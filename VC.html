@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEEN - Smart Video Conference</title>
+  <!-- Google Fonts for better typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Favicon -->
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2974/2974498.png" type="image/png">
+  <style>
+    /* Reset some default styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #f5f7fa, #c3cfe2); /* Gradient background */
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header Styles */
+    header {
+      background-color: #007BFF;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-container img {
+      width: 40px;
+      height: 40px;
+    }
+
+    .logo-container h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: white; /* Changed to white */
+      font-family: 'Times New Roman', Times, serif; /* Times New Roman font */
+    }
+
+    /* Navigation Styles */
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav ul li {
+      cursor: pointer;
+      position: relative;
+    }
+
+    nav ul li a {
+      color: white;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    nav ul li a:hover {
+      color: #ffd700;
+    }
+
+    /* Main Container Styles */
+    .main-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    /* Container Styles */
+    .container {
+      background: rgba(255, 255, 255, 0.95); /* Semi-transparent background */
+      padding: 30px; /* Increased padding for better spacing */
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 800px; /* Adjusted max-width for larger room window */
+      animation: fadeIn 0.5s ease-in-out;
+      display: none; /* Hidden by default */
+      overflow: hidden; /* Prevent overflow */
+    }
+
+    /* Show the container when active */
+    .container.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1, h2 {
+      margin-bottom: 20px;
+      color: #007BFF;
+      text-align: center;
+    }
+
+    /* Input Styles */
+    .input-group {
+      margin-bottom: 20px; /* Increased margin for better spacing */
+      position: relative;
+    }
+
+    .input-group i {
+      position: absolute;
+      top: 50%;
+      left: 15px; /* Increased left spacing for better icon alignment */
+      transform: translateY(-50%);
+      color: #aaa;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px 15px 12px 45px; /* Increased padding for better spacing */
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      transition: border-color 0.3s;
+    }
+
+    .input-group input:focus {
+      border-color: #007BFF;
+      outline: none;
+    }
+
+    /* Button Styles */
+    button {
+      width: 100%;
+      padding: 14px; /* Increased padding for better click area */
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+      transform: translateY(-2px);
+    }
+
+    /* Link Styles */
+    .link {
+      margin-top: 20px; /* Increased margin for better spacing */
+      text-align: center;
+    }
+
+    .link a {
+      color: #007BFF;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Video Conference Styles */
+    .room-container {
+      text-align: center;
+      width: 100%;
+    }
+
+    .room-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 15px; /* Increased gap for better spacing */
+      margin-bottom: 25px; /* Increased margin for better spacing */
+    }
+
+    .video-container {
+      display: flex;
+      flex-direction: row; /* Align videos horizontally */
+      align-items: flex-start;
+      gap: 20px; /* Reduced gap to better fit within room window */
+      margin-bottom: 25px; /* Space below the container */
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    }
+
+    .video-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 48%; /* Each video takes up ~48% of the container */
+    }
+
+    .video-label {
+      margin-bottom: 10px; /* Space below the label */
+      font-weight: bold;
+      color: #007BFF;
+      font-size: 18px; /* Larger font for labels */
+    }
+
+    .video {
+      width: 100%;
+      aspect-ratio: 16 / 9; /* Maintain aspect ratio */
+      background-color: #000;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      transition: width 0.3s, height 0.3s; /* Smooth resizing */
+      flex-shrink: 0; /* Prevent shrinking on smaller screens */
+    }
+
+    .video video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Mute and Control Button Styles */
+    .control-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px; /* Reduced gap for better spacing */
+      flex-wrap: wrap;
+      margin-bottom: 15px; /* Increased margin for better spacing */
+    }
+
+    .control-buttons button {
+      width: auto;
+      padding: 12px 25px; /* Increased padding for better click area */
+      font-size: 16px; /* Increased font size for better readability */
+      display: flex;
+      align-items: center;
+      gap: 10px; /* Increased gap between icon and text */
+      border-radius: 5px; /* Rounded corners */
+    }
+
+    /* Slider for Video Scaling */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px; /* Increased gap for better spacing */
+      margin-bottom: 25px; /* Increased margin for better spacing */
+    }
+
+    .slider-container label {
+      font-size: 16px; /* Increased font size for better readability */
+      color: #007BFF;
+    }
+
+    .slider-container input[type="range"] {
+      width: 90%; /* Increased width for better usability */
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1400px) {
+      .container {
+        max-width: 700px; /* Reduced max-width for better fit on medium screens */
+      }
+
+      .video-wrapper {
+        width: 48%; /* Maintain proportion */
+      }
+
+      .video {
+        aspect-ratio: 16 / 9; /* Ensure aspect ratio */
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .container {
+        max-width: 600px; /* Further reduced max-width for smaller screens */
+      }
+
+      .video-wrapper {
+        width: 48%; /* Maintain proportion */
+      }
+
+      .video {
+        aspect-ratio: 16 / 9; /* Ensure aspect ratio */
+      }
+    }
+
+    @media (max-width: 992px) {
+      .video-container {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .video-wrapper {
+        width: 100%; /* Full width on smaller screens */
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        max-width: 90%; /* Adjusted max-width for smaller screens */
+        padding: 20px;
+      }
+
+      .video-wrapper {
+        width: 100%; /* Full width on mobile devices */
+      }
+
+      .control-buttons {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .control-buttons button {
+        width: 100%;
+      }
+
+      .slider-container input[type="range"] {
+        width: 100%;
+      }
+    }
+
+    /* Footer Styles */
+    footer {
+      background-color: #007BFF;
+      color: white;
+      text-align: center;
+      padding: 20px 25px; /* Increased padding for better spacing */
+      position: relative;
+      bottom: 0;
+      width: 100%;
+    }
+
+    footer a {
+      color: #ffd700;
+      text-decoration: none;
+      margin: 0 7px; /* Increased margin for better spacing */
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Additional Styling for Pages to Utilize Space */
+    .about-page p,
+    .contact-page p,
+    .help-page p,
+    .contact-page ul {
+      margin-bottom: 20px; /* Increased margin for better spacing */
+      line-height: 1.6;
+      font-size: 16px; /* Increased font size for better readability */
+    }
+
+    .contact-page ul {
+      list-style: none;
+    }
+
+    .contact-page ul li {
+      margin-bottom: 12px; /* Increased margin for better spacing */
+      font-size: 16px;
+    }
+
+    .contact-page ul li i {
+      margin-right: 12px; /* Increased margin for better spacing */
+      color: #007BFF;
+    }
+
+    .help-page h2 {
+      margin-top: 20px; /* Increased margin for better spacing */
+      margin-bottom: 12px; /* Increased margin for better spacing */
+      color: #0056b3;
+      font-size: 18px; /* Increased font size for better readability */
+    
+}
+.secure-switch {
+  width: 100%;  /* Same width as Join Room */
+  max-width: 400px;  /* Adjust to match button size */
+  height: 50px;  
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.secure-switch.on {
+  background-color: #007BFF;
+}
+
+.secure-switch.off {
+  background-color: red;
+}
+
+.info-icon {
+  cursor: pointer;
+  margin-left: 10px;
+  font-size: 22px;
+  vertical-align: middle;
+}
+
+/* Modal Styling */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgb(0,0,0);
+  background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 60%;
+  border-radius: 8px;
+}
+
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+
+  </style>
+</head>
+<body>
+  <!-- Header with Logo and Site Name -->
+  <header>
+    <div class="logo-container">
+      <!-- Updated Logo Source -->
+      <img src="https://cdn-icons-png.flaticon.com/512/2974/2974498.png" alt="SEEN Logo">
+      <h1>SEEN</h1>
+    </div>
+    <!-- Navigation Menu -->
+    <nav>
+      <ul>
+        <li><a href="#" onclick="navigateTo('home')">Home</a></li>
+        <li><a href="#" onclick="navigateTo('about')">About</a></li>
+        <li><a href="#" onclick="navigateTo('contact')">Contact</a></li>
+        <li><a href="#" onclick="navigateTo('help')">Help</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- Main Content Area -->
+  <div class="main-container">
+    <!-- Login Page -->
+    <div class="container login-page active" id="loginPage">
+      <h1>Login</h1>
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input id="username" type="text" placeholder="Username" />
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input id="password" type="password" placeholder="Password" />
+      </div>
+      <button onclick="login()">Login</button>
+      <div class="link">
+        <p>Don't have an account? <a href="#" onclick="navigateTo('signup')">Sign Up</a></p>
+      </div>
+    </div>
+
+    <!-- Signup Page -->
+    <div class="container signup-page" id="signupPage">
+      <h1>Sign Up</h1>
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input id="new-username" type="text" placeholder="Username" />
+      </div>
+      <div class="input-group">
+        <i class="fas fa-envelope"></i>
+        <input id="new-email" type="email" placeholder="Email" />
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input id="new-password" type="password" placeholder="Password" />
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input id="confirm-password" type="password" placeholder="Confirm Password" />
+      </div>
+      <button onclick="sendVerificationCode()">Send Verification Code</button>
+      <div class="input-group">
+        <i class="fas fa-key"></i>
+        <input id="verification-code" type="text" placeholder="Enter Verification Code" />
+      </div>
+      <button onclick="signup()">Sign Up</button>
+      <div class="link">
+        <p>Already have an account? <a href="#" onclick="navigateTo('login')">Login</a></p>
+      </div>
+    </div>
+
+    <!-- Home Page -->
+    <div class="container homepage" id="homePage">
+      <h1 id="welcomeMessage">Welcome to SEEN!</h1>
+      <div class="room-actions">
+        <button onclick="createRoom()">Create Room</button>
+        <div class="input-group">
+          <i class="fas fa-door-open"></i>
+          <input id="room-id" type="text" placeholder="Enter Room ID" />
+        </div>
+        <button onclick="joinRoom()">Join Room</button>
+      </div>
+      <div class="secure-switch-container" style="margin-top: 20px; text-align: center;">
+        <button id="secureToggle" class="secure-switch off">Faster</button>
+        <span id="infoIcon" class="info-icon">ℹ️</span>
+      </div>
+      
+      <!-- Popup Modal -->
+      <div id="infoModal" class="modal">
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <h2>Feature Information</h2>
+          <p><strong>Secure:</strong> Implement encryption methods but slow</p>
+          <p><strong>Faster:</strong> Low delay time but without security</p>
+        </div>
+      </div>
+      
+      
+    </div>
+
+    <!-- About Page -->
+    <div class="container about-page" id="aboutPage">
+      <h1>About SEEN</h1>
+      <p>
+        SEEN is a cutting-edge video conferencing platform designed to facilitate seamless and secure online meetings. Whether you're connecting with colleagues, friends, or family, SEEN provides a reliable and user-friendly experience.
+      </p>
+      <p>
+        Our mission is to bridge the gap between people, making communication effortless and effective through advanced technology and intuitive design.
+      </p>
+    </div>
+
+    <!-- Contact Page -->
+    <div class="container contact-page" id="contactPage">
+      <h1>Contact Us</h1>
+      <p>If you have any questions, feedback, or need support, feel free to reach out to us:</p>
+      <ul>
+        <li><i class="fas fa-envelope"></i> Email: support@seen.com</li>
+        <li><i class="fas fa-phone"></i> Phone: +1 (234) 567-8901</li>
+        <li><i class="fas fa-map-marker-alt"></i> Address: 1234 Main St, Anytown, USA</li>
+      </ul>
+      <p>Follow us on social media:</p>
+      <p>
+        <a href="#" target="_blank"><i class="fab fa-facebook-f"></i></a>
+        <a href="#" target="_blank"><i class="fab fa-twitter"></i></a>
+        <a href="#" target="_blank"><i class="fab fa-linkedin-in"></i></a>
+        <a href="#" target="_blank"><i class="fab fa-instagram"></i></a>
+      </p>
+    </div>
+
+    <!-- Help Page -->
+    <div class="container help-page" id="helpPage">
+      <h1>Help & Support</h1>
+      <p>Here are some common questions and solutions to help you get the most out of SEEN:</p>
+      <h2>How to Create a Room?</h2>
+      <p>Simply click the "Create Room" button on the Home page, and a unique Room ID will be generated for you to share with others.</p>
+
+      <h2>How to Join a Room?</h2>
+      <p>Enter the Room ID provided by the host into the "Enter Room ID" field and click "Join Room".</p>
+
+      <h2>How to Mute/Unmute Microphone?</h2>
+      <p>Use the "Mute" button in the conference room to toggle your microphone on or off.</p>
+
+      <h2>How to Share Your Screen?</h2>
+      <p>Click the "Share Screen" button to share your screen with other participants. To stop sharing, click the button again or stop the screen share from your browser prompt.</p>
+
+      <h2>Need More Help?</h2>
+      <p>If you need further assistance, please contact our support team at <a href="mailto:support@seen.com">support@seen.com</a>.</p>
+    </div>
+
+    <!-- Room Page (Dynamic) -->
+    <div class="container room-page" id="roomPage">
+      <h2>Room: <span id="currentRoomId"></span></h2>
+      <div class="slider-container">
+        <label for="sizeSlider">Adjust Video Size:</label>
+        <input type="range" id="sizeSlider" min="0" max="100" value="0">
+      </div>
+      <div class="video-container" id="videoContainer">
+        <div class="video-wrapper">
+          <div class="video-label">Host</div>
+          <div class="video" id="localVideoContainer">
+            <video id="localVideo" autoplay muted></video>
+          </div>
+        </div>
+        <div class="video-wrapper">
+          <div class="video-label">Participant 1</div>
+          <div class="video" id="remoteVideoContainer">
+            <video id="remoteVideo" autoplay></video>
+          </div>
+        </div>
+      </div>
+      <div class="control-buttons">
+        <button id="muteButton"><i class="fas fa-microphone"></i> Mute</button>
+        <button id="toggleVideoButton"><i class="fas fa-video"></i> Turn Video Off</button>
+        <button id="shareScreenButton"><i class="fas fa-desktop"></i> Share Screen</button>
+        <button onclick="leaveRoom()"><i class="fas fa-sign-out-alt"></i> Leave Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>&copy; 2024 SEEN. All rights reserved.</p>
+    <p>
+      <a href="#" onclick="navigateTo('about')">About</a> |
+      <a href="#" onclick="navigateTo('contact')">Contact</a> |
+      <a href="#" onclick="navigateTo('help')">Help</a>
+    </p>
+  </footer>
+
+  <!-- Including SweetAlert2 for better alerts and modals -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script>
+    // Use Immediately Invoked Function Expression (IIFE) to avoid polluting global scope
+    (function() {
+      const crypto = window.crypto || window.msCrypto;
+
+      // User and Room Data Storage
+      const userDatabase = {}; // In-memory user storage
+      const roomDatabase = {}; // In-memory room storage
+      let currentUser = null; // To store the current logged-in user
+
+      // Hashing function for passwords
+      async function hashPassword(password) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      }
+
+      // Navigation Function
+      window.navigateTo = function(page) {
+        // Hide all containers
+        const containers = document.querySelectorAll('.container');
+        containers.forEach(container => container.classList.remove('active'));
+
+        // Show the selected page
+        const selectedPage = document.getElementById(`${page}Page`);
+        if (selectedPage) {
+          selectedPage.classList.add('active');
+        }
+
+        // If navigating away from room page, reset video containers
+        if (page !== 'room') {
+          resetVideoContainers();
+        }
+      }
+
+      // Authentication Functions
+      window.login = async function() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        if (!username || !password) {
+          Swal.fire('Error', 'Please enter both username and password.', 'error');
+          return;
+        }
+
+        const hashedPassword = await hashPassword(password);
+        if (userDatabase[username] && userDatabase[username] === hashedPassword) {
+          currentUser = username;
+          document.getElementById('welcomeMessage').innerText = `Welcome, ${username}!`;
+          Swal.fire('Success', `Welcome, ${username}!`, 'success').then(() => {
+            navigateTo('home');
+          });
+        } else {
+          Swal.fire('Error', 'Invalid username or password.', 'error');
+        }
+      }
+
+
+  // Send verification code to email using Brevo API
+  window.sendVerificationCode = function() {
+  console.log('Send Verification Code button clicked');
+
+  const email = document.getElementById('new-email').value.trim();
+  if (!email) {
+    Swal.fire('Error', 'Please enter an email.', 'error');
+    return;
+  }
+  
+  const verificationCode = Math.floor(100000 + Math.random() * 900000);
+  localStorage.setItem('verificationCode', verificationCode);
+  
+  fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': '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',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { email: 'ahmedsameh200382@gmail.com' },  
+      to: [{ email: email }],
+      subject: 'Your Verification Code',
+      htmlContent: `<p>Your verification code is <strong>${verificationCode}</strong></p>`
+    })
+  })
+  .then((response) => {
+    if (response.ok) {
+      Swal.fire('Success', 'Verification code sent to your email.', 'success');
+    } else {
+      response.json().then(data => {
+        console.error('Brevo Error:', data);
+        Swal.fire('Error', `Failed to send email: ${data.message}`, 'error');
+      });
+    }
+  })
+  .catch((error) => {
+    console.error('Email Error:', error);
+    Swal.fire('Error', 'Failed to send email. Check the console for details.', 'error');
+  });
+}
+
+
+  window.signup = async function() {
+    const username = document.getElementById('new-username').value.trim();
+    const email = document.getElementById('new-email').value.trim();
+    const password = document.getElementById('new-password').value.trim();
+    const confirmPassword = document.getElementById('confirm-password').value.trim();
+    const enteredCode = document.getElementById('verification-code').value.trim();
+    const storedCode = localStorage.getItem('verificationCode');
+
+    if (!username || !email || !password || !confirmPassword || !enteredCode) {
+      Swal.fire('Error', 'Please fill in all fields.', 'error');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Swal.fire('Error', 'Passwords do not match.', 'error');
+      return;
+    }
+
+    if (userDatabase[username]) {
+      Swal.fire('Error', 'Username already exists. Please choose a different username.', 'error');
+      return;
+    }
+
+    if (enteredCode !== storedCode) {
+      Swal.fire('Error', 'Invalid verification code.', 'error');
+      return;
+    }
+
+    // Register user
+    const hashedPassword = await hashPassword(password);
+    userDatabase[username] = hashedPassword;
+    Swal.fire('Success', `Account created for ${username}!`, 'success').then(() => {
+      navigateTo('login');
+    });
+  }
+
+
+      // Room Management Functions
+      window.createRoom = function() {
+        if (!currentUser) {
+          Swal.fire('Error', 'You must be logged in to create a room.', 'error');
+          return;
+        }
+
+        const roomId = generateRoomId();
+        roomDatabase[roomId] = { participants: [currentUser] };
+        Swal.fire({
+          title: 'Room Created',
+          html: `Your Room ID is: <strong>${roomId}</strong>`,
+          icon: 'success',
+          confirmButtonText: 'OK'
+        }).then(() => {
+          document.getElementById('currentRoomId').innerText = roomId;
+          navigateTo('room');
+          renderRoomPage(roomId, currentUser);
+        });
+      }
+
+      window.joinRoom = function() {
+        const roomId = document.getElementById('room-id').value.trim();
+        const username = currentUser;
+
+        if (!username) {
+          Swal.fire('Error', 'You must be logged in to join a room.', 'error');
+          return;
+        }
+
+        if (!roomId) {
+          Swal.fire('Error', 'Please enter a Room ID.', 'error');
+          return;
+        }
+
+        if (roomDatabase[roomId]) {
+          roomDatabase[roomId].participants.push(username);
+          Swal.fire('Success', `Successfully joined room: ${roomId}`, 'success').then(() => {
+            document.getElementById('currentRoomId').innerText = roomId;
+            navigateTo('room');
+            renderRoomPage(roomId, username);
+          });
+        } else {
+          Swal.fire('Error', 'Room ID not found. Please enter a valid Room ID.', 'error');
+        }
+      }
+
+      window.leaveRoom = function() {
+        if (!currentUser) return;
+
+        const roomId = document.getElementById('currentRoomId').innerText;
+        if (roomDatabase[roomId]) {
+          roomDatabase[roomId].participants = roomDatabase[roomId].participants.filter(user => user !== currentUser);
+          if (roomDatabase[roomId].participants.length === 0) {
+            delete roomDatabase[roomId];
+          }
+        }
+
+        Swal.fire('Left Room', `You have left the room: ${roomId}`, 'info').then(() => {
+          navigateTo('home');
+        });
+      }
+
+      // Video Stream Setup
+      let localStream = null; // To keep track of the local media stream
+      let videoEnabled = true; // Track video state
+
+      function renderRoomPage(roomId, username) {
+        setupVideoStream(roomId, username);
+        setupMuteButton();
+        setupToggleVideoButton();
+        setupShareScreenButton();
+        setupSizeSlider();
+      }
+
+      function setupVideoStream(roomId, username) {
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: true })
+          .then((stream) => {
+            localStream = stream;
+            const localVideo = document.getElementById('localVideo');
+            if (localVideo) {
+              localVideo.srcObject = stream;
+            }
+
+            // Simulate remote video for demonstration
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (remoteVideo) {
+              // Remote video will only play after joining the room
+              // For demonstration, we'll set a placeholder video after a delay
+              setTimeout(() => {
+                remoteVideo.src = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                remoteVideo.play();
+              }, 1000); // Delay to simulate participant joining
+            }
+
+            console.log(`User ${username} is in room: ${roomId}`);
+          })
+          .catch((err) => {
+            console.error('Error accessing media devices:', err);
+            Swal.fire('Error', 'Unable to access camera and microphone.', 'error');
+          });
+      }
+
+      // Mute Button Functionality
+      function setupMuteButton() {
+        const muteButton = document.getElementById('muteButton');
+        if (!muteButton) return;
+
+        let isMuted = false;
+
+        muteButton.addEventListener('click', () => {
+          if (!localStream) return;
+
+          isMuted = !isMuted;
+          localStream.getAudioTracks().forEach(track => {
+            track.enabled = !isMuted;
+          });
+
+          if (isMuted) {
+            muteButton.innerHTML = '<i class="fas fa-microphone-slash"></i> Unmute';
+            muteButton.style.backgroundColor = '#dc3545'; // Red color when muted
+          } else {
+            muteButton.innerHTML = '<i class="fas fa-microphone"></i> Mute';
+            muteButton.style.backgroundColor = '#007BFF'; // Blue color when unmuted
+          }
+        });
+      }
+
+      // Toggle Video Button Functionality
+      function setupToggleVideoButton() {
+        const toggleVideoButton = document.getElementById('toggleVideoButton');
+        if (!toggleVideoButton) return;
+
+        toggleVideoButton.addEventListener('click', () => {
+          if (!localStream) return;
+
+          videoEnabled = !videoEnabled;
+          localStream.getVideoTracks().forEach(track => {
+            track.enabled = videoEnabled;
+          });
+
+          if (videoEnabled) {
+            toggleVideoButton.innerHTML = '<i class="fas fa-video"></i> Turn Video Off';
+            toggleVideoButton.style.backgroundColor = '#007BFF'; // Blue color when video is on
+          } else {
+            toggleVideoButton.innerHTML = '<i class="fas fa-video-slash"></i> Turn Video On';
+            toggleVideoButton.style.backgroundColor = '#dc3545'; // Red color when video is off
+          }
+        });
+      }
+
+      // Share Screen Button Functionality
+      function setupShareScreenButton() {
+        const shareScreenButton = document.getElementById('shareScreenButton');
+        if (!shareScreenButton) return;
+
+        let isSharing = false;
+
+        shareScreenButton.addEventListener('click', () => {
+          if (!navigator.mediaDevices.getDisplayMedia) {
+            Swal.fire('Error', 'Screen sharing is not supported in your browser.', 'error');
+            return;
+          }
+
+          if (!isSharing) {
+            navigator.mediaDevices.getDisplayMedia({ video: true })
+              .then((screenStream) => {
+                // Replace the current video track with the screen stream
+                const screenTrack = screenStream.getVideoTracks()[0];
+                localStream.removeTrack(localStream.getVideoTracks()[0]);
+                localStream.addTrack(screenTrack);
+
+                const localVideo = document.getElementById('localVideo');
+                if (localVideo) {
+                  localVideo.srcObject = null;
+                  localVideo.srcObject = localStream;
+                  localVideo.play();
+                }
+
+                isSharing = true;
+                shareScreenButton.innerHTML = '<i class="fas fa-stop-circle"></i> Stop Sharing';
+
+                // When the user stops sharing via the browser
+                screenTrack.onended = () => {
+                  stopScreenShare();
+                };
+
+                Swal.fire('Success', 'Screen sharing started.', 'success');
+              })
+              .catch((err) => {
+                console.error('Error sharing screen:', err);
+                Swal.fire('Error', 'Unable to share screen.', 'error');
+              });
+          } else {
+            stopScreenShare();
+          }
+        });
+
+        function stopScreenShare() {
+          if (!isSharing) return;
+
+          // Remove screen track and restore original video
+          const tracks = localStream.getVideoTracks();
+          if (tracks.length > 0) {
+            localStream.removeTrack(tracks[0]);
+            tracks[0].stop();
+          }
+
+          navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then((stream) => {
+              const newVideoTrack = stream.getVideoTracks()[0];
+              localStream.addTrack(newVideoTrack);
+
+              const localVideo = document.getElementById('localVideo');
+              if (localVideo) {
+                localVideo.srcObject = null;
+                localVideo.srcObject = localStream;
+                localVideo.play();
+              }
+
+              isSharing = false;
+              shareScreenButton.innerHTML = '<i class="fas fa-desktop"></i> Share Screen';
+              Swal.fire('Info', 'Screen sharing stopped.', 'info');
+            })
+            .catch((err) => {
+              console.error('Error restoring video:', err);
+              Swal.fire('Error', 'Unable to restore video after screen sharing.', 'error');
+            });
+        }
+      }
+
+      // Video Size Slider Functionality
+      function setupSizeSlider() {
+        const sizeSlider = document.getElementById('sizeSlider');
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const remoteVideoContainer = document.getElementById('remoteVideoContainer');
+
+        if (!sizeSlider || !localVideoContainer || !remoteVideoContainer) return;
+
+        sizeSlider.addEventListener('input', () => {
+          const scale = sizeSlider.value; // Percentage value from 0 to 100
+          // Calculate new dimensions based on scale
+          const baseWidth = 16 / 9; // Base aspect ratio width
+          const baseHeight = 1; // Base aspect ratio height
+
+          // Apply scale as a percentage
+          const newScale = 1 + (scale / 100);
+
+          // Update aspect ratio
+          const newAspectRatio = baseWidth * newScale + ' / ' + baseHeight * newScale;
+          localVideoContainer.style.aspectRatio = newAspectRatio;
+          remoteVideoContainer.style.aspectRatio = newAspectRatio;
+        });
+      }
+
+      // Utility Functions
+      function generateRoomId() {
+        return Math.random().toString(36).substring(2, 8).toUpperCase();
+      }
+
+      // Reset Video Containers to Original Size and Stop Remote Video
+      function resetVideoContainers() {
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const remoteVideoContainer = document.getElementById('remoteVideoContainer');
+        const sizeSlider = document.getElementById('sizeSlider');
+
+        if (localVideoContainer && remoteVideoContainer) {
+          localVideoContainer.style.aspectRatio = '16 / 9';
+          remoteVideoContainer.style.aspectRatio = '16 / 9';
+        }
+
+        if (sizeSlider) {
+          sizeSlider.value = 0; // Set default scale to 0 (no zoom)
+        }
+
+        // Reset remote video source to default and stop playback
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+          remoteVideo.pause();
+          remoteVideo.srcObject = null;
+          remoteVideo.src = '';
+        }
+
+        // Reset toggle video button
+        const toggleVideoButton = document.getElementById('toggleVideoButton');
+        if (toggleVideoButton) {
+          toggleVideoButton.innerHTML = '<i class="fas fa-video"></i> Turn Video Off';
+          toggleVideoButton.style.backgroundColor = '#007BFF';
+        }
+
+        // Reset mute button
+        const muteButton = document.getElementById('muteButton');
+        if (muteButton) {
+          muteButton.innerHTML = '<i class="fas fa-microphone"></i> Mute';
+          muteButton.style.backgroundColor = '#007BFF';
+        }
+      }
+    })();
+// Toggle Button Logic
+document.getElementById('secureToggle').addEventListener('click', function() {
+  const button = this;
+  if (button.classList.contains('off')) {
+    button.classList.remove('off');
+    button.classList.add('on');
+    button.innerText = 'Secure';
+  } else {
+    button.classList.remove('on');
+    button.classList.add('off');
+    button.innerText = 'Faster';
+  }
+});
+
+// Info Modal Popup
+const modal = document.getElementById("infoModal");
+const infoIcon = document.getElementById("infoIcon");
+const closeBtn = document.querySelector(".close");
+
+infoIcon.onclick = function() {
+  modal.style.display = "block";
+}
+
+closeBtn.onclick = function() {
+  modal.style.display = "none";
+}
+
+window.onclick = function(event) {
+  if (event.target == modal) {
+    modal.style.display = "none";
+  }
+}
+
+
+  </script>
+</body>
+</html>
