@@ -1,17 +1,20 @@
 # Video-Conference-Project
 
-Login Page:
+Home Page:
 
-![image](https://github.com/user-attachments/assets/e821b59d-0b35-4680-83b7-ce25f1b8c17a)
+![image](https://github.com/user-attachments/assets/8324bc7d-7396-4913-9fd6-c084e6156869)
+
 
 Sign-Up Page:
 
-![image](https://github.com/user-attachments/assets/ec8a4218-d034-4605-ac2b-998a79b4625a)
+![image](https://github.com/user-attachments/assets/5f8c9558-1c61-4916-90d5-4572bb56b8ec)
 
-Home Page:
 
-![image](https://github.com/user-attachments/assets/5f052294-607f-4dc6-9dd5-4e07b8a49e2b)
+Create/Join Meeting Page:
+![image](https://github.com/user-attachments/assets/3b292ec8-f221-49c9-8fa7-7e28c33fb182)
+
 
 Meeting Page:
 
-![image](https://github.com/user-attachments/assets/5d2bdaa6-31ee-4bf2-94e0-30bce0cc798d)
+![image](https://github.com/user-attachments/assets/934a6ce4-c4c1-4c6f-bb81-88e814a99f98)
+
