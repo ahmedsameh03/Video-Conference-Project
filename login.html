@@ -198,7 +198,7 @@
       </div>
     </div>
 
-    <!-- Sign-Up Form -->
+    <!-- Sign Up Form -->
     <div class="form" id="signupForm">
       <form>
         <input type="email" id="signupEmail" placeholder="Email" required>
@@ -263,7 +263,7 @@
       window.location.href = 'dashboard.html'; // Redirect to dashboard
     });
 
-    // Add a handler to check the verification code during submission
+    // Add a handler to check the verification code during submission.
     signupForm.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const enteredCode = verificationCodeInput.value;
