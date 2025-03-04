@@ -11,6 +11,7 @@ Sign-Up Page:
 
 
 Create/Join Meeting Page:
+
 ![image](https://github.com/user-attachments/assets/3b292ec8-f221-49c9-8fa7-7e28c33fb182)
 
 
