@@ -44,7 +44,7 @@ navigator.mediaDevices.getUserMedia({
     // Here you can add code to connect to other participants if backend is available
 }).catch(error => {
     console.error('Error accessing media devices.', error);
-    alert('Cannot access camera or microphone.');
+   
 });
 
 // Function to add video stream to grid

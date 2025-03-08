@@ -42,7 +42,6 @@ async function toggleVideo() {
             videoButton.classList.remove('active');
         } catch (error) {
             console.error('Error accessing media devices.', error);
-            alert('Cannot access camera or microphone.');
         }
     } else {
         if (localStream) {
