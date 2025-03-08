@@ -28,6 +28,21 @@ let isMuted = false;
 let isVideoOff = true;
 let localStream = null;
 
+// Function to add a video stream to the grid
+function addVideoStream(videoElement, label) {
+    videoElement.classList.add("video-element");
+    const videoContainer = document.createElement("div");
+    videoContainer.className = "video-container";
+    videoContainer.appendChild(videoElement);
+
+    const labelElement = document.createElement("p");
+    labelElement.className = "video-label";
+    labelElement.textContent = label;
+    videoContainer.appendChild(labelElement);
+
+    videoGrid.appendChild(videoContainer);
+}
+
 // Function to start or stop video
 async function toggleVideo() {
     const videoButton = document.getElementById('video-btn');
@@ -36,7 +51,6 @@ async function toggleVideo() {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localVideo.srcObject = localStream;
-            localVideo.play();
             isVideoOff = false;
             videoButton.innerHTML = '<i class="fas fa-video"></i>';
             videoButton.classList.remove('active');
@@ -65,18 +79,17 @@ function toggleMute() {
     }
 
     const muteButton = document.getElementById('mute-btn');
-    if (isMuted) {
-        muteButton.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-        muteButton.classList.add('active');
-    } else {
-        muteButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        muteButton.classList.remove('active');
-    }
+    muteButton.innerHTML = isMuted 
+        ? '<i class="fas fa-microphone-slash"></i>' 
+        : '<i class="fas fa-microphone"></i>';
+    
+    muteButton.classList.toggle('active', isMuted);
 }
 
 // Share Screen Functionality
-function shareScreen() {
-    navigator.mediaDevices.getDisplayMedia({ video: true }).then(screenStream => {
+async function shareScreen() {
+    try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenVideo = document.createElement('video');
         screenVideo.srcObject = screenStream;
         screenVideo.autoplay = true;
@@ -86,12 +99,11 @@ function shareScreen() {
 
         // Stop sharing when the user stops sharing the screen
         screenStream.getTracks()[0].onended = () => {
-            const videos = document.querySelectorAll('.screen-video');
-            videos.forEach(v => v.parentElement.remove());
+            screenVideo.parentElement.remove();
         };
-    }).catch(error => {
+    } catch (error) {
         console.error('Error sharing screen:', error);
-    });
+    }
 }
 
 // Send Chat Message
@@ -130,9 +142,9 @@ function leaveMeeting() {
 }
 
 // Function to add participants to the list
-function addParticipant(name) {
+function addParticipant(participantName) {
     const participant = document.createElement('p');
-    participant.textContent = name;
+    participant.textContent = participantName;
     participantsList.appendChild(participant);
 }
 
@@ -146,14 +158,17 @@ function setActiveSpeaker(videoElement) {
     document.querySelectorAll('.video-container').forEach(vc => vc.classList.remove('active-speaker'));
     videoElement.parentElement.classList.add('active-speaker');
 }
+
+// Start camera when in meeting
 if (window.location.pathname.includes("meeting.html")) {
-    // Now, only request the camera if the user is in a meeting
     async function startCamera() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById("large-video").srcObject = stream;
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById("large-video").srcObject = localStream;
+            addVideoStream(localVideo, name); // Add local video to the grid
         } catch (error) {
             console.error("Error accessing camera:", error);
         }
     }
+    startCamera();
 }
