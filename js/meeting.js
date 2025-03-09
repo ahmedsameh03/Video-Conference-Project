@@ -207,6 +207,9 @@ function leaveMeeting() {
 window.addEventListener("beforeunload", () => {
     socket.emit("user-disconnected", userId); // Notify server to remove user
 });
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then((stream) => console.log("Stream acquired:", stream))
+    .catch((err) => console.error("Camera error:", err));
 
 // ✅ Start Camera When Page Loads
 startCamera();
