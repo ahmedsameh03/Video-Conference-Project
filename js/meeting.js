@@ -204,6 +204,9 @@ function leaveMeeting() {
         window.location.href = "index.html";
     }
 }
+window.addEventListener("beforeunload", () => {
+    socket.emit("user-disconnected", userId); // Notify server to remove user
+});
 
 // ✅ Start Camera When Page Loads
 startCamera();
