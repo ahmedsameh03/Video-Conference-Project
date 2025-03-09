@@ -172,3 +172,7 @@ if (window.location.pathname.includes("meeting.html")) {
     }
     startCamera();
 }
+
+function leaveMeeting() {
+    window.location.href = "index.html"; 
+}
