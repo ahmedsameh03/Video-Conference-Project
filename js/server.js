@@ -45,5 +45,13 @@ wss.on("connection", (ws) => {
         }
     });
 });
+socket.on("user-disconnected", (userId) => {
+    if (peers[userId]) {
+        peers[userId].close();  // Close the connection
+        delete peers[userId];   // Remove from the list
+        document.getElementById(userId)?.remove(); // Remove video tile
+    }
+});
+
 
 console.log("✅ WebRTC Signaling Server running on ws://localhost:3000");
