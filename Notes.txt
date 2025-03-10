@@ -1,0 +1,7 @@
+cd js
+node server.js
+
+main
+npx http-server -p 5500
+
+open login.html with live server
