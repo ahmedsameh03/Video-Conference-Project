@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SEEN - Login / Sign Up</title>
+  <script type="module" src="firebase.js"></script>
+
+
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/boxicons@2.1.2/css/boxicons.min.css" rel="stylesheet">
   <style>
@@ -194,7 +196,7 @@
         </div>
       </form>
       <div class="social-login">
-        <button class="google"><i class="bx bxl-google"></i> Google</button>
+        <button id="google-login" class="google"><i class="bx bxl-google"></i> Google</button>
         <button class="face-recognition"><i class="bx bx-face"></i> Face Recognition</button>
       </div>
     </div>
