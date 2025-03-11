@@ -46,14 +46,14 @@ wss.on("connection", (ws) => {
                     break;
             }
         } catch (error) {
-            console.error("❌ Error parsing message:", error);
+            console.error(" Error parsing message:", error);
         }
     });
 
     ws.on("close", () => {
         if (ws.room && rooms[ws.room]) {
             rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
-            console.log(`❌ User disconnected from room: ${ws.room}`);
+            console.log(` User disconnected from room: ${ws.room}`);
         }
     });
 });
