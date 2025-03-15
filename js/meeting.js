@@ -149,23 +149,48 @@ function toggleMute() {
         : '<i class="fas fa-microphone-slash"></i>';
 }
 
-// ✅ Share Screen
-function shareScreen() {
-    navigator.mediaDevices.getDisplayMedia({ video: true }).then(screenStream => {
-        const screenVideo = document.createElement("video");
+let screenStream;
+let screenVideo;
+
+async function shareScreen() {
+    try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+
+        // Check if screen sharing is already active
+        if (screenVideo) {
+            screenVideo.srcObject = screenStream;
+            return;
+        }
+
+        // Create a new video element for screen sharing
+        screenVideo = document.createElement("video");
         screenVideo.srcObject = screenStream;
         screenVideo.autoplay = true;
-        screenVideo.className = "screen-video";
-        addVideoStream(screenStream, "Screen Share");
+        screenVideo.id = "screen-share";
+        screenVideo.style.width = "100%";
 
-        // Stop sharing when the user stops
-        screenStream.getTracks()[0].onended = () => {
-            screenVideo.remove();
+        // Append the video to the main video container
+        const videoGrid = document.getElementById("video-grid");
+        videoGrid.appendChild(screenVideo);
+
+        // Stop sharing when user closes it
+        screenStream.getVideoTracks()[0].onended = function () {
+            stopScreenShare();
         };
-    }).catch(error => {
+    } catch (error) {
         console.error("Error sharing screen:", error);
-    });
+    }
 }
+
+function stopScreenShare() {
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop()); // Stop the stream
+        screenVideo.remove(); // Remove the video element
+        screenStream = null;
+        screenVideo = null;
+    }
+}
+
 
 // ✅ Send Chat Message
 function sendMessage() {
