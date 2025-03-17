@@ -57,4 +57,4 @@ wss.on("connection", (ws) => {
     });
 });
 
-console.log("✅ WebRTC Signaling Server running on ws://localhost:3000");
+console.log("✅ WebRTC Signaling Server running on ws://localhost:4000");
