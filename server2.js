@@ -35,6 +35,7 @@ transporter.verify((error, success) => {
     }
 });
 
+
 // ✅ API to Send OTP
 app.post('/send-otp', async (req, res) => {
     const { email } = req.body;
