@@ -1,11 +1,12 @@
 const WebSocket = require("ws");
 
-const wss = new WebSocket.Server({ port: 4000 });
+const PORT = process.env.PORT || 4000;
+const server = new WebSocket.Server({ port: PORT });
 const rooms = {}; // Store active rooms and participants
 
-console.log("✅ WebRTC Signaling Server running on ws://localhost:4000");
+console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
-wss.on("connection", (ws) => {
+server.on("connection", (ws) => {
     console.log("🔗 New WebSocket connection established");
 
     ws.on("message", (message) => {
@@ -76,3 +77,5 @@ wss.on("connection", (ws) => {
         }
     }
 });
+
+console.log(`WebSocket server running on port ${PORT}`);
