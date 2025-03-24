@@ -24,7 +24,7 @@ const ws = new WebSocket("ws://localhost:3000");
 const peers = {};
 let localStream;
 
-// ✅ Start Camera & Microphone (Show in Middle Box)
+// Start Camera & Microphone
 async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -36,7 +36,7 @@ async function startCamera() {
     }
 }
 
-// ✅ Handle WebSocket Messages
+// Handle WebSocket Messages
 ws.onmessage = async (message) => {
     const data = JSON.parse(message.data);
 
@@ -59,7 +59,7 @@ ws.onmessage = async (message) => {
     }
 };
 
-// ✅ Create WebRTC Peer Connection
+// Create WebRTC Peer Connection
 function createPeer(user) {
     const peer = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -79,7 +79,7 @@ function createPeer(user) {
     peers[user] = peer;
 }
 
-// ✅ Create Offer for New User
+// Create Offer for New User
 async function createOffer(user) {
     createPeer(user);
     const offer = await peers[user].createOffer();
@@ -88,7 +88,7 @@ async function createOffer(user) {
     ws.send(JSON.stringify({ type: "offer", offer, room, user }));
 }
 
-// ✅ Create Answer for Offer
+// Create Answer for Offer
 async function createAnswer(offer, user) {
     createPeer(user);
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
@@ -98,7 +98,7 @@ async function createAnswer(offer, user) {
     ws.send(JSON.stringify({ type: "answer", answer, room, user }));
 }
 
-// ✅ Add Video Stream to Grid
+// Add Video Stream to Grid
 function addVideoStream(stream, user) {
     const videoContainer = document.createElement("div");
     videoContainer.classList.add("video-container");
@@ -116,37 +116,25 @@ function addVideoStream(stream, user) {
     videoGrid.appendChild(videoContainer);
 }
 
-// ✅ Remove Video When User Leaves
+// Remove Video When User Leaves
 function removeVideoStream(user) {
     document.querySelector(`[data-user="${user}"]`)?.remove();
 }
 
-// ✅ Toggle Video
+// Toggle Video
 function toggleVideo() {
     const videoTracks = localStream.getVideoTracks();
     if (videoTracks.length > 0) {
         videoTracks[0].enabled = !videoTracks[0].enabled;
     }
-
-    const videoButton = document.getElementById('video-btn');
-    videoButton.classList.toggle("active");
-    videoButton.innerHTML = videoTracks[0].enabled
-        ? '<i class="fas fa-video"></i>'
-        : '<i class="fas fa-video-slash"></i>';
 }
 
-// ✅ Toggle Mute
+// Toggle Mute
 function toggleMute() {
     const audioTracks = localStream.getAudioTracks();
     if (audioTracks.length > 0) {
         audioTracks[0].enabled = !audioTracks[0].enabled;
     }
-
-    const muteButton = document.getElementById('mute-btn');
-    muteButton.classList.toggle("active");
-    muteButton.innerHTML = audioTracks[0].enabled
-        ? '<i class="fas fa-microphone"></i>'
-        : '<i class="fas fa-microphone-slash"></i>';
 }
 
 let screenStream;
@@ -156,24 +144,19 @@ async function shareScreen() {
     try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
 
-        // Check if screen sharing is already active
         if (screenVideo) {
             screenVideo.srcObject = screenStream;
             return;
         }
 
-        // Create a new video element for screen sharing
         screenVideo = document.createElement("video");
         screenVideo.srcObject = screenStream;
         screenVideo.autoplay = true;
         screenVideo.id = "screen-share";
         screenVideo.style.width = "100%";
 
-        // Append the video to the main video container
-        const videoGrid = document.getElementById("video-grid");
         videoGrid.appendChild(screenVideo);
 
-        // Stop sharing when user closes it
         screenStream.getVideoTracks()[0].onended = function () {
             stopScreenShare();
         };
@@ -184,15 +167,14 @@ async function shareScreen() {
 
 function stopScreenShare() {
     if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop()); // Stop the stream
-        screenVideo.remove(); // Remove the video element
+        screenStream.getTracks().forEach(track => track.stop());
+        screenVideo.remove();
         screenStream = null;
         screenVideo = null;
     }
 }
 
-
-// ✅ Send Chat Message
+// Send Chat Message
 function sendMessage() {
     const message = chatInputField.value.trim();
     if (message !== "") {
@@ -209,8 +191,7 @@ ws.onmessage = (message) => {
     }
 };
 
-
-// ✅ Display Chat Message
+// Display Chat Message
 function displayMessage(message) {
     const messageElement = document.createElement("p");
     messageElement.innerHTML = `<strong>${message.user}:</strong> ${message.text}`;
@@ -220,31 +201,12 @@ function displayMessage(message) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// ✅ Toggle Chat
+// Toggle Chat
 function toggleChat() {
     document.getElementById("chat-container").classList.toggle("visible");
 }
 
-// ✅ Toggle Participants
+// Toggle Participants
 function toggleParticipants() {
     document.getElementById("participants-container").classList.toggle("visible");
 }
-
-// ✅ Leave Meeting
-function leaveMeeting() {
-    if (confirm("Are you sure you want to leave?")) {
-        ws.send(JSON.stringify({ type: "user-left", user: name, room }));
-        ws.close();
-        window.location.href = "index.html";
-    }
-}
-
-window.addEventListener("beforeunload", () => {
-    socket.emit("user-disconnected", userId); // Notify server to remove user
-});
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then((stream) => console.log("Stream acquired:", stream))
-    .catch((err) => console.error("Camera error:", err));
-
-// ✅ Start Camera When Page Loads
-startCamera();
