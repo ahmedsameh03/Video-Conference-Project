@@ -196,11 +196,19 @@ function stopScreenShare() {
 function sendMessage() {
     const message = chatInputField.value.trim();
     if (message !== "") {
+        ws.send(JSON.stringify({ type: "chat", user: name, text: message }));
         displayMessage({ user: name, text: message, own: true });
         chatInputField.value = "";
-        // TODO: Send message via WebSocket to all users
     }
 }
+
+ws.onmessage = (message) => {
+    const data = JSON.parse(message.data);
+    if (data.type === "chat") {
+        displayMessage({ user: data.user, text: data.text, own: false });
+    }
+};
+
 
 // ✅ Display Chat Message
 function displayMessage(message) {
@@ -224,11 +232,13 @@ function toggleParticipants() {
 
 // ✅ Leave Meeting
 function leaveMeeting() {
-    const confirmLeave = confirm("Are you sure you want to leave?");
-    if (confirmLeave) {
+    if (confirm("Are you sure you want to leave?")) {
+        ws.send(JSON.stringify({ type: "user-left", user: name, room }));
+        ws.close();
         window.location.href = "index.html";
     }
 }
+
 window.addEventListener("beforeunload", () => {
     socket.emit("user-disconnected", userId); // Notify server to remove user
 });
