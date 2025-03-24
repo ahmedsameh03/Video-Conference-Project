@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 
+// Use dynamic port for deployment (Render/Vercel)
 const PORT = process.env.PORT || 4000;
 const server = new WebSocket.Server({ port: PORT });
 const rooms = {}; // Store active rooms and participants
@@ -12,21 +13,24 @@ server.on("connection", (ws) => {
     ws.on("message", (message) => {
         try {
             const data = JSON.parse(message);
+            if (!data.type || !data.room) return;
 
             switch (data.type) {
                 case "join":
                     if (!rooms[data.room]) {
                         rooms[data.room] = [];
                     }
-
+                    
                     rooms[data.room].push(ws);
                     ws.room = data.room;
-                    ws.user = data.user; // Store user info
+                    ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`; // Fallback username
+
+                    console.log(`👤 ${ws.user} joined room: ${ws.room}`);
 
                     // Notify existing users in the room
                     rooms[data.room].forEach(client => {
                         if (client !== ws && client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify({ type: "new-user", user: data.user }));
+                            client.send(JSON.stringify({ type: "new-user", user: ws.user }));
                         }
                     });
                     break;
@@ -49,7 +53,7 @@ server.on("connection", (ws) => {
                     console.warn(`⚠️ Unknown message type: ${data.type}`);
             }
         } catch (error) {
-            console.error("❌ Error parsing message:", error);
+            console.error("❌ Error processing message:", error);
         }
     });
 
@@ -57,25 +61,36 @@ server.on("connection", (ws) => {
         removeUserFromRoom(ws);
     });
 
+    ws.on("error", (error) => {
+        console.error("⚠️ WebSocket error:", error);
+    });
+
     function removeUserFromRoom(ws) {
-        if (ws.room && rooms[ws.room]) {
-            rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
+        if (!ws.room || !rooms[ws.room]) return;
 
-            // Notify remaining users in the room
-            rooms[ws.room].forEach(client => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify({ type: "user-left", user: ws.user }));
-                }
-            });
+        rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
 
-            // Delete room if empty
-            if (rooms[ws.room].length === 0) {
-                delete rooms[ws.room];
+        // Notify remaining users in the room
+        rooms[ws.room].forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: "user-left", user: ws.user }));
             }
+        });
 
-            console.log(`🔴 User "${ws.user}" left room: ${ws.room}`);
+        // Delete room if empty
+        if (rooms[ws.room].length === 0) {
+            delete rooms[ws.room];
         }
+
+        console.log(`🔴 ${ws.user} left room: ${ws.room}`);
     }
 });
 
-console.log(`WebSocket server running on port ${PORT}`);
+// Keep server alive on platforms like Render
+server.on("listening", () => {
+    console.log(`✅ WebSocket Server is running on port ${PORT}`);
+});
+
+server.on("error", (err) => {
+    console.error("❌ WebSocket Server Error:", err);
+});

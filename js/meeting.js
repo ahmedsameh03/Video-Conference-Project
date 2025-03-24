@@ -7,7 +7,10 @@ function getQueryParams() {
     return params;
 }
 
-const { room, name } = getQueryParams();
+const queryParams = getQueryParams();
+const room = queryParams.room;
+const name = queryParams.name;
+
 document.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById('meeting-id-display')) {
         document.getElementById('meeting-id-display').textContent = `#${room}`;
@@ -25,7 +28,7 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
-const ws = new WebSocket("ws://localhost:3000");
+const ws = new WebSocket("wss://video-conference-project.onrender.com");
 const peers = {};
 let localStream;
 
