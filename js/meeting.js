@@ -216,3 +216,13 @@ function toggleChat() {
 function toggleParticipants() {
     document.getElementById("participants-container").classList.toggle("visible");
 }
+
+function leaveMeeting() {
+    const confirmLeave = confirm("Are you sure you want to leave the meeting?");
+    if (confirmLeave) {
+        if (localVideo?.srcObject) {
+            localVideo.srcObject.getTracks().forEach(track => track.stop());
+        }
+        window.location.href = 'dashboard.html';
+    }
+}

@@ -177,18 +177,6 @@ function toggleParticipants() {
     }
 }
 
-// Leave Meeting Functionality
-function leaveMeeting() {
-    const confirmLeave = confirm("Are you sure you want to leave the meeting?");
-    if (confirmLeave) {
-        if (localVideo?.srcObject) {
-            localVideo.srcObject.getTracks().forEach(track => track.stop());
-        }
-
-        window.location.href = 'dashboard.html';
-    }
-}
-
 // Function to add participants to the list
 function addParticipant(name) {
     if (!participantsList) {
@@ -211,3 +199,10 @@ function setActiveSpeaker(videoElement) {
     document.querySelectorAll('.video-container').forEach(vc => vc.classList.remove('active-speaker'));
     videoElement.parentElement.classList.add('active-speaker');
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    const leaveBtn = document.getElementById("leave-btn");
+    if (leaveBtn) {
+        leaveBtn.addEventListener("click", leaveMeeting);
+    }
+});
