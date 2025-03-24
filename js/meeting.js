@@ -9,8 +9,12 @@ function getQueryParams() {
 
 const { room, name } = getQueryParams();
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('meeting-id-display').textContent = `#${room}`;
-    document.getElementById('user-name-display').textContent = name;
+    if (document.getElementById('meeting-id-display')) {
+        document.getElementById('meeting-id-display').textContent = `#${room}`;
+    }
+    if (document.getElementById('user-name-display')) {
+        document.getElementById('user-name-display').textContent = name;
+    }
     startCamera();
 });
 
@@ -25,12 +29,21 @@ const ws = new WebSocket("ws://localhost:3000");
 const peers = {};
 let localStream;
 
+// WebSocket Event Handlers
+ws.onopen = () => {
+    console.log("WebSocket connected!");
+    ws.send(JSON.stringify({ type: "join", room, user: name }));
+};
+
+ws.onerror = (error) => {
+    console.error("WebSocket Error:", error);
+};
+
 // Start Camera & Microphone
 async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
-        ws.send(JSON.stringify({ type: "join", room, user: name }));
     } catch (error) {
         console.error("Error accessing camera:", error);
     }
@@ -38,32 +51,36 @@ async function startCamera() {
 
 // Handle WebSocket Messages
 ws.onmessage = async (message) => {
-    const data = JSON.parse(message.data);
-    if (!data.type) return;
+    try {
+        const data = JSON.parse(message.data);
+        if (!data.type) return;
 
-    switch (data.type) {
-        case "new-user":
-            await createOffer(data.user);
-            break;
-        case "offer":
-            await createAnswer(data.offer, data.user);
-            break;
-        case "answer":
-            if (peers[data.user]) {
-                await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
-            }
-            break;
-        case "candidate":
-            if (peers[data.user]) {
-                await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
-            }
-            break;
-        case "user-left":
-            removeVideoStream(data.user);
-            break;
-        case "chat":
-            displayMessage({ user: data.user, text: data.text, own: false });
-            break;
+        switch (data.type) {
+            case "new-user":
+                await createOffer(data.user);
+                break;
+            case "offer":
+                await createAnswer(data.offer, data.user);
+                break;
+            case "answer":
+                if (peers[data.user]) {
+                    await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
+                }
+                break;
+            case "candidate":
+                if (peers[data.user]) {
+                    await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+                break;
+            case "user-left":
+                removeVideoStream(data.user);
+                break;
+            case "chat":
+                displayMessage({ user: data.user, text: data.text, own: false });
+                break;
+        }
+    } catch (error) {
+        console.error("Error handling WebSocket message:", error);
     }
 };
 
