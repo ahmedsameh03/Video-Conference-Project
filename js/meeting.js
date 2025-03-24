@@ -1,7 +1,7 @@
 // Parse URL Parameters
 function getQueryParams() {
     const params = {};
-    window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(str, key, value) {
+    new URLSearchParams(window.location.search).forEach((value, key) => {
         params[key] = decodeURIComponent(value);
     });
     return params;
@@ -11,6 +11,7 @@ const { room, name } = getQueryParams();
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('meeting-id-display').textContent = `#${room}`;
     document.getElementById('user-name-display').textContent = name;
+    startCamera();
 });
 
 // WebRTC and UI Elements
@@ -29,7 +30,6 @@ async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
-        localVideo.play();
         ws.send(JSON.stringify({ type: "join", room, user: name }));
     } catch (error) {
         console.error("Error accessing camera:", error);
@@ -39,22 +39,30 @@ async function startCamera() {
 // Handle WebSocket Messages
 ws.onmessage = async (message) => {
     const data = JSON.parse(message.data);
+    if (!data.type) return;
 
     switch (data.type) {
         case "new-user":
-            createOffer(data.user);
+            await createOffer(data.user);
             break;
         case "offer":
-            createAnswer(data.offer, data.user);
+            await createAnswer(data.offer, data.user);
             break;
         case "answer":
-            peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
+            if (peers[data.user]) {
+                await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
+            }
             break;
         case "candidate":
-            peers[data.user]?.addIceCandidate(new RTCIceCandidate(data.candidate));
+            if (peers[data.user]) {
+                await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
             break;
         case "user-left":
             removeVideoStream(data.user);
+            break;
+        case "chat":
+            displayMessage({ user: data.user, text: data.text, own: false });
             break;
     }
 };
@@ -84,7 +92,6 @@ async function createOffer(user) {
     createPeer(user);
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
-
     ws.send(JSON.stringify({ type: "offer", offer, room, user }));
 }
 
@@ -94,7 +101,6 @@ async function createAnswer(offer, user) {
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await peers[user].createAnswer();
     await peers[user].setLocalDescription(answer);
-
     ws.send(JSON.stringify({ type: "answer", answer, room, user }));
 }
 
@@ -118,53 +124,42 @@ function addVideoStream(stream, user) {
 
 // Remove Video When User Leaves
 function removeVideoStream(user) {
-    document.querySelector(`[data-user="${user}"]`)?.remove();
+    const videoElement = document.querySelector(`[data-user="${user}"]`);
+    if (videoElement) videoElement.parentElement.remove();
+    delete peers[user];
 }
 
 // Toggle Video
 function toggleVideo() {
-    const videoTracks = localStream.getVideoTracks();
-    if (videoTracks.length > 0) {
-        videoTracks[0].enabled = !videoTracks[0].enabled;
-    }
+    localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
 }
 
 // Toggle Mute
 function toggleMute() {
-    const audioTracks = localStream.getAudioTracks();
-    if (audioTracks.length > 0) {
-        audioTracks[0].enabled = !audioTracks[0].enabled;
-    }
+    localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
 }
 
 let screenStream;
 let screenVideo;
 
+// Share Screen
 async function shareScreen() {
     try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-
-        if (screenVideo) {
-            screenVideo.srcObject = screenStream;
-            return;
-        }
-
         screenVideo = document.createElement("video");
         screenVideo.srcObject = screenStream;
         screenVideo.autoplay = true;
         screenVideo.id = "screen-share";
         screenVideo.style.width = "100%";
-
         videoGrid.appendChild(screenVideo);
 
-        screenStream.getVideoTracks()[0].onended = function () {
-            stopScreenShare();
-        };
+        screenStream.getVideoTracks()[0].onended = stopScreenShare;
     } catch (error) {
         console.error("Error sharing screen:", error);
     }
 }
 
+// Stop Screen Sharing
 function stopScreenShare() {
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
@@ -177,26 +172,18 @@ function stopScreenShare() {
 // Send Chat Message
 function sendMessage() {
     const message = chatInputField.value.trim();
-    if (message !== "") {
+    if (message) {
         ws.send(JSON.stringify({ type: "chat", user: name, text: message }));
         displayMessage({ user: name, text: message, own: true });
         chatInputField.value = "";
     }
 }
 
-ws.onmessage = (message) => {
-    const data = JSON.parse(message.data);
-    if (data.type === "chat") {
-        displayMessage({ user: data.user, text: data.text, own: false });
-    }
-};
-
 // Display Chat Message
-function displayMessage(message) {
+function displayMessage({ user, text, own }) {
     const messageElement = document.createElement("p");
-    messageElement.innerHTML = `<strong>${message.user}:</strong> ${message.text}`;
-    if (message.own) messageElement.classList.add("own-message");
-
+    messageElement.innerHTML = `<strong>${user}:</strong> ${text}`;
+    if (own) messageElement.classList.add("own-message");
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
