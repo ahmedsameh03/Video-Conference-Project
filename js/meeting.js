@@ -1,25 +1,7 @@
 // Parse URL Parameters
-function getQueryParams() {
-    const params = {};
-    new URLSearchParams(window.location.search).forEach((value, key) => {
-        params[key] = decodeURIComponent(value);
-    });
-    return params;
-}
-
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
-
-document.addEventListener("DOMContentLoaded", () => {
-    if (document.getElementById('meeting-id-display')) {
-        document.getElementById('meeting-id-display').textContent = `#${room}`;
-    }
-    if (document.getElementById('user-name-display')) {
-        document.getElementById('user-name-display').textContent = name;
-    }
-    startCamera();
-});
 
 // WebRTC and UI Elements
 const localVideo = document.getElementById("large-video");
@@ -42,6 +24,23 @@ ws.onerror = (error) => {
     console.error("WebSocket Error:", error);
 };
 
+document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById('meeting-id-display')) {
+        document.getElementById('meeting-id-display').textContent = `#${room}`;
+    }
+    if (document.getElementById('user-name-display')) {
+        document.getElementById('user-name-display').textContent = name;
+    }
+    startCamera();
+}); 
+
+function getQueryParams() {
+    const params = {};
+    new URLSearchParams(window.location.search).forEach((value, key) => {
+        params[key] = decodeURIComponent(value);
+    });
+    return params;
+}
 // Start Camera & Microphone
 async function startCamera() {
     try {
