@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 
 // Use dynamic port for deployment (Render/Vercel)
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const server = new WebSocket.Server({ port: PORT });
 const rooms = {}; // Store active rooms and participants
 
