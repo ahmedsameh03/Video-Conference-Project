@@ -1,0 +1,19 @@
+{
+  "name": "auth-server",
+  "version": "1.0.0",
+  "description": "SEEN Project - Auth Server",
+  "main": "authServer.js",
+  "scripts": {
+    "start": "node authServer.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "nodemailer": "^6.10.1"
+  }
+}
