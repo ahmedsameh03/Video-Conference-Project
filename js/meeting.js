@@ -1,3 +1,21 @@
+const socket = io('http://localhost:5000');
+
+const roomId = 'test-room'; // Temporary for now
+const userId = crypto.randomUUID(); // Create a random user ID for demo
+
+// Join the room
+socket.emit('join-room', { roomId, userId });
+
+// When another user connects
+socket.on('user-connected', (id) => {
+  console.log(`User connected: ${id}`);
+});
+
+// When another user disconnects
+socket.on('user-disconnected', (id) => {
+  console.log(`User disconnected: ${id}`);
+});
+
 // Function to parse URL parameters
 function getQueryParams() {
     const params = {};
