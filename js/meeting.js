@@ -10,7 +10,7 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
-const ws = new WebSocket("ws://localhost:3001");
+const ws = new WebSocket("wss://video-conference-project-production.up.railway.app");
 const peers = {};
 let localStream;
 
