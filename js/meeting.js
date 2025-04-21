@@ -14,9 +14,12 @@ const ws = new WebSocket("wss://video-conference-project-production.up.railway.a
 const peers = {};
 let localStream;
 
-// WebSocket Event Handlers
 ws.onopen = () => {
-    console.log("WebSocket connected!");
+    console.log("✅ WebSocket connected!");
+
+    // ✅ Once connected, send join and start camera
+    ws.send(JSON.stringify({ type: "join", room, user: name }));
+    startCamera();
 };
 
 ws.onerror = (error) => {
@@ -30,9 +33,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById('user-name-display')) {
         document.getElementById('user-name-display').textContent = name;
     }
-    startCamera();
-}); 
+});
 
+// Extract query params
 function getQueryParams() {
     const params = {};
     new URLSearchParams(window.location.search).forEach((value, key) => {
@@ -40,21 +43,18 @@ function getQueryParams() {
     });
     return params;
 }
-// Start Camera & Microphone
+
+// Start camera
 async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
-        
-        // ✅ Join the room only after stream is ready
-        ws.send(JSON.stringify({ type: "join", room, user: name }));
-        
     } catch (error) {
         console.error("Error accessing camera:", error);
     }
 }
 
-// Handle WebSocket Messages
+// Handle WebSocket messages
 ws.onmessage = async (message) => {
     try {
         const data = JSON.parse(message.data);
@@ -89,7 +89,7 @@ ws.onmessage = async (message) => {
     }
 };
 
-// Create WebRTC Peer Connection
+// Create Peer
 function createPeer(user) {
     const peer = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -109,7 +109,7 @@ function createPeer(user) {
     peers[user] = peer;
 }
 
-// Create Offer for New User
+// WebRTC Offer
 async function createOffer(user) {
     createPeer(user);
     const offer = await peers[user].createOffer();
@@ -117,7 +117,7 @@ async function createOffer(user) {
     ws.send(JSON.stringify({ type: "offer", offer, room, user }));
 }
 
-// Create Answer for Offer
+// WebRTC Answer
 async function createAnswer(offer, user) {
     createPeer(user);
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
@@ -126,9 +126,8 @@ async function createAnswer(offer, user) {
     ws.send(JSON.stringify({ type: "answer", answer, room, user }));
 }
 
-// Add Video Stream to Grid
+// Video Stream Display
 function addVideoStream(stream, user) {
-    // ✅ Prevent duplicates
     if (document.querySelector(`[data-user="${user}"]`)) return;
 
     const videoContainer = document.createElement("div");
@@ -145,33 +144,29 @@ function addVideoStream(stream, user) {
     videoContainer.appendChild(video);
     videoContainer.appendChild(nameTag);
     videoGrid.appendChild(videoContainer);
-    video.playsInline = true;
-    video.muted = user === name; // mute self stream to avoid echo
 
+    video.playsInline = true;
+    video.muted = user === name;
 }
 
-
-// Remove Video When User Leaves
+// Remove Video Stream
 function removeVideoStream(user) {
     const videoElement = document.querySelector(`[data-user="${user}"]`);
     if (videoElement) videoElement.parentElement.remove();
     delete peers[user];
 }
 
-// Toggle Video
+// Toggle Controls
 function toggleVideo() {
     localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
 }
 
-// Toggle Mute
 function toggleMute() {
     localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
 }
 
-let screenStream;
-let screenVideo;
+let screenStream, screenVideo;
 
-// Share Screen
 async function shareScreen() {
     try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -188,7 +183,6 @@ async function shareScreen() {
     }
 }
 
-// Stop Screen Sharing
 function stopScreenShare() {
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
@@ -198,7 +192,7 @@ function stopScreenShare() {
     }
 }
 
-// Send Chat Message
+// Chat
 function sendMessage() {
     const message = chatInputField.value.trim();
     if (message) {
@@ -208,7 +202,6 @@ function sendMessage() {
     }
 }
 
-// Display Chat Message
 function displayMessage({ user, text, own }) {
     const messageElement = document.createElement("p");
     messageElement.innerHTML = `<strong>${user}:</strong> ${text}`;
@@ -217,12 +210,10 @@ function displayMessage({ user, text, own }) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Toggle Chat
 function toggleChat() {
     document.getElementById("chat-container").classList.toggle("visible");
 }
 
-// Toggle Participants
 function toggleParticipants() {
     document.getElementById("participants-container").classList.toggle("visible");
 }
