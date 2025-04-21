@@ -254,8 +254,8 @@
       }
   
       try {
-        const response = await fetch('http://localhost:3000/send-otp', {
-          method: 'POST',
+        const response = await fetch("https://authserver-production.up.railway.app/send-otp", {
+          method: "POST",
           headers: {
             'Content-Type': 'application/json',
           },
