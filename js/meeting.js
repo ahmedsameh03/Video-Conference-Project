@@ -92,7 +92,14 @@ ws.onmessage = async (message) => {
 // Create Peer
 function createPeer(user) {
     const peer = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: "turn:relay1.expressturn.com:3478",
+                username: "efwew",
+                credential: "efwewe"
+            }
+        ]
     });
 
     peer.onicecandidate = (event) => {
@@ -108,6 +115,7 @@ function createPeer(user) {
     localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
     peers[user] = peer;
 }
+
 
 // WebRTC Offer
 async function createOffer(user) {
