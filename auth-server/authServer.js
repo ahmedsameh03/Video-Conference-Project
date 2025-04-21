@@ -5,11 +5,18 @@ const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
+
+// ✅ Allow your frontend origin
+app.use(cors({
+  origin: "https://seenmeet.vercel.app",  // 🔓 allow Vercel frontend
+  methods: ["GET", "POST"],
+  credentials: true
+}));
+
 app.use(express.json());
 
 let otpStorage = {}; // Temporary storage for OTPs
-let users = []; // Temporary storage for user credentials
+let users = [];      // Temporary storage for user credentials
 
 // ✅ Validate environment variables
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
