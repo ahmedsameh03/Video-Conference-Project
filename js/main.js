@@ -1,4 +1,4 @@
-// public/js/meeting.js
+// public/js/main.js
 
 // Function to parse URL parameters
 function getQueryParams() {
@@ -12,18 +12,32 @@ function getQueryParams() {
 // Extract room ID and user name from URL
 const { room, name } = getQueryParams();
 
-// Update meeting ID and user name in the navbar and video
+// Ensure DOM elements exist before modifying them
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('meeting-id-display').textContent = `#${room}`;
-    document.getElementById('user-name-display').textContent = name;
+    const meetingIdDisplay = document.getElementById('meeting-id-display');
+    const userNameDisplay = document.getElementById('user-name-display');
+
+    if (meetingIdDisplay) {
+        meetingIdDisplay.textContent = `#${room}`;
+    } else {
+        console.error("❌ Error: meeting-id-display element not found!");
+    }
+
+    if (userNameDisplay) {
+        userNameDisplay.textContent = name;
+    } else {
+        console.error("❌ Error: user-name-display element not found!");
+    }
 });
 
-// Get elements
+// Get essential DOM elements
 const localVideo = document.getElementById('local-video');
 const videoGrid = document.getElementById('video-grid');
 const chatMessages = document.getElementById('chat-messages');
 const chatInputField = document.getElementById('chat-input-field');
 const participantsList = document.getElementById('participants-list');
+const chatContainer = document.getElementById('chat-container');
+const participantsContainer = document.getElementById('participants-container');
 
 // Flags for mute and video
 let isMuted = false;
@@ -34,21 +48,24 @@ navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
 }).then(stream => {
-    // Display local video
-    localVideo.srcObject = stream;
-    localVideo.play();
-
-    // Add local video to grid
-    addVideoStream(localVideo, name);
-
-    // Here you can add code to connect to other participants if backend is available
+    if (localVideo) {
+        localVideo.srcObject = stream;
+        localVideo.play();
+        addVideoStream(localVideo, name);
+    } else {
+        console.error("❌ Error: local-video element not found!");
+    }
 }).catch(error => {
     console.error('Error accessing media devices.', error);
-   
 });
 
-// Function to add video stream to grid
+// Function to add video stream to the grid
 function addVideoStream(video, username) {
+    if (!videoGrid) {
+        console.error("❌ Error: video-grid element not found!");
+        return;
+    }
+
     const videoContainer = document.createElement('div');
     videoContainer.classList.add('video-container');
 
@@ -64,36 +81,34 @@ function addVideoStream(video, username) {
 // Toggle Mute/Unmute Microphone
 function toggleMute() {
     isMuted = !isMuted;
-    const audioTracks = localVideo.srcObject.getAudioTracks();
-    if (audioTracks.length > 0) {
+    const audioTracks = localVideo?.srcObject?.getAudioTracks();
+    if (audioTracks && audioTracks.length > 0) {
         audioTracks[0].enabled = !isMuted;
     }
 
     const muteButton = document.getElementById('mute-btn');
-    if (isMuted) {
-        muteButton.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-        muteButton.classList.add('active');
-    } else {
-        muteButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        muteButton.classList.remove('active');
+    if (muteButton) {
+        muteButton.innerHTML = isMuted 
+            ? '<i class="fas fa-microphone-slash"></i>' 
+            : '<i class="fas fa-microphone"></i>';
+        muteButton.classList.toggle('active', isMuted);
     }
 }
 
 // Toggle Start/Stop Video
 function toggleVideo() {
     isVideoOff = !isVideoOff;
-    const videoTracks = localVideo.srcObject.getVideoTracks();
-    if (videoTracks.length > 0) {
+    const videoTracks = localVideo?.srcObject?.getVideoTracks();
+    if (videoTracks && videoTracks.length > 0) {
         videoTracks[0].enabled = !isVideoOff;
     }
 
     const videoButton = document.getElementById('video-btn');
-    if (isVideoOff) {
-        videoButton.innerHTML = '<i class="fas fa-video-slash"></i>';
-        videoButton.classList.add('active');
-    } else {
-        videoButton.innerHTML = '<i class="fas fa-video"></i>';
-        videoButton.classList.remove('active');
+    if (videoButton) {
+        videoButton.innerHTML = isVideoOff 
+            ? '<i class="fas fa-video-slash"></i>' 
+            : '<i class="fas fa-video"></i>';
+        videoButton.classList.toggle('active', isVideoOff);
     }
 }
 
@@ -107,11 +122,9 @@ function shareScreen() {
         screenVideo.autoplay = true;
         screenVideo.className = 'screen-video';
         screenVideo.style.border = '2px solid #28a745';
+
         addVideoStream(screenVideo, 'Screen Share');
 
-        // If you have a backend, you can add code to broadcast this screenStream to other participants
-
-        // Stop sharing when the user stops sharing the screen
         screenStream.getTracks()[0].onended = () => {
             const videos = document.querySelectorAll('.screen-video');
             videos.forEach(v => v.parentElement.remove());
@@ -123,16 +136,20 @@ function shareScreen() {
 
 // Send Chat Message
 function sendMessage() {
-    const message = chatInputField.value.trim();
-    if (message !== "") {
+    const message = chatInputField?.value.trim();
+    if (message && chatMessages) {
         displayMessage({ user: name, text: message, own: true });
         chatInputField.value = "";
-        // If you have a backend, you can add code to send the message to other participants
     }
 }
 
 // Display Chat Message
 function displayMessage(message) {
+    if (!chatMessages) {
+        console.error("❌ Error: chat-messages element not found!");
+        return;
+    }
+
     const messageElement = document.createElement('p');
     messageElement.innerHTML = `<strong>${message.user}:</strong> ${message.text}`;
     if (message.own) {
@@ -144,56 +161,48 @@ function displayMessage(message) {
 
 // Toggle Chat Visibility
 function toggleChat() {
-    const chatContainer = document.getElementById('chat-container');
-    chatContainer.classList.toggle('visible');
+    if (chatContainer) {
+        chatContainer.classList.toggle('visible');
+    } else {
+        console.error("❌ Error: chat-container element not found!");
+    }
 }
 
 // Toggle Participants Visibility
 function toggleParticipants() {
-    const participantsContainer = document.getElementById('participants-container');
-    participantsContainer.classList.toggle('visible');
-}
-
-// Leave Meeting Functionality
-function leaveMeeting() {
-    const confirmLeave = confirm("Are you sure you want to leave the meeting?");
-    if (confirmLeave) {
-        // Disconnect from the meeting (if backend integration exists)
-        // Example:
-        // if (socket) {
-        //     socket.emit('leaveMeeting', { room, name });
-        //     socket.disconnect();
-        // }
-
-        // Disconnect media streams
-        if (localVideo.srcObject) {
-            localVideo.srcObject.getTracks().forEach(track => track.stop());
-        }
-
-        // Redirect to the dashboard or goodbye page
-        window.location.href = 'dashboard.html'; // or 'goodbye.html'
+    if (participantsContainer) {
+        participantsContainer.classList.toggle('visible');
+    } else {
+        console.error("❌ Error: participants-container element not found!");
     }
 }
 
-// Function to add participants to the list (For demonstration purposes)
+// Function to add participants to the list
 function addParticipant(name) {
+    if (!participantsList) {
+        console.error("❌ Error: participants-list element not found!");
+        return;
+    }
+
     const participant = document.createElement('p');
     participant.textContent = name;
     participantsList.appendChild(participant);
 }
 
-// Adding dummy participants (Replace this with dynamic data when backend is connected)
+// Adding dummy participants (Replace with real data when backend is connected)
 addParticipant('User One');
 addParticipant('User Two');
 addParticipant('User Three');
 
 // Active Speaker Indicator (Requires backend integration)
 function setActiveSpeaker(videoElement) {
-    // This function requires backend support to analyze audio streams and determine the active speaker
-    // As a placeholder, we'll highlight the videoElement passed to this function
     document.querySelectorAll('.video-container').forEach(vc => vc.classList.remove('active-speaker'));
     videoElement.parentElement.classList.add('active-speaker');
 }
 
-// Example usage (Needs to be triggered by backend events)
-// setActiveSpeaker(someVideoElement);
+document.addEventListener("DOMContentLoaded", () => {
+    const leaveBtn = document.getElementById("leave-btn");
+    if (leaveBtn) {
+        leaveBtn.addEventListener("click", leaveMeeting);
+    }
+});

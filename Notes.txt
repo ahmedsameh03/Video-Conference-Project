@@ -1,0 +1,8 @@
+cd .\js\
+node server.js
+
+main dir
+node server2.js
+npx http-server -p 5500
+
+open login.html with live server

@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SEEN - Login / Sign Up</title>
+  <script type="module" src="firebase.js"></script>
+
+
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/boxicons@2.1.2/css/boxicons.min.css" rel="stylesheet">
   <style>
@@ -193,7 +196,7 @@
         </div>
       </form>
       <div class="social-login">
-        <button class="google"><i class="bx bxl-google"></i> Google</button>
+        <button id="google-login" class="google"><i class="bx bxl-google"></i> Google</button>
         <button class="face-recognition"><i class="bx bx-face"></i> Face Recognition</button>
       </div>
     </div>
@@ -223,59 +226,75 @@
   </footer>
 
   <script>
-    const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
-    const switchToSignup = document.getElementById('switchToSignup');
-    const switchToLogin = document.getElementById('switchToLogin');
-    const sendCodeButton = document.getElementById('sendCodeButton');
-    const verificationCodeInput = document.getElementById('verificationCode');
-    const loginFormSubmit = document.getElementById('loginFormSubmit');
+   const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const switchToSignup = document.getElementById('switchToSignup');
+const switchToLogin = document.getElementById('switchToLogin');
+const sendCodeButton = document.getElementById('sendCodeButton');
+const verificationCodeInput = document.getElementById('verificationCode');
+const loginFormSubmit = document.getElementById('loginFormSubmit');
 
-    // Mock verification code
-    const verificationCode = "123456";
+switchToSignup.addEventListener('click', () => {
+  loginForm.classList.remove('active');
+  signupForm.classList.add('active');
+});
 
-    switchToSignup.addEventListener('click', () => {
-      loginForm.classList.remove('active');
-      signupForm.classList.add('active');
+switchToLogin.addEventListener('click', () => {
+  signupForm.classList.remove('active');
+  loginForm.classList.add('active');
+});
+
+sendCodeButton.addEventListener('click', async () => {
+  const email = document.getElementById('signupEmail').value;
+
+  if (!email) {
+    alert('Please enter your email address.');
+    return;
+  }
+
+  try {
+    const response = await fetch('http://localhost:3000/send-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
     });
 
-    switchToLogin.addEventListener('click', () => {
-      signupForm.classList.remove('active');
-      loginForm.classList.add('active');
-    });
+    const data = await response.json();
 
-    sendCodeButton.addEventListener('click', () => {
-      const email = document.getElementById('signupEmail').value;
-      if (!email) {
-        alert('Please enter your email address.');
-        return;
-      }
-
-      // Simulate sending an email
-      alert(`Verification code sent to ${email}`);
+    if (response.ok) {
+      alert('Verification code sent successfully!');
       verificationCodeInput.style.display = 'block';
-    });
+    } else {
+      alert(`Error: ${data.message}`);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Failed to send verification code. Please try again.');
+  }
+});
 
-    loginFormSubmit.addEventListener('submit', (e) => {
-      e.preventDefault();
-      // Simulate successful login and redirect to dashboard
-      alert('Login Successful!');
-      window.location.href = 'dashboard.html'; // Redirect to dashboard
-    });
+loginFormSubmit.addEventListener('submit', (e) => {
+  e.preventDefault();
+  alert('Login Successful!');
+  window.location.href = 'dashboard.html';
+});
 
-    // Add a handler to check the verification code during submission.
-    signupForm.querySelector('form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const enteredCode = verificationCodeInput.value;
-      if (enteredCode !== verificationCode) {
-        alert('Invalid verification code.');
-        return;
-      }
+signupForm.querySelector('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const enteredCode = verificationCodeInput.value;
 
-      alert('Sign up successful!');
-      signupForm.classList.remove('active');
-      loginForm.classList.add('active');
-    });
+  if (!enteredCode) {
+    alert('Please enter the verification code.');
+    return;
+  }
+
+  alert('Sign up successful!');
+  signupForm.classList.remove('active');
+  loginForm.classList.add('active');
+});
+
   </script>
 </body>
 </html>

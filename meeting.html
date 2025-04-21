@@ -372,6 +372,9 @@
             align-items: center;
             justify-content: center;
         }
+        #large-video {
+            transform: scaleX(-1); /* Flip back to normal */
+        }
     </style>
 </head>
 <body>
@@ -392,13 +395,12 @@
 
     <!-- Video Grid -->
     <div class="video-grid" id="video-grid">
-        <!-- Local Video (Picture-in-Picture) -->
-        <!-- <video id="local-video" autoplay muted></video> -->
-        <video id="large-video" autoplay playsinline></video>
-        <p id="user-name-display">You</p>
-        <!-- Remote Videos will be added here dynamically -->
+        <div class="video-container" id="main-video-container">
+            <video id="large-video" autoplay playsinline></video>
+            <p id="user-name-display">You</p>
+        </div>
     </div>
-
+    
     <!-- Participants List -->
     <div class="participants-container" id="participants-container">
         <div class="participants-header">
@@ -462,6 +464,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
     <!-- Custom JavaScript -->
     <script src="js/meeting.js"></script>
+    <script src="js/main.js"></script>
     <script>
         // Initialize Bootstrap tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -474,8 +477,6 @@
             alert("AI Features will be implemented here.");
             // You can add more functionality here, such as opening a modal or a sidebar with AI features.
         }
-    </script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script src="JS/meeting.js"></script>
+    </script> 
 </body>
 </html>
