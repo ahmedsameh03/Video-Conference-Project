@@ -1,4 +1,8 @@
-const socket = io('http://localhost:5000');
+// Only declare once
+if (typeof socket === 'undefined') {
+    var socket = io('http://localhost:5000');
+  }
+  
 
 const roomId = 'test-room'; // Temporary for now
 const userId = crypto.randomUUID(); // Create a random user ID for demo
