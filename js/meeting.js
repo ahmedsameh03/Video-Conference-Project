@@ -13,6 +13,7 @@ socket.on('user-disconnected', (id) => {
   console.log(`User disconnected: ${id}`);
 });
 
+
 // Function to parse URL parameters
 function getQueryParams() {
     const params = {};
