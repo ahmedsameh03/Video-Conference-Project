@@ -17,7 +17,6 @@ let localStream;
 // WebSocket Event Handlers
 ws.onopen = () => {
     console.log("WebSocket connected!");
-    ws.send(JSON.stringify({ type: "join", room, user: name }));
 };
 
 ws.onerror = (error) => {
@@ -46,6 +45,10 @@ async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
+        
+        // ✅ Join the room only after stream is ready
+        ws.send(JSON.stringify({ type: "join", room, user: name }));
+        
     } catch (error) {
         console.error("Error accessing camera:", error);
     }
