@@ -10,7 +10,7 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
-const ws = new WebSocket("wss://video-conference-project.onrender.com");
+const ws = new WebSocket("ws://localhost:5000");
 const peers = {};
 let localStream;
 
@@ -125,6 +125,9 @@ async function createAnswer(offer, user) {
 
 // Add Video Stream to Grid
 function addVideoStream(stream, user) {
+    // ✅ Prevent duplicates
+    if (document.querySelector(`[data-user="${user}"]`)) return;
+
     const videoContainer = document.createElement("div");
     videoContainer.classList.add("video-container");
 
@@ -132,14 +135,18 @@ function addVideoStream(stream, user) {
     video.srcObject = stream;
     video.autoplay = true;
     video.setAttribute("data-user", user);
-    videoContainer.appendChild(video);
 
     const nameTag = document.createElement("p");
     nameTag.textContent = user;
-    videoContainer.appendChild(nameTag);
 
+    videoContainer.appendChild(video);
+    videoContainer.appendChild(nameTag);
     videoGrid.appendChild(videoContainer);
+    video.playsInline = true;
+    video.muted = user === name; // mute self stream to avoid echo
+
 }
+
 
 // Remove Video When User Leaves
 function removeVideoStream(user) {
