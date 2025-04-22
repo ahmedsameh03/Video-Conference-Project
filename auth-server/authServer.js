@@ -53,6 +53,7 @@ app.post("/send-otp", async (req, res) => {
 
     const otp = Math.floor(1000 + Math.random() * 9000);
     otpStorage[email] = otp;
+    console.log("✅ Generated OTP:", otp, "for:", email);
 
     const mailOptions = {
         from: process.env.EMAIL_USER,
@@ -72,6 +73,10 @@ app.post("/send-otp", async (req, res) => {
 // ✅ API to Verify OTP
 app.post("/verify-otp", (req, res) => {
     const { email, otp } = req.body;
+    console.log("🔍 Verifying OTP for:", email);
+    console.log("🧠 OTP stored:", otpStorage[email]);
+    console.log("🧾 OTP entered:", otp);
+
     if (otpStorage[email] && otpStorage[email] == otp) {
         delete otpStorage[email];
         res.json({ message: "OTP verified successfully!" });
