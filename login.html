@@ -308,15 +308,27 @@
         const data = await response.json();
   
         if (response.ok) {
-          const users = JSON.parse(localStorage.getItem('seen_users')) || {};
-          if (users[email]) {
-            alert('Account already exists. Please log in.');
-            return;
+          try {
+            const signupResponse = await fetch("https://video-conference-project-production-c224.up.railway.app/signup", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ email, password })
+            });
+
+            const result = await signupResponse.json();
+            if (signupResponse.ok) {
+              alert('Sign up successful! You can now log in.');
+              signupForm.classList.remove('active');
+              loginForm.classList.add('active');
+            } else {
+              alert(`Signup failed: ${result.error}`);
+            }
+          } catch (error) {
+            console.error('Signup error:', error);
+            alert('Signup failed. Please try again.');
           }
-  
-          users[email] = { password };
-          localStorage.setItem('seen_users', JSON.stringify(users));
-  
           alert('Sign up successful! You can now log in.');
           signupForm.classList.remove('active');
           loginForm.classList.add('active');
