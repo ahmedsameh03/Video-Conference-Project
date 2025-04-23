@@ -59,7 +59,6 @@ ws.onmessage = async (message) => {
     try {
         const data = JSON.parse(message.data);
         if (!data.type) return;
-
         switch (data.type) {
             case "new-user":
                 await createOffer(data.user);
