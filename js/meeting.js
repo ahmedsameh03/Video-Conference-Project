@@ -167,13 +167,42 @@ function removeParticipant(user) {
     if (participant) participant.remove();
 }
 
-function toggleVideo() {
-    localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
+function toggleMute() {
+    isMuted = !isMuted;
+    const audioTracks = localVideo?.srcObject?.getAudioTracks();
+    if (audioTracks && audioTracks.length > 0) {
+        audioTracks[0].enabled = !isMuted;
+    }
+
+    const muteButton = document.getElementById('mute-btn');
+    if (muteButton) {
+        muteButton.innerHTML = isMuted 
+            ? '<i class="fas fa-microphone-slash"></i>' 
+            : '<i class="fas fa-microphone"></i>';
+
+        muteButton.classList.toggle('btn-primary', isMuted);  // 🔥 add blue color if muted
+        muteButton.classList.toggle('btn-secondary', !isMuted); // 🔥 gray color if unmuted
+    }
 }
 
-function toggleMute() {
-    localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
+function toggleVideo() {
+    isVideoOff = !isVideoOff;
+    const videoTracks = localVideo?.srcObject?.getVideoTracks();
+    if (videoTracks && videoTracks.length > 0) {
+        videoTracks[0].enabled = !isVideoOff;
+    }
+
+    const videoButton = document.getElementById('video-btn');
+    if (videoButton) {
+        videoButton.innerHTML = isVideoOff 
+            ? '<i class="fas fa-video-slash"></i>' 
+            : '<i class="fas fa-video"></i>';
+
+        videoButton.classList.toggle('btn-primary', isVideoOff);   // 🔥 add blue when video off
+        videoButton.classList.toggle('btn-secondary', !isVideoOff); // 🔥 gray when video on
+    }
 }
+
 
 let screenStream, screenVideo;
 
