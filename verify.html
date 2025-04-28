@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Verify Login - SEEN</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #f4f6f8;
+      color: #333;
+      text-align: center;
+    }
+    h1 {
+      color: #4070f4;
+      margin-bottom: 20px;
+    }
+    p {
+      font-size: 18px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Verifying your login...</h1>
+  <p id="message">Please wait...</p>
+
+  <script>
+    async function verifyLogin() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (!token) {
+        document.getElementById('message').innerText = 'Invalid verification link.';
+        return;
+      }
+
+      try {
+        const response = await fetch('https://video-conference-project-production-c224.up.railway.app/verify-magic-link', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          document.getElementById('message').innerText = 'Login successful! Redirecting to dashboard...';
+          setTimeout(() => {
+            window.location.href = 'dashboard.html';
+          }, 2000); // 2 seconds delay
+        } else {
+          document.getElementById('message').innerText = `Verification failed: ${data.message}`;
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('message').innerText = 'An error occurred. Please try again.';
+      }
+    }
+
+    verifyLogin();
+  </script>
+
+</body>
+</html>
