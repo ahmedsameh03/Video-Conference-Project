@@ -16,8 +16,6 @@ let localStream;
 
 ws.onopen = () => {
     console.log("✅ WebSocket connected!");
-
-    // ✅ Once connected, send join and start camera
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     startCamera();
 };
@@ -35,7 +33,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
-// Extract query params
 function getQueryParams() {
     const params = {};
     new URLSearchParams(window.location.search).forEach((value, key) => {
@@ -44,7 +41,6 @@ function getQueryParams() {
     return params;
 }
 
-// Start camera
 async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -54,13 +50,13 @@ async function startCamera() {
     }
 }
 
-// Handle WebSocket messages
 ws.onmessage = async (message) => {
     try {
         const data = JSON.parse(message.data);
         if (!data.type) return;
         switch (data.type) {
             case "new-user":
+                addParticipant(data.user);
                 await createOffer(data.user);
                 break;
             case "offer":
@@ -78,6 +74,7 @@ ws.onmessage = async (message) => {
                 break;
             case "user-left":
                 removeVideoStream(data.user);
+                removeParticipant(data.user);
                 break;
             case "chat":
                 displayMessage({ user: data.user, text: data.text, own: false });
@@ -88,16 +85,10 @@ ws.onmessage = async (message) => {
     }
 };
 
-// Create Peer
 function createPeer(user) {
     const peer = new RTCPeerConnection({
         iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            {
-                urls: "turn:relay1.expressturn.com:3478",
-                username: "efwew",
-                credential: "efwewe"
-            }
+            { urls: "stun:stun.l.google.com:19302" }
         ]
     });
 
@@ -115,8 +106,6 @@ function createPeer(user) {
     peers[user] = peer;
 }
 
-
-// WebRTC Offer
 async function createOffer(user) {
     createPeer(user);
     const offer = await peers[user].createOffer();
@@ -124,7 +113,6 @@ async function createOffer(user) {
     ws.send(JSON.stringify({ type: "offer", offer, room, user }));
 }
 
-// WebRTC Answer
 async function createAnswer(offer, user) {
     createPeer(user);
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
@@ -133,7 +121,6 @@ async function createAnswer(offer, user) {
     ws.send(JSON.stringify({ type: "answer", answer, room, user }));
 }
 
-// Video Stream Display
 function addVideoStream(stream, user) {
     if (document.querySelector(`[data-user="${user}"]`)) return;
 
@@ -156,14 +143,25 @@ function addVideoStream(stream, user) {
     video.muted = user === name;
 }
 
-// Remove Video Stream
 function removeVideoStream(user) {
     const videoElement = document.querySelector(`[data-user="${user}"]`);
     if (videoElement) videoElement.parentElement.remove();
     delete peers[user];
 }
 
-// Toggle Controls
+function addParticipant(user) {
+    if (document.getElementById(`participant-${user}`)) return;
+    const participant = document.createElement("p");
+    participant.textContent = user;
+    participant.id = `participant-${user}`;
+    participantsList.appendChild(participant);
+}
+
+function removeParticipant(user) {
+    const participant = document.getElementById(`participant-${user}`);
+    if (participant) participant.remove();
+}
+
 function toggleVideo() {
     localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
 }
@@ -199,7 +197,6 @@ function stopScreenShare() {
     }
 }
 
-// Chat
 function sendMessage() {
     const message = chatInputField.value.trim();
     if (message) {

@@ -1,9 +1,8 @@
 const WebSocket = require("ws");
 
-// Use dynamic port for deployment (Render/Vercel)
 const PORT = process.env.PORT || 3001;
 const server = new WebSocket.Server({ port: PORT });
-const rooms = {}; // Store active rooms and participants
+const rooms = {};
 
 console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
@@ -20,14 +19,12 @@ server.on("connection", (ws) => {
                     if (!rooms[data.room]) {
                         rooms[data.room] = [];
                     }
-                    
                     rooms[data.room].push(ws);
                     ws.room = data.room;
-                    ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`; // Fallback username
+                    ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
 
                     console.log(`👤 ${ws.user} joined room: ${ws.room}`);
 
-                    // Notify existing users in the room
                     rooms[data.room].forEach(client => {
                         if (client !== ws && client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({ type: "new-user", user: ws.user }));
@@ -70,14 +67,12 @@ server.on("connection", (ws) => {
 
         rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
 
-        // Notify remaining users in the room
         rooms[ws.room].forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: "user-left", user: ws.user }));
             }
         });
 
-        // Delete room if empty
         if (rooms[ws.room].length === 0) {
             delete rooms[ws.room];
         }
@@ -86,7 +81,6 @@ server.on("connection", (ws) => {
     }
 });
 
-// Keep server alive on platforms like Render
 server.on("listening", () => {
     console.log(`✅ WebSocket Server is running on port ${PORT}`);
 });
