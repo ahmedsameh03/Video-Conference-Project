@@ -17,8 +17,13 @@ let localStream;
 ws.onopen = () => {
     console.log("✅ WebSocket connected!");
     ws.send(JSON.stringify({ type: "join", room, user: name }));
+
+    // ✅ Add yourself to the participants list immediately
+    addParticipant(name);
+
     startCamera();
 };
+
 
 ws.onerror = (error) => {
     console.error("WebSocket Error:", error);
