@@ -2,21 +2,24 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
+const crypto = require("crypto"); // ✅ Added for secure magic tokens
 require("dotenv").config();
 
 const app = express();
 
 // ✅ Allow your frontend origin
 app.use(cors({
-  origin: "https://seenmeet.vercel.app",  // 🔓 allow Vercel frontend
+  origin: "https://seenmeet.vercel.app",
   methods: ["GET", "POST"],
   credentials: true
 }));
 
 app.use(express.json());
 
-let otpStorage = {}; // Temporary storage for OTPs
-let users = [];      // Temporary storage for user credentials
+// ✅ Temporary in-memory storage
+let otpStorage = {}; // { email: otp }
+let users = [];      // { email, password }
+let magicLinks = {}; // { token: { email, expiresAt } }
 
 // ✅ Validate environment variables
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -97,21 +100,19 @@ app.post("/signup", async (req, res) => {
         return res.status(400).json({ error: "User already exists" });
     }
 
-    // Hash password before saving
     const hashedPassword = await bcrypt.hash(password, 10);
     users.push({ email, password: hashedPassword });
 
     res.json({ message: "User registered successfully!" });
 });
 
-// ✅ SIGN IN: Authenticate user
+// ✅ OLD LOGIN (optional: not used after magic link)
 app.post("/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
     }
 
-    // Find user in the list
     const user = users.find(user => user.email === email);
     if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
@@ -125,7 +126,75 @@ app.post("/login", async (req, res) => {
     res.json({ message: "Login successful!" });
 });
 
-// ✅ PROTECTED ROUTE (Without JWT for now)
+// ✅ NEW LOGIN: Request Magic Link
+app.post("/request-magic-link", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const user = users.find(user => user.email === email);
+    if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+        return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Generate secure token
+    const token = crypto.randomBytes(32).toString("hex");
+
+    // Save token with expiration
+    magicLinks[token] = {
+        email,
+        expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+    };
+
+    const magicLinkUrl = `https://seenmeet.vercel.app/verify.html?token=${token}`;
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "SEEN Login - Magic Link",
+        text: `Click this link to complete your login: ${magicLinkUrl}\n\nThis link will expire in 10 minutes.`
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Magic link sent to ${email}`);
+        res.json({ message: "Magic link sent successfully to your email." });
+    } catch (error) {
+        console.error("❌ Error sending magic link email:", error);
+        res.status(500).json({ message: "Failed to send magic link." });
+    }
+});
+
+// ✅ VERIFY Magic Link
+app.post("/verify-magic-link", (req, res) => {
+    const { token } = req.body;
+
+    if (!token) {
+        return res.status(400).json({ error: "Token is required" });
+    }
+
+    const tokenData = magicLinks[token];
+    if (!tokenData) {
+        return res.status(400).json({ error: "Invalid or expired token" });
+    }
+
+    if (tokenData.expiresAt < Date.now()) {
+        delete magicLinks[token];
+        return res.status(400).json({ error: "Token expired" });
+    }
+
+    delete magicLinks[token];
+    console.log(`✅ Magic link verified for ${tokenData.email}`);
+    res.json({ message: "Magic link verified successfully!" });
+});
+
+// ✅ Protected Route (for future)
 app.get("/dashboard", (req, res) => {
     res.json({ message: "Welcome to the dashboard!" });
 });
