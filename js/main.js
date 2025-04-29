@@ -1,5 +1,4 @@
 // public/js/main.js
-
 // Function to parse URL parameters
 function getQueryParams() {
     const params = {};
