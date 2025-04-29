@@ -239,6 +239,12 @@ body {
 .chat-input button:hover {
     background-color: #0056b3;
 }
+/* 🔵 When button is active (mic muted or video off) */
+.control-btn.active {
+    background-color: #007bff; /* Bright Blue */
+    color: white;
+}
+
 
 /* Participants Container */
 .participants-container {

@@ -274,7 +274,11 @@
             opacity: 0;
             pointer-events: none;
         }
-
+        /* ✅ Highlight the active buttons (like mute/video) */
+        .control-btn.active {
+            background-color: #007bff; /* Nice blue when active */
+            color: white;
+        }
         .participants-container.visible {
             transform: translateY(0);
             opacity: 1;
