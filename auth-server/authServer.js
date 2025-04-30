@@ -16,14 +16,14 @@ mongoose.connect(process.env.MONGO_URI)
 const app = express();
 
 const corsOptions = {
-    origin: "https://seenmeet.vercel.app",
+    origin: "https://seenmeet.vercel.app", // ✅ must match frontend domain exactly
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type"],
     credentials: true
   };
   
   app.use(cors(corsOptions));
-  app.options("*", cors(corsOptions)); // ✅ handle preflight requests
+  app.options("*", cors(corsOptions)); // ✅ handles preflight
   
 
 app.use(express.json());
