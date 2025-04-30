@@ -92,7 +92,7 @@ app.post("/verify-otp", (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-    const { email, username, password } = req.body;
+    const { email, password } = req.body;
 
     try {
         const existingUser = await User.findOne({ email });
@@ -101,7 +101,7 @@ app.post("/signup", async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ email, username, password: hashedPassword });
+        const newUser = new User({ email, password: hashedPassword });
         await newUser.save();
 
         res.status(201).json({ message: "Signup successful!" });

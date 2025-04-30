@@ -67,7 +67,6 @@
     <!-- Sign Up Form -->
     <div class="form" id="signupForm">
       <form>
-        <input type="text" id="signupUsername" placeholder="Username" required>
         <input type="email" id="signupEmail" placeholder="Email" required>
         <button type="button" id="sendCodeButton">Send Verification Code</button>
         <input type="text" id="verificationCode" placeholder="Verification Code" style="display: none;" required>
@@ -142,7 +141,6 @@
     signupForm.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const username = document.getElementById('signupUsername').value;
       const email = document.getElementById('signupEmail').value;
       const code = document.getElementById('verificationCode').value;
       const passwordInputs = signupForm.querySelectorAll('input[type="password"]');
@@ -173,7 +171,7 @@
             const signupResponse = await fetch("https://video-conference-project-production-c224.up.railway.app/signup", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, username, password })
+              body: JSON.stringify({ email, password })
             });
 
             const result = await signupResponse.json();
