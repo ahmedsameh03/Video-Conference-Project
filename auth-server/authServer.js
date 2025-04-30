@@ -1,5 +1,4 @@
 const User = require('./models/users');
-
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
@@ -18,11 +17,16 @@ mongoose.connect(process.env.MONGO_URI, {
 
 const app = express();
 
-app.use(cors({
-  origin: "https://seenmeet.vercel.app",
-  methods: ["GET", "POST"],
-  credentials: true
-}));
+const corsOptions = {
+    origin: "https://seenmeet.vercel.app",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  };
+  
+  app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions)); // ✅ handle preflight requests
+  
 
 app.use(express.json());
 
