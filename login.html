@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SEEN - Login / Sign Up</title>
   <script type="module" src="firebase.js"></script>
-
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/boxicons@2.1.2/css/boxicons.min.css" rel="stylesheet">
   <style>
-    /* Your existing CSS - No changes needed */
     body { font-family: 'Poppins', sans-serif; margin: 0; background: #fff; color: #333; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
     .navbar { width: 100%; background: #fff; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); position: fixed; top: 0; z-index: 1000; }
     .navbar .logo { text-decoration: none; color: rgb(30, 48, 243); font-weight: 500; margin: 0 15px; font-size: 40px; transform: translateX(50px); }
@@ -69,6 +67,7 @@
     <!-- Sign Up Form -->
     <div class="form" id="signupForm">
       <form>
+        <input type="text" id="signupUsername" placeholder="Username" required>
         <input type="email" id="signupEmail" placeholder="Email" required>
         <button type="button" id="sendCodeButton">Send Verification Code</button>
         <input type="text" id="verificationCode" placeholder="Verification Code" style="display: none;" required>
@@ -143,13 +142,14 @@
     signupForm.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const username = document.getElementById('signupUsername').value;
       const email = document.getElementById('signupEmail').value;
       const code = document.getElementById('verificationCode').value;
       const passwordInputs = signupForm.querySelectorAll('input[type="password"]');
       const password = passwordInputs[0].value;
       const confirmPassword = passwordInputs[1].value;
 
-      if (!code || !email || !password || !confirmPassword) {
+      if (!code || !email || !password || !confirmPassword || !username) {
         alert('Please fill in all fields.');
         return;
       }
@@ -173,7 +173,7 @@
             const signupResponse = await fetch("https://video-conference-project-production-c224.up.railway.app/signup", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, password })
+              body: JSON.stringify({ email, username, password })
             });
 
             const result = await signupResponse.json();
@@ -182,7 +182,7 @@
               signupForm.classList.remove('active');
               loginForm.classList.add('active');
             } else {
-              alert(`Signup failed: ${result.error}`);
+              alert(`Signup failed: ${result.message}`);
             }
           } catch (error) {
             console.error('Signup error:', error);
@@ -197,7 +197,7 @@
       }
     });
 
-    // UPDATED LOGIN HANDLER FOR MAGIC LINK
+    // LOGIN
     loginFormSubmit.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = loginFormSubmit.querySelector('input[type="email"]').value;
@@ -222,7 +222,6 @@
         alert('Login request failed.');
       }
     });
-
   </script>
 </body>
 </html>

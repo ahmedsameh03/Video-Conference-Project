@@ -1,12 +1,13 @@
+const User = require('./models/users');
+
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
-const crypto = require("crypto"); // ✅ Added for secure magic tokens
+const crypto = require("crypto");
 require("dotenv").config();
 
 const mongoose = require("mongoose");
-require("dotenv").config();
 
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
@@ -15,10 +16,8 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log("✅ Connected to MongoDB Atlas"))
 .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-
 const app = express();
 
-// ✅ Allow your frontend origin
 app.use(cors({
   origin: "https://seenmeet.vercel.app",
   methods: ["GET", "POST"],
@@ -27,18 +26,14 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ Temporary in-memory storage
 let otpStorage = {}; // { email: otp }
-let users = [];      // { email, password }
 let magicLinks = {}; // { token: { email, expiresAt } }
 
-// ✅ Validate environment variables
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error("❌ Missing EMAIL_USER or EMAIL_PASS in environment variables.");
     process.exit(1);
 }
 
-// ✅ Email Transporter Configuration
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -49,7 +44,6 @@ const transporter = nodemailer.createTransport({
     logger: true
 });
 
-// ✅ Verify Email Transporter Configuration
 transporter.verify((error) => {
     if (error) {
         console.error("❌ Email config error:", error);
@@ -58,7 +52,6 @@ transporter.verify((error) => {
     }
 });
 
-// ✅ API to Send OTP
 app.post("/send-otp", async (req, res) => {
     const { email } = req.body;
     if (!email) {
@@ -84,7 +77,6 @@ app.post("/send-otp", async (req, res) => {
     }
 });
 
-// ✅ API to Verify OTP
 app.post("/verify-otp", (req, res) => {
     const { email, otp } = req.body;
     console.log("🔍 Verifying OTP for:", email);
@@ -99,32 +91,33 @@ app.post("/verify-otp", (req, res) => {
     }
 });
 
-// ✅ SIGN UP: Register a new user
 app.post("/signup", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
+    const { email, username, password } = req.body;
+
+    try {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: "User already exists." });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({ email, username, password: hashedPassword });
+        await newUser.save();
+
+        res.status(201).json({ message: "Signup successful!" });
+    } catch (error) {
+        console.error("❌ Signup Error:", error);
+        res.status(500).json({ message: "Server error during signup." });
     }
-
-    // Check if user already exists
-    if (users.some(user => user.email === email)) {
-        return res.status(400).json({ error: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    users.push({ email, password: hashedPassword });
-
-    res.json({ message: "User registered successfully!" });
 });
 
-// ✅ OLD LOGIN (optional: not used after magic link)
 app.post("/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = users.find(user => user.email === email);
+    const user = await User.findOne({ email });
     if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -137,14 +130,13 @@ app.post("/login", async (req, res) => {
     res.json({ message: "Login successful!" });
 });
 
-// ✅ NEW LOGIN: Request Magic Link
 app.post("/request-magic-link", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = users.find(user => user.email === email);
+    const user = await User.findOne({ email });
     if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -154,13 +146,11 @@ app.post("/request-magic-link", async (req, res) => {
         return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Generate secure token
     const token = crypto.randomBytes(32).toString("hex");
 
-    // Save token with expiration
     magicLinks[token] = {
         email,
-        expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+        expiresAt: Date.now() + 10 * 60 * 1000
     };
 
     const magicLinkUrl = `https://seenmeet.vercel.app/verify.html?token=${token}`;
@@ -182,7 +172,6 @@ app.post("/request-magic-link", async (req, res) => {
     }
 });
 
-// ✅ VERIFY Magic Link
 app.post("/verify-magic-link", (req, res) => {
     const { token } = req.body;
 
@@ -205,16 +194,13 @@ app.post("/verify-magic-link", (req, res) => {
     res.json({ message: "Magic link verified successfully!" });
 });
 
-// ✅ Protected Route (for future)
 app.get("/dashboard", (req, res) => {
     res.json({ message: "Welcome to the dashboard!" });
 });
 
-// ✅ Default Route
 app.get("/", (req, res) => {
     res.send("🚀 Server is running!");
 });
 
-// ✅ Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
