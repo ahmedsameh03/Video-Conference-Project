@@ -12,7 +12,7 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
-const ws = new WebSocket("wss://video-conference-project-production.up.railway.app");
+const ws = new WebSocket("ws://video-conference-project-production.up.railway.app");
 const peers = {};
 let localStream;
 
@@ -169,19 +169,25 @@ function removeParticipant(user) {
     if (participant) participant.remove();
 }
 function toggleMute() {
-    isMuted = !isMuted;
-    const audioTracks = localStream.getAudioTracks();
+    if (!localVideo || !localVideo.srcObject) {
+      console.error("🎤 No local video stream available.");
+      return;
+    }
+  
+    const audioTracks = localVideo.srcObject.getAudioTracks();
     if (audioTracks.length > 0) {
-        audioTracks[0].enabled = !isMuted;
-    }
-
-    const muteButton = document.getElementById('mute-btn');
-    if (isMuted) {
-        muteButton.classList.add('active');   // ✅ Add blue style when muted
+      isMuted = !isMuted;
+      audioTracks[0].enabled = !isMuted;
+  
+      const muteButton = document.getElementById("mute-btn");
+      if (muteButton) {
+        muteButton.classList.toggle("active", isMuted);
+      }
     } else {
-        muteButton.classList.remove('active'); // ✅ Remove blue style when unmuted
+      console.error("🎤 No audio tracks found.");
     }
-}
+  }
+  
 
 
 function toggleVideo() {
