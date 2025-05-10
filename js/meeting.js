@@ -15,6 +15,7 @@ const participantsList = document.getElementById("participants-list");
 const ws = new WebSocket("wss://courageous-wonder.up.railway.app"); // Or your local/dev server, e.g., "ws://localhost:3001"
 const peers = {};
 let localStream;
+// This is a test change to trigger Git commit
 
 console.log("Attempting to connect to WebSocket server...");
 
