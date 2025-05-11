@@ -14,32 +14,25 @@ server.on("connection", (ws) => {
             const data = JSON.parse(message);
             if (!data.type || !data.room) return;
 
+            if (!rooms[data.room]) rooms[data.room] = [];
+
+            console.log(`📩 Received message of type "${data.type}" in room "${data.room}"`);
+
             switch (data.type) {
                 case "join":
-                    if (!rooms[data.room]) {
-                        rooms[data.room] = [];
-                    }
                     rooms[data.room].push(ws);
                     ws.room = data.room;
                     ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
+                    console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
 
-                    console.log(`👤 ${ws.user} joined room: ${ws.room}`);
-
-                    rooms[data.room].forEach(client => {
-                        if (client !== ws && client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify({ type: "new-user", user: ws.user }));
-                        }
-                    });
+                    broadcast(ws, data.room, { type: "new-user", user: ws.user });
                     break;
 
                 case "offer":
                 case "answer":
                 case "candidate":
-                    rooms[data.room]?.forEach(client => {
-                        if (client !== ws && client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify(data));
-                        }
-                    });
+                case "chat":
+                    broadcast(ws, data.room, data);
                     break;
 
                 case "leave":
@@ -62,22 +55,27 @@ server.on("connection", (ws) => {
         console.error("⚠️ WebSocket error:", error);
     });
 
+    function broadcast(sender, room, data) {
+        const clients = rooms[room] || [];
+        console.log(`📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`);
+        clients.forEach(client => {
+            if (client !== sender && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(data));
+            }
+        });
+    }
+
     function removeUserFromRoom(ws) {
         if (!ws.room || !rooms[ws.room]) return;
 
         rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
+        console.log(`🔴 ${ws.user} left room "${ws.room}". Remaining: ${rooms[ws.room].length}`);
 
-        rooms[ws.room].forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: "user-left", user: ws.user }));
-            }
-        });
+        broadcast(ws, ws.room, { type: "user-left", user: ws.user });
 
         if (rooms[ws.room].length === 0) {
             delete rooms[ws.room];
         }
-
-        console.log(`🔴 ${ws.user} left room: ${ws.room}`);
     }
 });
 
