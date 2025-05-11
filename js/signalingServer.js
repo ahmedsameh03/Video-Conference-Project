@@ -56,14 +56,16 @@ server.on("connection", (ws) => {
     });
 
     function broadcast(sender, room, data) {
-        const clients = rooms[room] || [];
-        console.log(`📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`);
-        clients.forEach(client => {
-            if (client !== sender && client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify(data));
-            }
-        });
-    }
+    const clients = rooms[room] || [];
+    console.log(`📢 Broadcasting message of type "${data.type}" to ${clients.length - 1} clients in room "${room}"`);
+    clients.forEach(client => {
+        if (client !== sender && client.readyState === WebSocket.OPEN) {
+            console.log(`📤 Sending to client: ${client.user || 'Unknown User'}`);
+            client.send(JSON.stringify(data));
+        }
+    });
+}
+
 
     function removeUserFromRoom(ws) {
         if (!ws.room || !rooms[ws.room]) return;
