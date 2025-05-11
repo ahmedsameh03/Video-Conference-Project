@@ -137,10 +137,15 @@ function createPeer(user) {
     const peer = new RTCPeerConnection({
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-            // TURN server configuration removed as per user request
+            { urls: "stun:stun1.l.google.com:19302" },
+            {
+                urls: "turn:a.relay.metered.ca:80",
+                username: "openai",
+                credential: "openai"
+            }
         ]
     });
+
 
     peer.onicecandidate = (event) => {
         if (event.candidate) {
