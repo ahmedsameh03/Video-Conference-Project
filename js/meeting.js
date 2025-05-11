@@ -12,7 +12,7 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 // Ensure the WebSocket URL is correct for your deployment
-const ws = new WebSocket("wss://your-railway-app.up.railway.app"); // Or your local/dev server, e.g., "ws://localhost:3001"
+const ws = new WebSocket("wss://video-conference-project-production-65d5.up.railway.app"); // Or your local/dev server, e.g., "ws://localhost:3001"
 const peers = {};
 let localStream;
 
