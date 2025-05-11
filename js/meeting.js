@@ -12,10 +12,9 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 // Ensure the WebSocket URL is correct for your deployment
-const ws = new WebSocket("wss://courageous-wonder.up.railway.app"); // Or your local/dev server, e.g., "ws://localhost:3001"
+const ws = new WebSocket("wss://video-conference-project-production.up.railway.app"); // Or your local/dev server, e.g., "ws://localhost:3001"
 const peers = {};
 let localStream;
-// This is a test change to trigger Git commit
 
 console.log("Attempting to connect to WebSocket server...");
 
@@ -138,13 +137,8 @@ function createPeer(user) {
     const peer = new RTCPeerConnection({
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            // Add TURN server configurations here if you have them
-            // {
-            //   urls: "turn:your-turn-server.com:3478",
-            //   username: "your-username",
-            //   credential: "your-password"
-            // },
+            { urls: "stun:stun1.l.google.com:19302" }
+            // TURN server configuration removed as per user request
         ]
     });
 
