@@ -1,90 +1,97 @@
-const WebSocket = require("ws");
+// signalingServer.js
 
+const WebSocket = require('ws');
 const PORT = process.env.PORT || 3001;
-const server = new WebSocket.Server({ port: PORT });
+
+// In-memory room storage: { roomId: [ws1, ws2, …], … }
 const rooms = {};
 
-console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
+const wss = new WebSocket.Server({ port: PORT }, () => {
+  console.log(`🚀 Signaling server listening on port ${PORT}`);
+});
 
-server.on("connection", (ws) => {
-    console.log("🔗 New WebSocket connection established");
-
-    ws.on("message", (message) => {
-        try {
-            const data = JSON.parse(message);
-            if (!data.type || !data.room) return;
-
-            if (!rooms[data.room]) rooms[data.room] = [];
-
-            console.log(`📩 Received message of type "${data.type}" in room "${data.room}"`);
-
-            switch (data.type) {
-                case "join":
-                    rooms[data.room].push(ws);
-                    ws.room = data.room;
-                    ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
-                    console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
-
-                    broadcast(ws, data.room, { type: "new-user", user: ws.user });
-                    break;
-
-                case "offer":
-                case "answer":
-                case "candidate":
-                case "chat":
-                    broadcast(ws, data.room, data);
-                    break;
-
-                case "leave":
-                    removeUserFromRoom(ws);
-                    break;
-
-                default:
-                    console.warn(`⚠️ Unknown message type: ${data.type}`);
-            }
-        } catch (error) {
-            console.error("❌ Error processing message:", error);
-        }
-    });
-
-    ws.on("close", () => {
-        removeUserFromRoom(ws);
-    });
-
-    ws.on("error", (error) => {
-        console.error("⚠️ WebSocket error:", error);
-    });
-
-    function broadcast(sender, room, data) {
-    const clients = rooms[room] || [];
-    console.log(`📢 Broadcasting message of type "${data.type}" to ${clients.length - 1} clients in room "${room}"`);
-    clients.forEach(client => {
-        if (client !== sender && client.readyState === WebSocket.OPEN) {
-            console.log(`📤 Sending to client: ${client.user || 'Unknown User'}`);
-            client.send(JSON.stringify(data));
-        }
-    });
-}
-
-
-    function removeUserFromRoom(ws) {
-        if (!ws.room || !rooms[ws.room]) return;
-
-        rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
-        console.log(`🔴 ${ws.user} left room "${ws.room}". Remaining: ${rooms[ws.room].length}`);
-
-        broadcast(ws, ws.room, { type: "user-left", user: ws.user });
-
-        if (rooms[ws.room].length === 0) {
-            delete rooms[ws.room];
-        }
+wss.on('connection', (ws) => {
+  ws.on('message', (raw) => {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      console.warn('⚠️ Invalid JSON:', raw);
+      return;
     }
-});
+    const { type, room, user, target, offer, answer, candidate } = data;
 
-server.on("listening", () => {
-    console.log(`✅ WebSocket Server is running on port ${PORT}`);
-});
+    // Utility: send a JSON message
+    const send = (socket, msg) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(msg));
+      }
+    };
 
-server.on("error", (err) => {
-    console.error("❌ WebSocket Server Error:", err);
+    switch (type) {
+      case 'join':
+        // Attach metadata
+        ws.user = user;
+        ws.room = room;
+
+        // Add to room
+        rooms[room] = rooms[room] || [];
+        // First, tell the new user about existing peers
+        rooms[room].forEach(existing => {
+          send(ws, { type: 'new-user', user: existing.user });
+        });
+        // Then, add them to the room
+        rooms[room].push(ws);
+        // Notify everyone else that someone new arrived
+        rooms[room].forEach(client => {
+          if (client !== ws) {
+            send(client, { type: 'new-user', user });
+          }
+        });
+        break;
+
+      case 'offer':
+      case 'answer':
+      case 'candidate':
+        // Forward to the one peer matching `target`
+        (rooms[room] || []).forEach(client => {
+          if (client.user === target) {
+            send(client, { type, user, offer, answer, candidate });
+          }
+        });
+        break;
+
+      case 'leave':
+        // Remove and notify
+        if (rooms[room]) {
+          rooms[room] = rooms[room].filter(c => c !== ws);
+          rooms[room].forEach(client => {
+            send(client, { type: 'user-left', user });
+          });
+          if (rooms[room].length === 0) {
+            delete rooms[room];
+          }
+        }
+        break;
+
+      default:
+        console.warn('⚠️ Unhandled message type:', type);
+    }
+  });
+
+  ws.on('close', () => {
+    // Handle abrupt disconnect same as "leave"
+    const { room, user } = ws;
+    if (room && rooms[room]) {
+      rooms[room] = rooms[room].filter(c => c !== ws);
+      rooms[room].forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: 'user-left', user }));
+        }
+      });
+      if (rooms[room].length === 0) {
+        delete rooms[room];
+      }
+    }
+  });
 });
