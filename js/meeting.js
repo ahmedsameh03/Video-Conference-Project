@@ -139,12 +139,13 @@ function createPeer(user) {
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
             {
-                urls: "turn:a.relay.metered.ca:80",
+                urls: "turn:a.relay.metered.ca:443",
                 username: "openai",
                 credential: "openai"
             }
         ]
     });
+
 
 
     peer.onicecandidate = (event) => {
