@@ -159,7 +159,11 @@ ws.onmessage = async (message) => {
 // Create a new RTCPeerConnection for a user
 function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
-  const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const peer = new RTCPeerConnection({
+  iceServers: ICE_SERVERS,
+  iceTransportPolicy: "relay"
+});
+
 
   // ICE / connection logging
   peer.oniceconnectionstatechange = () => {
