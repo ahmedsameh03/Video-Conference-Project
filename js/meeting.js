@@ -43,8 +43,11 @@ ws.onopen = () => {
   console.log("✅ WebSocket connected!");
   ws.send(JSON.stringify({ type: "join", room, user: name }));
   addParticipant(name); // Add self to participant list
-  startCamera();
+  startCamera().then(() => {
+    console.log("📹 Local Stream Tracks:", localStream.getTracks());
+  });
 };
+
 
 ws.onerror = (error) => {
   console.error("❌ WebSocket Error:", error);
