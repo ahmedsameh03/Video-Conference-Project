@@ -59,7 +59,7 @@ server.on("connection", (ws) => {
         const clients = rooms[room] || [];
         console.log(`📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`);
         clients.forEach(client => {
-            if (client !== sender && client.readyState === WebSocket.OPEN) {
+            if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify(data));
             }
         });
