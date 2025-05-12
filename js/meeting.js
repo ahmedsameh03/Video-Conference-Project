@@ -18,7 +18,9 @@ const participantsList = document.getElementById("participants-list");
 // Use ws://localhost:3001 in dev, and wss://… in production
 const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
   ? "ws://localhost:3001"
-  : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production.up.railway.app`;
+  : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production-65d5.up.railway.app`;
+
+
 
 console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
 const ws = new WebSocket(SIGNALING_SERVER_URL);
