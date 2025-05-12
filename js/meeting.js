@@ -1,53 +1,49 @@
-// /js/meeting.js
-
-// Parse URL Parameters
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
 
-// WebRTC and UI Elements
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
-// ——— NEW: Dynamic WebSocket URL ———
-// Use ws://localhost:3001 in dev, and wss://… in production
 const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
   ? "ws://localhost:3001"
   : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production-65d5.up.railway.app`;
 
-
-
 console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 
-// ——— NEW: Combined STUN + TURN list ———
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   {
     urls: ["turn:a.relay.metered.ca:443?transport=tcp"],
-    username: "openai",
-    credential: "openai"
+    username: "PLEASE_REPLACE_WITH_VALID_USERNAME",
+    credential: "PLEASE_REPLACE_WITH_VALID_CREDENTIAL"
   }
 ];
 
 const peers = {};
 let localStream;
 
-// WebSocket event handlers
-ws.onopen = () => {
+ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
-  ws.send(JSON.stringify({ type: "join", room, user: name }));
-  addParticipant(name); // Add self to participant list
-  startCamera().then(() => {
+  try {
+    await startCamera();
+    if (!localStream || !localStream.getTracks().length) {
+      throw new Error("Local stream not initialized or no tracks available.");
+    }
     console.log("📹 Local Stream Tracks:", localStream.getTracks());
-  });
+    ws.send(JSON.stringify({ type: "join", room, user: name }));
+    addParticipant(name);
+  } catch (error) {
+    console.error("❌ Failed to start camera before joining:", error);
+    alert("Failed to start camera/microphone. Please check permissions and try again.");
+  }
 };
-
 
 ws.onerror = (error) => {
   console.error("❌ WebSocket Error:", error);
@@ -61,7 +57,6 @@ ws.onclose = (event) => {
   }
 };
 
-// Populate meeting & user display
 document.addEventListener("DOMContentLoaded", () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -71,7 +66,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Utility to parse query params
 function getQueryParams() {
   const params = {};
   new URLSearchParams(window.location.search).forEach((value, key) => {
@@ -80,21 +74,22 @@ function getQueryParams() {
   return params;
 }
 
-// Start camera + mic
 async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    if (!localStream.getVideoTracks().length || !localStream.getAudioTracks().length) {
+      throw new Error("No video or audio tracks available.");
+    }
     console.log("✅ Camera and microphone access granted.");
     localVideo.srcObject = localStream;
-    localVideo.muted = true; // prevent echo
+    localVideo.muted = true;
   } catch (error) {
     console.error("❌ Error accessing camera/microphone:", error);
     alert(`Error accessing camera/microphone: ${error.name} - ${error.message}. Please check permissions.`);
   }
 }
 
-// Handle incoming WebSocket messages
 ws.onmessage = async (message) => {
   try {
     const data = JSON.parse(message.data);
@@ -148,6 +143,7 @@ ws.onmessage = async (message) => {
         break;
 
       case "chat":
+        console.log(`📩 Chat message received from ${data.user}: ${data.text}`); // Debug log
         displayMessage({ user: data.user, text: data.text, own: false });
         break;
 
@@ -159,16 +155,13 @@ ws.onmessage = async (message) => {
   }
 };
 
-// Create a new RTCPeerConnection for a user
 function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const peer = new RTCPeerConnection({
-  iceServers: ICE_SERVERS,
-  iceTransportPolicy: "relay"
-});
+    iceServers: ICE_SERVERS,
+    iceTransportPolicy: "relay"
+  });
 
-
-  // ICE / connection logging
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
@@ -184,7 +177,6 @@ function createPeer(user) {
     }
   };
 
-  // Send ICE candidates to peer via signaling
   peer.onicecandidate = (event) => {
     if (event.candidate) {
       console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
@@ -194,24 +186,20 @@ function createPeer(user) {
     }
   };
 
-  // Track ICE gathering
   peer.onicegatheringstatechange = () => {
     console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
   };
 
-  // When a remote track arrives, show it
   peer.ontrack = (event) => {
     console.log(`🎞️ Track event for ${user}:`, event);
     console.log(`🎞️ Received streams:`, event.streams);
     if (event.streams && event.streams[0]) {
-        addVideoStream(event.streams[0], user);
+      addVideoStream(event.streams[0], user);
     } else {
-        console.warn(`⚠️ No streams received from ${user}.`);
+      console.warn(`⚠️ No streams received from ${user}.`);
     }
-};
+  };
 
-
-  // Add our local tracks
   if (localStream) {
     localStream.getTracks().forEach(track => {
       console.log(`➕ Adding local track for ${user}:`, track.kind);
@@ -222,7 +210,6 @@ function createPeer(user) {
   peers[user] = peer;
 }
 
-// Offer / answer routines
 async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
   if (!peers[user]) createPeer(user);
@@ -250,7 +237,6 @@ async function createAnswer(offer, user) {
   }
 }
 
-// Video stream DOM management
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
   console.log(`➕ Adding video stream for ${user}`);
@@ -282,7 +268,6 @@ function removeVideoStream(user) {
   }
 }
 
-// Participant list UI
 function addParticipant(user) {
   if (document.getElementById(`participant-${user}`)) return;
   const p = document.createElement("p");
@@ -296,7 +281,6 @@ function removeParticipant(user) {
   if (p) p.remove();
 }
 
-// Mute / unmute
 function toggleMute() {
   if (!localStream) return console.error("No local stream");
   const audioTracks = localStream.getAudioTracks();
@@ -308,7 +292,6 @@ function toggleMute() {
   }
 }
 
-// Video on/off
 function toggleVideo() {
   if (!localStream) return console.error("No local stream");
   const videoTracks = localStream.getVideoTracks();
@@ -322,7 +305,6 @@ function toggleVideo() {
 
 let screenStream, screenVideoElement;
 
-// Screen sharing
 async function shareScreen() {
   console.log("🖥️ Attempting to share screen...");
   try {
@@ -333,7 +315,6 @@ async function shareScreen() {
     screenVideoElement.id = "screen-share";
     videoGrid.appendChild(screenVideoElement);
 
-    // Replace track for all peers
     Object.values(peers).forEach(peer => {
       const sender = peer.getSenders().find(s => s.track?.kind === "video");
       sender?.replaceTrack(screenStream.getVideoTracks()[0]);
@@ -355,7 +336,6 @@ function stopScreenShare() {
   screenVideoElement?.remove();
   screenStream = null;
 
-  // Revert to camera
   const cameraTrack = localStream.getVideoTracks()[0];
   Object.values(peers).forEach(peer => {
     const sender = peer.getSenders().find(s => s.track?.kind === "video");
@@ -363,7 +343,6 @@ function stopScreenShare() {
   });
 }
 
-// Chat
 function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
@@ -374,6 +353,7 @@ function sendMessage() {
 }
 
 function displayMessage({ user, text, own }) {
+  console.log(`📩 Displaying message from ${user}: ${text}`); // Debug log
   const el = document.createElement("p");
   el.innerHTML = `<strong>${user}:</strong> ${text}`;
   if (own) el.classList.add("own-message");
@@ -389,7 +369,6 @@ function toggleParticipants() {
   document.getElementById("participants-container").classList.toggle("visible");
 }
 
-// Leave meeting
 function leaveMeeting() {
   if (!confirm("Are you sure you want to leave the meeting?")) return;
   console.log("🚪 Leaving meeting...");
