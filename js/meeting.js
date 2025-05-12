@@ -22,9 +22,6 @@ let localStream;
 
 // Fetch TURN Server Credentials from Metered API
 async function fetchIceServers() {
-  console.log("🔄 Using STUN server only for testing...");
-  return [{ urls: "stun:stun.l.google.com:19302" }];
-  /*
   try {
     console.log("🌐 Fetching TURN credentials from Metered...");
     const response = await fetch("https://conferenceapp.metered.live/api/v1/turn/credentials?apiKey=fa36a42e54fe5d67d11060571f2772a0c6f6");
@@ -40,7 +37,6 @@ async function fetchIceServers() {
     console.log("🔄 Falling back to STUN server...");
     return [{ urls: "stun:stun.l.google.com:19302" }];
   }
-  */
 }
 
 ws.onopen = async () => {
@@ -50,7 +46,7 @@ ws.onopen = async () => {
     if (!localStream || !localStream.getTracks().length) {
       throw new Error("Local stream not initialized or no tracks available.");
     }
-    console.log("📹 Local Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+    console.log("📹 Local Stream initialized with tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
   } catch (error) {
@@ -92,15 +88,21 @@ async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    if (!localStream.getVideoTracks().length || !localStream.getAudioTracks().length) {
-      throw new Error("No video or audio tracks available.");
+    if (!localStream.getVideoTracks().length) {
+      console.warn("⚠️ No video tracks available in localStream.");
     }
-    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+    if (!localStream.getAudioTracks().length) {
+      console.warn("⚠️ No audio tracks available in localStream.");
+    }
+    if (!localStream.getTracks().length) {
+      throw new Error("No tracks (video or audio) available.");
+    }
+    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     localVideo.srcObject = localStream;
     localVideo.muted = true;
     await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
   } catch (error) {
-    console.error("❌ Error accessing camera/microphone:", error);
+    console.error("❌ Error accessing camera/microphone:", error.name, error.message, error.stack);
     alert(`Error accessing camera/microphone: ${error.name} - ${error.message}. Please check permissions.`);
   }
 }
@@ -148,7 +150,7 @@ ws.onmessage = async (message) => {
             await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
             console.log(`✅ ICE candidate added for ${data.user}`);
           } catch (e) {
-            console.error("❌ Error adding ICE candidate:", e);
+            console.error("❌ Error adding ICE candidate:", e.message, e.stack);
           }
         }
         break;
@@ -175,6 +177,7 @@ ws.onmessage = async (message) => {
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const iceServers = await fetchIceServers();
+  console.log("🧊 ICE Servers used:", iceServers);
   const peer = new RTCPeerConnection({
     iceServers: iceServers
   });
@@ -182,7 +185,7 @@ async function createPeer(user) {
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
-      console.error(`❌ ICE connection for ${user} failed/disconnected. Attempting to renegotiate...`);
+      console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
     }
   };
   peer.onconnectionstatechange = () => {
@@ -209,7 +212,7 @@ async function createPeer(user) {
 
   peer.ontrack = (event) => {
     console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(`🎞️ Received streams:`, event.streams);
+    console.log(`🎞️ Received streams:`, event.streams.map(s => ({ id: s.id, active: s.active })));
     if (event.streams && event.streams[0]) {
       addVideoStream(event.streams[0], user);
     } else {
@@ -219,12 +222,15 @@ async function createPeer(user) {
 
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      console.log(`➕ Adding local track for ${user}:`, track.kind, track.enabled);
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
       if (track.enabled) {
         const sender = peer.addTrack(track, localStream);
         console.log(`✅ Added ${track.kind} track with sender:`, sender);
       } else {
-        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}`);
+        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`);
+        track.enabled = true;
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Forced enabled and added ${track.kind} track with sender:`, sender);
       }
     });
   } else {
@@ -240,10 +246,10 @@ async function createOffer(user) {
   try {
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
-    console.log(`✅ Offer ready. Sending to ${user}`);
+    console.log(`✅ Offer ready. Sending to ${user}`, offer);
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
   } catch (e) {
-    console.error("❌ Error creating offer:", e);
+    console.error("❌ Error creating offer:", e.message, e.stack);
   }
 }
 
@@ -254,16 +260,16 @@ async function createAnswer(offer, user) {
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await peers[user].createAnswer();
     await peers[user].setLocalDescription(answer);
-    console.log(`✅ Answer ready. Sending to ${user}`);
+    console.log(`✅ Answer ready. Sending to ${user}`, answer);
     ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
   } catch (e) {
-    console.error("❌ Error creating answer:", e);
+    console.error("❌ Error creating answer:", e.message, e.stack);
   }
 }
 
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
-  console.log(`➕ Adding video stream for ${user}`);
+  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
   const container = document.createElement("div");
   container.classList.add("video-container");
   container.setAttribute("data-user-container", user);
