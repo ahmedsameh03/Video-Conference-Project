@@ -107,7 +107,9 @@ ws.onmessage = async (message) => {
     switch (data.type) {
       case "new-user":
         console.log(`✨ New user joined: ${data.user}`);
-        addParticipant(data.user);
+        if (data.user !== name) { // لا تضيف نفسك
+          addParticipant(data.user);
+        }
         if (localStream) {
           await createOffer(data.user);
         } else {
@@ -165,7 +167,7 @@ ws.onmessage = async (message) => {
 
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
-  const iceServers = await fetchIceServers(); // Fetch TURN credentials dynamically
+  const iceServers = await fetchIceServers();
   const peer = new RTCPeerConnection({
     iceServers: iceServers,
     iceTransportPolicy: "relay"
@@ -226,7 +228,7 @@ async function createOffer(user) {
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
     console.log(`✅ Offer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "offer", offer, room, user: name })); 
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating offer:", e);
   }
@@ -240,7 +242,7 @@ async function createAnswer(offer, user) {
     const answer = await peers[user].createAnswer();
     await peers[user].setLocalDescription(answer);
     console.log(`✅ Answer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "answer", answer, room, user: name })); 
+    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating answer:", e);
   }
@@ -278,7 +280,7 @@ function removeVideoStream(user) {
 }
 
 function addParticipant(user) {
-  if (document.getElementById(`participant-${user}`)) return;
+  if (document.getElementById(`participant-${user}`) || user === name) return; // لا تضيف نفسك
   const p = document.createElement("p");
   p.textContent = user;
   p.id = `participant-${user}`;
@@ -356,7 +358,7 @@ function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
   console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room })); 
+  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
   displayMessage({ user: name, text: msg, own: true });
   chatInputField.value = "";
 }
