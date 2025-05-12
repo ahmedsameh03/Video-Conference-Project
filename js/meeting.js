@@ -20,6 +20,7 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream;
 
+// اختبار بسيط للـ Local Stream
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
   try {
@@ -36,7 +37,7 @@ async function testLocalStream() {
   }
 }
 
-
+// تشغيل الاختبار البسيط عند تحميل الصفحة
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -44,7 +45,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("user-name-display")) {
     document.getElementById("user-name-display").textContent = name;
   }
-  await testLocalStream(); 
+  await testLocalStream();
 });
 
 // Fetch ICE Servers (STUN only for now)
@@ -96,13 +97,11 @@ function getQueryParams() {
 async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
-    
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
     try {
-    
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       console.log("✅ Attempt 2: Camera only accessed successfully.");
     } catch (error2) {
@@ -157,8 +156,16 @@ ws.onmessage = async (message) => {
       case "answer":
         console.log(`📬 Answer received from ${data.user}`);
         if (peers[data.user]) {
-          await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
-          console.log(`✅ Remote description (answer) set for ${data.user}`);
+          const peer = peers[data.user];
+          console.log(`🔍 Current signaling state for ${data.user}:`, peer.signalingState);
+          if (peer.signalingState === "have-local-offer") {
+            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log(`✅ Remote description (answer) set for ${data.user}`);
+          } else {
+            console.error(`❌ Cannot set remote answer for ${data.user}. Expected state: 'have-local-offer', but got:`, peer.signalingState);
+          }
+        } else {
+          console.warn(`⚠️ No peer connection found for ${data.user}`);
         }
         break;
 
@@ -189,7 +196,7 @@ ws.onmessage = async (message) => {
         console.warn(`❓ Unknown message type: ${data.type}`);
     }
   } catch (error) {
-    console.error("❌ Error handling WebSocket message:", error);
+    console.error("❌ Error handling WebSocket message:", error.name, error.message, error.stack);
   }
 };
 
@@ -263,9 +270,11 @@ async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
-    const offer = await peers[user].createOffer();
-    await peers[user].setLocalDescription(offer);
-    console.log(`✅ Offer ready. Sending to ${user}`, offer);
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
@@ -276,10 +285,13 @@ async function createAnswer(offer, user) {
   console.log(`📬 Creating answer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
-    await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peers[user].createAnswer();
-    await peers[user].setLocalDescription(answer);
-    console.log(`✅ Answer ready. Sending to ${user}`, answer);
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating answer:", e.message, e.stack);
