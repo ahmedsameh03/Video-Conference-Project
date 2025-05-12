@@ -170,14 +170,15 @@ async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const iceServers = await fetchIceServers();
   const peer = new RTCPeerConnection({
-    iceServers: iceServers,
-    iceTransportPolicy: "relay"
+    iceServers: iceServers
+    // Removed iceTransportPolicy: "relay" to test with STUN only
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
-      console.error(`❌ ICE connection for ${user} failed/disconnected.`);
+      console.error(`❌ ICE connection for ${user} failed/disconnected. Attempting to renegotiate...`);
+      // Optional: Try renegotiation or fallback
     }
   };
   peer.onconnectionstatechange = () => {
