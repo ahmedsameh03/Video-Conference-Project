@@ -17,17 +17,25 @@ const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
 console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  {
-    urls: ["turn:a.relay.metered.ca:443?transport=tcp"],
-    username: "PLEASE_REPLACE_WITH_VALID_USERNAME",
-    credential: "PLEASE_REPLACE_WITH_VALID_CREDENTIAL"
-  }
-];
-
 const peers = {};
 let localStream;
+
+// Fetch TURN Server Credentials from Metered API
+async function fetchIceServers() {
+  try {
+    const response = await fetch("https://conferenceapp.metered.live/api/v1/turn/credentials?apiKey=fa36a42e54fe5d67d11060571f2772a0c6f6");
+    if (!response.ok) {
+      throw new Error(`Failed to fetch TURN credentials: ${response.statusText}`);
+    }
+    const iceServers = await response.json();
+    console.log("✅ Fetched TURN credentials:", iceServers);
+    return iceServers;
+  } catch (error) {
+    console.error("❌ Error fetching TURN credentials:", error);
+    // Fallback to STUN server if API fails
+    return [{ urls: "stun:stun.l.google.com:19302" }];
+  }
+}
 
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
@@ -143,7 +151,7 @@ ws.onmessage = async (message) => {
         break;
 
       case "chat":
-        console.log(`📩 Chat message received from ${data.user}: ${data.text}`); // Debug log
+        console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
         displayMessage({ user: data.user, text: data.text, own: false });
         break;
 
@@ -155,10 +163,11 @@ ws.onmessage = async (message) => {
   }
 };
 
-function createPeer(user) {
+async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
+  const iceServers = await fetchIceServers(); // Fetch TURN credentials dynamically
   const peer = new RTCPeerConnection({
-    iceServers: ICE_SERVERS,
+    iceServers: iceServers,
     iceTransportPolicy: "relay"
   });
 
@@ -212,7 +221,7 @@ function createPeer(user) {
 
 async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
-  if (!peers[user]) createPeer(user);
+  if (!peers[user]) await createPeer(user);
   try {
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
@@ -225,7 +234,7 @@ async function createOffer(user) {
 
 async function createAnswer(offer, user) {
   console.log(`📬 Creating answer for ${user}`);
-  if (!peers[user]) createPeer(user);
+  if (!peers[user]) await createPeer(user);
   try {
     await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await peers[user].createAnswer();
@@ -353,7 +362,7 @@ function sendMessage() {
 }
 
 function displayMessage({ user, text, own }) {
-  console.log(`📩 Displaying message from ${user}: ${text}`); // Debug log
+  console.log(`📩 Displaying message from ${user}: ${text}`);
   const el = document.createElement("p");
   el.innerHTML = `<strong>${user}:</strong> ${text}`;
   if (own) el.classList.add("own-message");
