@@ -89,10 +89,9 @@ async function startCamera() {
     if (!localStream.getVideoTracks().length || !localStream.getAudioTracks().length) {
       throw new Error("No video or audio tracks available.");
     }
-    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks());
+    console.log("✅ Camera and microphone access granted.");
     localVideo.srcObject = localStream;
     localVideo.muted = true;
-    localVideo.play().catch(e => console.error("❌ Video play failed:", e));
   } catch (error) {
     console.error("❌ Error accessing camera/microphone:", error);
     alert(`Error accessing camera/microphone: ${error.name} - ${error.message}. Please check permissions.`);
@@ -108,9 +107,7 @@ ws.onmessage = async (message) => {
     switch (data.type) {
       case "new-user":
         console.log(`✨ New user joined: ${data.user}`);
-        if (data.user !== name) { // لا تضيف نفسك
-          addParticipant(data.user);
-        }
+        addParticipant(data.user);
         if (localStream) {
           await createOffer(data.user);
         } else {
@@ -168,7 +165,7 @@ ws.onmessage = async (message) => {
 
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
-  const iceServers = await fetchIceServers();
+  const iceServers = await fetchIceServers(); // Fetch TURN credentials dynamically
   const peer = new RTCPeerConnection({
     iceServers: iceServers,
     iceTransportPolicy: "relay"
@@ -229,7 +226,7 @@ async function createOffer(user) {
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
     console.log(`✅ Offer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: name })); // إضافة user: name
   } catch (e) {
     console.error("❌ Error creating offer:", e);
   }
@@ -243,7 +240,7 @@ async function createAnswer(offer, user) {
     const answer = await peers[user].createAnswer();
     await peers[user].setLocalDescription(answer);
     console.log(`✅ Answer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+    ws.send(JSON.stringify({ type: "answer", answer, room, user: name })); // إضافة user: name
   } catch (e) {
     console.error("❌ Error creating answer:", e);
   }
@@ -281,7 +278,7 @@ function removeVideoStream(user) {
 }
 
 function addParticipant(user) {
-  if (document.getElementById(`participant-${user}`) || user === name) return; // لا تضيف نفسك
+  if (document.getElementById(`participant-${user}`)) return;
   const p = document.createElement("p");
   p.textContent = user;
   p.id = `participant-${user}`;
@@ -359,7 +356,7 @@ function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
   console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
+  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room })); // إضافة room
   displayMessage({ user: name, text: msg, own: true });
   chatInputField.value = "";
 }
