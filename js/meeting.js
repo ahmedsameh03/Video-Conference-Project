@@ -198,9 +198,15 @@ function createPeer(user) {
 
   // When a remote track arrives, show it
   peer.ontrack = (event) => {
-    console.log(`🎞️ Track received from ${user}:`, event.streams[0]);
-    addVideoStream(event.streams[0], user);
-  };
+    console.log(`🎞️ Track event for ${user}:`, event);
+    console.log(`🎞️ Received streams:`, event.streams);
+    if (event.streams && event.streams[0]) {
+        addVideoStream(event.streams[0], user);
+    } else {
+        console.warn(`⚠️ No streams received from ${user}.`);
+    }
+};
+
 
   // Add our local tracks
   if (localStream) {
