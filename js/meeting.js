@@ -152,7 +152,7 @@ ws.onmessage = async (message) => {
 
       case "chat":
         console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
-        displayMessage({ user: data.user, text: data.text, own: false });
+        displayMessage({ user: data.user, text: data.text, own: data.user === name });
         break;
 
       default:
@@ -226,7 +226,7 @@ async function createOffer(user) {
     const offer = await peers[user].createOffer();
     await peers[user].setLocalDescription(offer);
     console.log(`✅ Offer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "offer", offer, room, user }));
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: name })); 
   } catch (e) {
     console.error("❌ Error creating offer:", e);
   }
@@ -240,7 +240,7 @@ async function createAnswer(offer, user) {
     const answer = await peers[user].createAnswer();
     await peers[user].setLocalDescription(answer);
     console.log(`✅ Answer ready. Sending to ${user}`);
-    ws.send(JSON.stringify({ type: "answer", answer, room, user }));
+    ws.send(JSON.stringify({ type: "answer", answer, room, user: name })); 
   } catch (e) {
     console.error("❌ Error creating answer:", e);
   }
@@ -356,7 +356,7 @@ function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
   console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg }));
+  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room })); 
   displayMessage({ user: name, text: msg, own: true });
   chatInputField.value = "";
 }
