@@ -20,23 +20,42 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream;
 
-// Fetch TURN Server Credentials from Metered API
-async function fetchIceServers() {
+// اختبار بسيط للـ Local Stream
+async function testLocalStream() {
+  console.log("🧪 Testing local camera and microphone...");
   try {
-    console.log("🌐 Fetching TURN credentials from Metered...");
-    const response = await fetch("https://conferenceapp.metered.live/api/v1/turn/credentials?apiKey=fa36a42e54fe5d67d11060571f2772a0c6f6");
-    if (!response.ok) {
-      console.error(`❌ Failed to fetch TURN credentials: Status ${response.status} - ${response.statusText}`);
-      throw new Error(`Failed to fetch TURN credentials: ${response.statusText}`);
-    }
-    const iceServers = await response.json();
-    console.log("✅ Fetched TURN credentials:", iceServers);
-    return iceServers;
+    const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    console.log("✅ Test Stream successful! Tracks:", testStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
+    localVideo.srcObject = testStream;
+    localVideo.muted = true;
+    await localVideo.play().catch(e => console.error("❌ Test Video play failed:", e));
+    testStream.getTracks().forEach(track => track.stop());
+    console.log("🧪 Test completed. Local camera and microphone are working.");
   } catch (error) {
-    console.error("❌ Error fetching TURN credentials:", error);
-    console.log("🔄 Falling back to STUN server...");
-    return [{ urls: "stun:stun.l.google.com:19302" }];
+    console.error("❌ Test Stream failed:", error.name, error.message, error.stack);
+    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`);
   }
+}
+
+// تشغيل الاختبار البسيط عند تحميل الصفحة
+document.addEventListener("DOMContentLoaded", async () => {
+  if (document.getElementById("meeting-id-display")) {
+    document.getElementById("meeting-id-display").textContent = `#${room}`;
+  }
+  if (document.getElementById("user-name-display")) {
+    document.getElementById("user-name-display").textContent = name;
+  }
+  await testLocalStream();
+});
+
+// Fetch ICE Servers (STUN only for now)
+async function fetchIceServers() {
+  console.log("🔄 Using multiple STUN servers for better connectivity...");
+  return [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+  ];
 }
 
 ws.onopen = async () => {
@@ -67,15 +86,6 @@ ws.onclose = (event) => {
   }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (document.getElementById("meeting-id-display")) {
-    document.getElementById("meeting-id-display").textContent = `#${room}`;
-  }
-  if (document.getElementById("user-name-display")) {
-    document.getElementById("user-name-display").textContent = name;
-  }
-});
-
 function getQueryParams() {
   const params = {};
   new URLSearchParams(window.location.search).forEach((value, key) => {
@@ -88,23 +98,31 @@ async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    if (!localStream.getVideoTracks().length) {
-      console.warn("⚠️ No video tracks available in localStream.");
-    }
-    if (!localStream.getAudioTracks().length) {
-      console.warn("⚠️ No audio tracks available in localStream.");
-    }
-    if (!localStream.getTracks().length) {
-      throw new Error("No tracks (video or audio) available.");
-    }
-    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
-    localVideo.srcObject = localStream;
-    localVideo.muted = true;
-    await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
+    console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
-    console.error("❌ Error accessing camera/microphone:", error.name, error.message, error.stack);
-    alert(`Error accessing camera/microphone: ${error.name} - ${error.message}. Please check permissions.`);
+    console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      console.log("✅ Attempt 2: Camera only accessed successfully.");
+    } catch (error2) {
+      console.warn("⚠️ Attempt 2 failed:", error2.name, error2.message);
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        console.log("✅ Attempt 3: Microphone only accessed successfully.");
+      } catch (error3) {
+        console.error("❌ All attempts failed:", error3.name, error3.message, error3.stack);
+        throw new Error("Failed to access camera or microphone after all attempts.");
+      }
+    }
   }
+
+  if (!localStream.getTracks().length) {
+    throw new Error("No tracks (video or audio) available.");
+  }
+  console.log("✅ Final Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
+  localVideo.srcObject = localStream;
+  localVideo.muted = true;
+  await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
 }
 
 ws.onmessage = async (message) => {
@@ -138,8 +156,16 @@ ws.onmessage = async (message) => {
       case "answer":
         console.log(`📬 Answer received from ${data.user}`);
         if (peers[data.user]) {
-          await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
-          console.log(`✅ Remote description (answer) set for ${data.user}`);
+          const peer = peers[data.user];
+          console.log(`🔍 Current signaling state for ${data.user}:`, peer.signalingState);
+          if (peer.signalingState === "have-local-offer") {
+            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log(`✅ Remote description (answer) set for ${data.user}`);
+          } else {
+            console.error(`❌ Cannot set remote answer for ${data.user}. Expected state: 'have-local-offer', but got:`, peer.signalingState);
+          }
+        } else {
+          console.warn(`⚠️ No peer connection found for ${data.user}`);
         }
         break;
 
@@ -170,7 +196,7 @@ ws.onmessage = async (message) => {
         console.warn(`❓ Unknown message type: ${data.type}`);
     }
   } catch (error) {
-    console.error("❌ Error handling WebSocket message:", error);
+    console.error("❌ Error handling WebSocket message:", error.name, error.message, error.stack);
   }
 };
 
@@ -244,9 +270,11 @@ async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
-    const offer = await peers[user].createOffer();
-    await peers[user].setLocalDescription(offer);
-    console.log(`✅ Offer ready. Sending to ${user}`, offer);
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
@@ -257,10 +285,13 @@ async function createAnswer(offer, user) {
   console.log(`📬 Creating answer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
-    await peers[user].setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peers[user].createAnswer();
-    await peers[user].setLocalDescription(answer);
-    console.log(`✅ Answer ready. Sending to ${user}`, answer);
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating answer:", e.message, e.stack);
