@@ -30,16 +30,27 @@ server.on("connection", (ws, req) => {
           ws.room = data.room;
           ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
           console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
-
           broadcast(ws, data.room, { type: "new-user", user: ws.user });
           break;
 
         case "offer":
+          console.log(`📢 Broadcasting offer from ${ws.user} in room "${data.room}"`);
+          broadcast(ws, data.room, { type: "offer", offer: data.offer, user: ws.user, room: data.room });
+          break;
+
         case "answer":
+          console.log(`📢 Broadcasting answer from ${ws.user} in room "${data.room}"`);
+          broadcast(ws, data.room, { type: "answer", answer: data.answer, user: ws.user, room: data.room });
+          break;
+
         case "candidate":
+          console.log(`📢 Broadcasting candidate from ${ws.user} in room "${data.room}"`);
+          broadcast(ws, data.room, { type: "candidate", candidate: data.candidate, user: ws.user, room: data.room });
+          break;
+
         case "chat":
-          console.log(`📢 Broadcasting ${data.type} message in room "${data.room}"`);
-          broadcast(ws, data.room, data);
+          console.log(`📢 Broadcasting chat message from ${ws.user} in room "${data.room}"`);
+          broadcast(ws, data.room, { type: "chat", user: ws.user, text: data.text, room: data.room });
           break;
 
         case "leave":
