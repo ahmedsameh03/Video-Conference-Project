@@ -23,8 +23,10 @@ let localStream;
 // Fetch TURN Server Credentials from Metered API
 async function fetchIceServers() {
   try {
+    console.log("🌐 Fetching TURN credentials from Metered...");
     const response = await fetch("https://conferenceapp.metered.live/api/v1/turn/credentials?apiKey=fa36a42e54fe5d67d11060571f2772a0c6f6");
     if (!response.ok) {
+      console.error(`❌ Failed to fetch TURN credentials: Status ${response.status} - ${response.statusText}`);
       throw new Error(`Failed to fetch TURN credentials: ${response.statusText}`);
     }
     const iceServers = await response.json();
@@ -32,7 +34,7 @@ async function fetchIceServers() {
     return iceServers;
   } catch (error) {
     console.error("❌ Error fetching TURN credentials:", error);
-    // Fallback to STUN server if API fails
+    console.log("🔄 Falling back to STUN server...");
     return [{ urls: "stun:stun.l.google.com:19302" }];
   }
 }
@@ -110,11 +112,11 @@ ws.onmessage = async (message) => {
         console.log(`✨ New user joined: ${data.user}`);
         if (data.user !== name) { // لا تضيف نفسك
           addParticipant(data.user);
-        }
-        if (localStream) {
-          await createOffer(data.user);
-        } else {
-          console.warn("⚠️ Local stream not ready when new user joined.");
+          if (localStream) {
+            await createOffer(data.user);
+          } else {
+            console.warn("⚠️ Local stream not ready when new user joined.");
+          }
         }
         break;
 
@@ -171,14 +173,12 @@ async function createPeer(user) {
   const iceServers = await fetchIceServers();
   const peer = new RTCPeerConnection({
     iceServers: iceServers
-    // Removed iceTransportPolicy: "relay" to test with STUN only
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
       console.error(`❌ ICE connection for ${user} failed/disconnected. Attempting to renegotiate...`);
-      // Optional: Try renegotiation or fallback
     }
   };
   peer.onconnectionstatechange = () => {
@@ -216,7 +216,11 @@ async function createPeer(user) {
   if (localStream) {
     localStream.getTracks().forEach(track => {
       console.log(`➕ Adding local track for ${user}:`, track.kind, track);
-      peer.addTrack(track, localStream);
+      if (track.enabled) {
+        peer.addTrack(track, localStream);
+      } else {
+        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}`);
+      }
     });
   } else {
     console.error("❌ No localStream available for peer:", user);
