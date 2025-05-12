@@ -22,6 +22,9 @@ let localStream;
 
 // Fetch TURN Server Credentials from Metered API
 async function fetchIceServers() {
+  console.log("🔄 Using STUN server only for testing...");
+  return [{ urls: "stun:stun.l.google.com:19302" }];
+  /*
   try {
     console.log("🌐 Fetching TURN credentials from Metered...");
     const response = await fetch("https://conferenceapp.metered.live/api/v1/turn/credentials?apiKey=fa36a42e54fe5d67d11060571f2772a0c6f6");
@@ -37,6 +40,7 @@ async function fetchIceServers() {
     console.log("🔄 Falling back to STUN server...");
     return [{ urls: "stun:stun.l.google.com:19302" }];
   }
+  */
 }
 
 ws.onopen = async () => {
@@ -46,7 +50,7 @@ ws.onopen = async () => {
     if (!localStream || !localStream.getTracks().length) {
       throw new Error("Local stream not initialized or no tracks available.");
     }
-    console.log("📹 Local Stream Tracks:", localStream.getTracks());
+    console.log("📹 Local Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
   } catch (error) {
@@ -91,7 +95,7 @@ async function startCamera() {
     if (!localStream.getVideoTracks().length || !localStream.getAudioTracks().length) {
       throw new Error("No video or audio tracks available.");
     }
-    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks());
+    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
     localVideo.srcObject = localStream;
     localVideo.muted = true;
     await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
@@ -110,7 +114,7 @@ ws.onmessage = async (message) => {
     switch (data.type) {
       case "new-user":
         console.log(`✨ New user joined: ${data.user}`);
-        if (data.user !== name) { // لا تضيف نفسك
+        if (data.user !== name) {
           addParticipant(data.user);
           if (localStream) {
             await createOffer(data.user);
@@ -215,9 +219,10 @@ async function createPeer(user) {
 
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      console.log(`➕ Adding local track for ${user}:`, track.kind, track);
+      console.log(`➕ Adding local track for ${user}:`, track.kind, track.enabled);
       if (track.enabled) {
-        peer.addTrack(track, localStream);
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Added ${track.kind} track with sender:`, sender);
       } else {
         console.warn(`⚠️ Track ${track.kind} is disabled for ${user}`);
       }
