@@ -89,9 +89,10 @@ async function startCamera() {
     if (!localStream.getVideoTracks().length || !localStream.getAudioTracks().length) {
       throw new Error("No video or audio tracks available.");
     }
-    console.log("✅ Camera and microphone access granted.");
+    console.log("✅ Camera and microphone access granted. Tracks:", localStream.getTracks());
     localVideo.srcObject = localStream;
     localVideo.muted = true;
+    localVideo.play().catch(e => console.error("❌ Video play failed:", e));
   } catch (error) {
     console.error("❌ Error accessing camera/microphone:", error);
     alert(`Error accessing camera/microphone: ${error.name} - ${error.message}. Please check permissions.`);
