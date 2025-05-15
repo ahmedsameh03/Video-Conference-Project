@@ -20,7 +20,7 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream;
 
-// اختبار بسيط للـ Local Stream
+
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
   try {
@@ -37,7 +37,7 @@ async function testLocalStream() {
   }
 }
 
-// تشغيل الاختبار البسيط عند تحميل الصفحة
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -48,13 +48,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   await testLocalStream();
 });
 
-// Fetch ICE Servers (STUN only for now)
+
 async function fetchIceServers() {
   console.log("🔄 Using multiple STUN servers for better connectivity...");
   return [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun.1.google.com:19302" },
+    { urls: "stun:stun.2.google.com:19302" },
+    { urls: "stun:stun.services.mozilla.com:3478" },
+    { urls: "stun:stun.stunprotocol.org:3478" }
   ];
 }
 
@@ -238,7 +242,11 @@ async function createPeer(user) {
 
   peer.ontrack = (event) => {
     console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(`🎞️ Received streams:`, event.streams.map(s => ({ id: s.id, active: s.active })));
+    console.log(`🎞️ Received streams:`, event.streams.map(s => ({
+      id: s.id,
+      active: s.active,
+      tracks: s.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled }))
+    })));
     if (event.streams && event.streams[0]) {
       addVideoStream(event.streams[0], user);
     } else {
@@ -248,16 +256,13 @@ async function createPeer(user) {
 
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
-      if (track.enabled) {
-        const sender = peer.addTrack(track, localStream);
-        console.log(`✅ Added ${track.kind} track with sender:`, sender);
-      } else {
-        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`);
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: t.id });
+      if (track.kind === "audio" && !track.enabled) {
+        console.warn(`⚠️ Audio track disabled for ${user}. Enabling it...`);
         track.enabled = true;
-        const sender = peer.addTrack(track, localStream);
-        console.log(`✅ Forced enabled and added ${track.kind} track with sender:`, sender);
       }
+      const sender = peer.addTrack(track, localStream);
+      console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
   } else {
     console.error("❌ No localStream available for peer:", user);
@@ -300,7 +305,12 @@ async function createAnswer(offer, user) {
 
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
-  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
+
+  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`, {
+    streamActive: stream.active,
+    tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
+  });
+
   const container = document.createElement("div");
   container.classList.add("video-container");
   container.setAttribute("data-user-container", user);
@@ -309,7 +319,13 @@ function addVideoStream(stream, user) {
   videoEl.srcObject = stream;
   videoEl.autoplay = true;
   videoEl.playsInline = true;
+  videoEl.muted = false; 
   videoEl.setAttribute("data-user", user);
+
+  
+  videoEl.onloadedmetadata = () => {
+    videoEl.play().catch(e => console.error(`❌ Video play failed for ${user}:`, e));
+  };
 
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
@@ -348,7 +364,7 @@ function toggleMute() {
   if (audioTracks.length) {
     isMuted = !isMuted;
     audioTracks[0].enabled = !isMuted;
-    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}`);
+    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}. Track enabled: ${audioTracks[0].enabled}`);
     document.getElementById("mute-btn")?.classList.toggle("active", isMuted);
   }
 }
