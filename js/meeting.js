@@ -256,7 +256,7 @@ async function createPeer(user) {
 
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: t.id });
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
       if (track.kind === "audio" && !track.enabled) {
         console.warn(`⚠️ Audio track disabled for ${user}. Enabling it...`);
         track.enabled = true;
