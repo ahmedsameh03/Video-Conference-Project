@@ -8,7 +8,7 @@ console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
 server.on("connection", (ws, req) => {
   const origin = req.headers.origin;
-  if (origin !== "https://seenmeet.vercel.app") {
+  if (origin !== "https://seenmeet.vercel.app" && origin !== "http://localhost:3000") {
     ws.close(1008, "Unauthorized origin");
     console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
     return;
