@@ -209,13 +209,21 @@ async function createPeer(user) {
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
   const peer = new RTCPeerConnection({
-    iceServers: iceServers
+    iceServers: iceServers,
+    // إعدادات إضافية لتحسين الاتصال
+    iceTransportPolicy: "all",
+    bundlePolicy: "max-bundle"
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
       console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
+      // إعادة المحاولة تلقائيًا
+      if (peer.iceConnectionState === "failed") {
+        console.log("🔄 Attempting to restart ICE for", user);
+        peer.restartIce();
+      }
     }
   };
   peer.onconnectionstatechange = () => {
@@ -261,6 +269,10 @@ async function createPeer(user) {
         console.warn(`⚠️ Audio track disabled for ${user}. Enabling it...`);
         track.enabled = true;
       }
+      if (track.kind === "video" && !track.enabled) {
+        console.warn(`⚠️ Video track disabled for ${user}. Enabling it...`);
+        track.enabled = true;
+      }
       const sender = peer.addTrack(track, localStream);
       console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
@@ -277,7 +289,10 @@ async function createOffer(user) {
   try {
     const peer = peers[user];
     console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
-    const offer = await peer.createOffer();
+    const offer = await peer.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    });
     await peer.setLocalDescription(offer);
     console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
@@ -294,7 +309,10 @@ async function createAnswer(offer, user) {
     console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
     await peer.setRemoteDescription(new RTCSessionDescription(offer));
     console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
-    const answer = await peer.createAnswer();
+    const answer = await peer.createAnswer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    });
     await peer.setLocalDescription(answer);
     console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
@@ -320,11 +338,20 @@ function addVideoStream(stream, user) {
   videoEl.autoplay = true;
   videoEl.playsInline = true;
   videoEl.muted = false; // عشان يسمح بتشغيل الصوت للـ Remote Stream
+  videoEl.controls = true; // لتسهيل التحكم يدويًا في حالة الـ Autoplay فشل
   videoEl.setAttribute("data-user", user);
 
   // جرب تبدأ التشغيل يدويًا مع التعامل مع الأخطاء
   videoEl.onloadedmetadata = () => {
-    videoEl.play().catch(e => console.error(`❌ Video play failed for ${user}:`, e));
+    videoEl.play().catch(e => {
+      console.error(`❌ Video play failed for ${user}:`, e);
+      // محاولة بديلة للتعامل مع قيود الـ Autoplay
+      videoEl.muted = true; // جرب كتم الصوت مؤقتًا
+      videoEl.play().then(() => {
+        console.log(`✅ Video play succeeded with muted fallback for ${user}`);
+        videoEl.muted = false; // ارجع الصوت بعد التشغيل
+      }).catch(e => console.error(`❌ Muted play failed for ${user}:`, e));
+    });
   };
 
   const nameTag = document.createElement("p");
