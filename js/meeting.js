@@ -20,24 +20,35 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream;
 
-
+// Test local camera and microphone
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Please enable camera and microphone in your browser settings!");
+    return;
+  }
   try {
     const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     console.log("✅ Test Stream successful! Tracks:", testStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     localVideo.srcObject = testStream;
     localVideo.muted = true;
     await localVideo.play().catch(e => console.error("❌ Test Video play failed:", e));
-    testStream.getTracks().forEach(track => track.stop());
-    console.log("🧪 Test completed. Local camera and microphone are working.");
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(testStream);
+    source.connect(analyser);
+    console.log("🎙️ Audio test initiated...");
+    setTimeout(() => {
+      testStream.getTracks().forEach(track => track.stop());
+      console.log("🧪 Test completed. Local camera and microphone are working.");
+    }, 3000);
   } catch (error) {
     console.error("❌ Test Stream failed:", error.name, error.message, error.stack);
-    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`);
+    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check permissions and hardware.`);
   }
 }
 
-
+// Run the test on page load
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -48,22 +59,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   await testLocalStream();
 });
 
-
+// Fetch ICE Servers (STUN and optional TURN)
 async function fetchIceServers() {
-  console.log("🔄 Using multiple STUN servers for better connectivity...");
+  console.log("🔄 Using STUN and TURN servers for better connectivity...");
   return [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.1.google.com:19302" },
-    { urls: "stun:stun.2.google.com:19302" },
     { urls: "stun:stun.services.mozilla.com:3478" },
-    { urls: "stun:stun.stunprotocol.org:3478" }
+    { urls: "turn:your-turn-server.com", username: "username", credential: "password" } // Replace with a real TURN server if available
   ];
+}
+
+// Check network speed
+function checkNetworkSpeed() {
+  return new Promise(resolve => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection) {
+      console.log("📶 Network info:", {
+        downlink: connection.downlink,
+        effectiveType: connection.effectiveType,
+        rtt: connection.rtt
+      });
+      if (connection.downlink < 1) {
+        alert("Low internet speed detected, this may affect video and audio quality!");
+      }
+    }
+    resolve();
+  });
 }
 
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
+  await checkNetworkSpeed();
   try {
     await startCamera();
     if (!localStream || !localStream.getTracks().length) {
@@ -210,22 +238,22 @@ async function createPeer(user) {
   console.log("🧊 ICE Servers used:", iceServers);
   const peer = new RTCPeerConnection({
     iceServers: iceServers,
-    // إعدادات إضافية لتحسين الاتصال
     iceTransportPolicy: "all",
-    bundlePolicy: "max-bundle"
+    bundlePolicy: "max-bundle",
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
       console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
-      // إعادة المحاولة تلقائيًا
       if (peer.iceConnectionState === "failed") {
         console.log("🔄 Attempting to restart ICE for", user);
         peer.restartIce();
       }
     }
   };
+
   peer.onconnectionstatechange = () => {
     console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
     if (peer.connectionState === "connected") {
@@ -256,6 +284,7 @@ async function createPeer(user) {
       tracks: s.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled }))
     })));
     if (event.streams && event.streams[0]) {
+      console.log(`🎥 Remote stream received for ${user}. Adding to UI...`);
       addVideoStream(event.streams[0], user);
     } else {
       console.warn(`⚠️ No streams received from ${user}. Check if tracks are sent.`);
@@ -281,6 +310,7 @@ async function createPeer(user) {
   }
 
   peers[user] = peer;
+  return peer;
 }
 
 async function createOffer(user) {
@@ -322,7 +352,10 @@ async function createAnswer(offer, user) {
 }
 
 function addVideoStream(stream, user) {
-  if (document.querySelector(`video[data-user="${user}"]`)) return;
+  if (document.querySelector(`video[data-user="${user}"]`)) {
+    console.log(`⚠️ Video element for ${user} already exists. Skipping...`);
+    return;
+  }
 
   console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`, {
     streamActive: stream.active,
@@ -337,27 +370,37 @@ function addVideoStream(stream, user) {
   videoEl.srcObject = stream;
   videoEl.autoplay = true;
   videoEl.playsInline = true;
-  videoEl.muted = false; 
-  videoEl.controls = true; 
+  videoEl.muted = false;
   videoEl.setAttribute("data-user", user);
 
-  
+  const playButton = document.createElement("button");
+  playButton.textContent = `Play ${user}'s Stream`;
+  playButton.style.display = "none";
+  playButton.onclick = () => {
+    videoEl.play().then(() => {
+      console.log(`✅ Manual play succeeded for ${user}`);
+      playButton.style.display = "none";
+    }).catch(e => console.error(`❌ Manual play failed for ${user}:`, e));
+  };
+
   videoEl.onloadedmetadata = () => {
+    console.log(`🎥 Metadata loaded for ${user}'s video element`);
     videoEl.play().catch(e => {
       console.error(`❌ Video play failed for ${user}:`, e);
-      
-      videoEl.muted = true; 
-      videoEl.play().then(() => {
-        console.log(`✅ Video play succeeded with muted fallback for ${user}`);
-        videoEl.muted = false; 
-      }).catch(e => console.error(`❌ Muted play failed for ${user}:`, e));
+      playButton.style.display = "block";
+      alert(`Please click the 'Play ${user}'s Stream' button to start the video manually.`);
     });
+  };
+
+  videoEl.onerror = () => {
+    console.error(`❌ Video element error for ${user}`);
   };
 
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
 
   container.appendChild(videoEl);
+  container.appendChild(playButton);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
 }
