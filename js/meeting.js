@@ -3,8 +3,6 @@ const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
-let retryAttempts = 0;
-const MAX_RETRIES = 3;
 
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
@@ -22,53 +20,24 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream;
 
-// Check network speed as a fallback mechanism
-function checkNetworkSpeed() {
-  return new Promise(resolve => {
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (connection) {
-      console.log("📶 Network info:", {
-        downlink: connection.downlink,
-        effectiveType: connection.effectiveType,
-        rtt: connection.rtt
-      });
-      if (connection.downlink < 1) {
-        alert("Low internet speed detected! This may affect video/audio quality. Try switching to a better network.");
-      }
-    }
-    resolve();
-  });
-}
-
-// Test local camera and microphone
+// اختبار بسيط للـ Local Stream
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Please enable camera and microphone in your browser settings!");
-    return;
-  }
   try {
     const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     console.log("✅ Test Stream successful! Tracks:", testStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     localVideo.srcObject = testStream;
     localVideo.muted = true;
     await localVideo.play().catch(e => console.error("❌ Test Video play failed:", e));
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(testStream);
-    source.connect(analyser);
-    console.log("🎙️ Audio test initiated...");
-    setTimeout(() => {
-      testStream.getTracks().forEach(track => track.stop());
-      console.log("🧪 Test completed. Local camera and microphone are working.");
-    }, 3000);
+    testStream.getTracks().forEach(track => track.stop());
+    console.log("🧪 Test completed. Local camera and microphone are working.");
   } catch (error) {
     console.error("❌ Test Stream failed:", error.name, error.message, error.stack);
-    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check permissions and hardware.`);
+    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`);
   }
 }
 
-// Run the test on page load
+// تشغيل الاختبار البسيط عند تحميل الصفحة
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -79,21 +48,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   await testLocalStream();
 });
 
-// Fetch ICE Servers (STUN only, multiple servers for better connectivity)
+// Fetch ICE Servers (STUN only for now)
 async function fetchIceServers() {
   console.log("🔄 Using multiple STUN servers for better connectivity...");
   return [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.services.mozilla.com:3478" },
-    { urls: "stun:stun.stunprotocol.org:3478" }
   ];
 }
 
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
-  await checkNetworkSpeed();
   try {
     await startCamera();
     if (!localStream || !localStream.getTracks().length) {
@@ -103,7 +69,7 @@ ws.onopen = async () => {
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
   } catch (error) {
-    console.error("❌ Failed to start camera before joining:", error.message, error.stack);
+    console.error("❌ Failed to start camera before joining:", error);
     alert("Failed to start camera/microphone. Please check permissions and try again.");
   }
 };
@@ -131,10 +97,7 @@ function getQueryParams() {
 async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ 
-      video: true, 
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
@@ -159,7 +122,7 @@ async function startCamera() {
   console.log("✅ Final Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
   localVideo.srcObject = localStream;
   localVideo.muted = true;
-  await localVideo.play().catch(e => console.error("❌ Local Video play failed:", e));
+  await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
 }
 
 ws.onmessage = async (message) => {
@@ -242,33 +205,15 @@ async function createPeer(user) {
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
   const peer = new RTCPeerConnection({
-    iceServers,
-    iceTransportPolicy: "all", // Allow all transports (UDP, TCP)
-    bundlePolicy: "max-bundle", // Bundle audio and video into a single stream
-    rtcpMuxPolicy: "require", // Force RTCP multiplexing
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    iceServers: iceServers
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
-    if (peer.iceConnectionState === "failed") {
-      console.error(`❌ ICE connection failed for ${user}`);
-      if (retryAttempts < MAX_RETRIES) {
-        retryAttempts++;
-        console.log(`🔄 Retrying ICE connection (${retryAttempts}/${MAX_RETRIES})...`);
-        peer.restartIce();
-        checkNetworkSpeed();
-      } else {
-        alert(`Failed to connect to ${user} after ${MAX_RETRIES} attempts. Please try a different network or refresh the page.`);
-      }
-    } else if (peer.iceConnectionState === "connected") {
-      console.log(`✅ Successfully connected to ${user}`);
-      retryAttempts = 0; // Reset retries on success
-    } else if (["disconnected", "closed"].includes(peer.iceConnectionState)) {
-      console.error(`❌ ICE connection for ${user} disconnected/closed. State: ${peer.iceConnectionState}`);
+    if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
+      console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
     }
   };
-
   peer.onconnectionstatechange = () => {
     console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
     if (peer.connectionState === "connected") {
@@ -293,13 +238,8 @@ async function createPeer(user) {
 
   peer.ontrack = (event) => {
     console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(`🎞️ Received streams:`, event.streams.map(s => ({
-      id: s.id,
-      active: s.active,
-      tracks: s.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled }))
-    })));
+    console.log(`🎞️ Received streams:`, event.streams.map(s => ({ id: s.id, active: s.active })));
     if (event.streams && event.streams[0]) {
-      console.log(`🎥 Remote stream received for ${user}. Adding to UI...`);
       addVideoStream(event.streams[0], user);
     } else {
       console.warn(`⚠️ No streams received from ${user}. Check if tracks are sent.`);
@@ -309,23 +249,21 @@ async function createPeer(user) {
   if (localStream) {
     localStream.getTracks().forEach(track => {
       console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
-      if (track.kind === "audio" && !track.enabled) {
-        console.warn(`⚠️ Audio track disabled for ${user}. Enabling it...`);
+      if (track.enabled) {
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      } else {
+        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`);
         track.enabled = true;
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Forced enabled and added ${track.kind} track with sender:`, sender);
       }
-      if (track.kind === "video" && !track.enabled) {
-        console.warn(`⚠️ Video track disabled for ${user}. Enabling it...`);
-        track.enabled = true;
-      }
-      const sender = peer.addTrack(track, localStream);
-      console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
   } else {
     console.error("❌ No localStream available for peer:", user);
   }
 
   peers[user] = peer;
-  return peer;
 }
 
 async function createOffer(user) {
@@ -334,10 +272,7 @@ async function createOffer(user) {
   try {
     const peer = peers[user];
     console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
-    const offer = await peer.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
+    const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
@@ -354,10 +289,7 @@ async function createAnswer(offer, user) {
     console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
     await peer.setRemoteDescription(new RTCSessionDescription(offer));
     console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
-    const answer = await peer.createAnswer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
+    const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
     console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
     ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
@@ -367,16 +299,8 @@ async function createAnswer(offer, user) {
 }
 
 function addVideoStream(stream, user) {
-  if (document.querySelector(`video[data-user="${user}"]`)) {
-    console.log(`⚠️ Video element for ${user} already exists. Skipping...`);
-    return;
-  }
-
-  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`, {
-    streamActive: stream.active,
-    tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
-  });
-
+  if (document.querySelector(`video[data-user="${user}"]`)) return;
+  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
   const container = document.createElement("div");
   container.classList.add("video-container");
   container.setAttribute("data-user-container", user);
@@ -385,37 +309,12 @@ function addVideoStream(stream, user) {
   videoEl.srcObject = stream;
   videoEl.autoplay = true;
   videoEl.playsInline = true;
-  videoEl.muted = false;
   videoEl.setAttribute("data-user", user);
-
-  const playButton = document.createElement("button");
-  playButton.textContent = `Play ${user}'s Stream`;
-  playButton.style.display = "none";
-  playButton.onclick = () => {
-    videoEl.play().then(() => {
-      console.log(`✅ Manual play succeeded for ${user}`);
-      playButton.style.display = "none";
-    }).catch(e => console.error(`❌ Manual play failed for ${user}:`, e));
-  };
-
-  videoEl.onloadedmetadata = () => {
-    console.log(`🎥 Metadata loaded for ${user}'s video element`);
-    videoEl.play().catch(e => {
-      console.error(`❌ Video play failed for ${user}:`, e);
-      playButton.style.display = "block";
-      alert(`Please click the 'Play ${user}'s Stream' button to start the video manually.`);
-    });
-  };
-
-  videoEl.onerror = () => {
-    console.error(`❌ Video element error for ${user}`);
-  };
 
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
 
   container.appendChild(videoEl);
-  container.appendChild(playButton);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
 }
@@ -449,7 +348,7 @@ function toggleMute() {
   if (audioTracks.length) {
     isMuted = !isMuted;
     audioTracks[0].enabled = !isMuted;
-    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}. Track enabled: ${audioTracks[0].enabled}`);
+    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}`);
     document.getElementById("mute-btn")?.classList.toggle("active", isMuted);
   }
 }
