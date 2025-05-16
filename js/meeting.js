@@ -3,6 +3,8 @@ const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
+let retryAttempts = 0;
+const MAX_RETRIES = 3;
 
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
@@ -19,6 +21,24 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 
 const peers = {};
 let localStream;
+
+// Check network speed as a fallback mechanism
+function checkNetworkSpeed() {
+  return new Promise(resolve => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection) {
+      console.log("📶 Network info:", {
+        downlink: connection.downlink,
+        effectiveType: connection.effectiveType,
+        rtt: connection.rtt
+      });
+      if (connection.downlink < 1) {
+        alert("Low internet speed detected! This may affect video/audio quality. Try switching to a better network.");
+      }
+    }
+    resolve();
+  });
+}
 
 // Test local camera and microphone
 async function testLocalStream() {
@@ -59,34 +79,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   await testLocalStream();
 });
 
-// Fetch ICE Servers (STUN and optional TURN)
+// Fetch ICE Servers (STUN only, multiple servers for better connectivity)
 async function fetchIceServers() {
-  console.log("🔄 Using STUN and TURN servers for better connectivity...");
+  console.log("🔄 Using multiple STUN servers for better connectivity...");
   return [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
     { urls: "stun:stun.services.mozilla.com:3478" },
-    { urls: "turn:your-turn-server.com", username: "username", credential: "password" } // Replace with a real TURN server if available
+    { urls: "stun:stun.stunprotocol.org:3478" }
   ];
-}
-
-// Check network speed
-function checkNetworkSpeed() {
-  return new Promise(resolve => {
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (connection) {
-      console.log("📶 Network info:", {
-        downlink: connection.downlink,
-        effectiveType: connection.effectiveType,
-        rtt: connection.rtt
-      });
-      if (connection.downlink < 1) {
-        alert("Low internet speed detected, this may affect video and audio quality!");
-      }
-    }
-    resolve();
-  });
 }
 
 ws.onopen = async () => {
@@ -101,7 +103,7 @@ ws.onopen = async () => {
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
   } catch (error) {
-    console.error("❌ Failed to start camera before joining:", error);
+    console.error("❌ Failed to start camera before joining:", error.message, error.stack);
     alert("Failed to start camera/microphone. Please check permissions and try again.");
   }
 };
@@ -129,7 +131,10 @@ function getQueryParams() {
 async function startCamera() {
   console.log("🎥 Attempting to start camera and microphone...");
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = await navigator.mediaDevices.getUserMedia({ 
+      video: true, 
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
     console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
@@ -154,7 +159,7 @@ async function startCamera() {
   console.log("✅ Final Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
   localVideo.srcObject = localStream;
   localVideo.muted = true;
-  await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
+  await localVideo.play().catch(e => console.error("❌ Local Video play failed:", e));
 }
 
 ws.onmessage = async (message) => {
@@ -237,20 +242,30 @@ async function createPeer(user) {
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
   const peer = new RTCPeerConnection({
-    iceServers: iceServers,
-    iceTransportPolicy: "all",
-    bundlePolicy: "max-bundle",
+    iceServers,
+    iceTransportPolicy: "all", // Allow all transports (UDP, TCP)
+    bundlePolicy: "max-bundle", // Bundle audio and video into a single stream
+    rtcpMuxPolicy: "require", // Force RTCP multiplexing
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
   });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
-    if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
-      console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
-      if (peer.iceConnectionState === "failed") {
-        console.log("🔄 Attempting to restart ICE for", user);
+    if (peer.iceConnectionState === "failed") {
+      console.error(`❌ ICE connection failed for ${user}`);
+      if (retryAttempts < MAX_RETRIES) {
+        retryAttempts++;
+        console.log(`🔄 Retrying ICE connection (${retryAttempts}/${MAX_RETRIES})...`);
         peer.restartIce();
+        checkNetworkSpeed();
+      } else {
+        alert(`Failed to connect to ${user} after ${MAX_RETRIES} attempts. Please try a different network or refresh the page.`);
       }
+    } else if (peer.iceConnectionState === "connected") {
+      console.log(`✅ Successfully connected to ${user}`);
+      retryAttempts = 0; // Reset retries on success
+    } else if (["disconnected", "closed"].includes(peer.iceConnectionState)) {
+      console.error(`❌ ICE connection for ${user} disconnected/closed. State: ${peer.iceConnectionState}`);
     }
   };
 
