@@ -202,28 +202,20 @@
   }
 }
 
+ .video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 160px); 
+    gap: 10px;
+    padding: 10px;
+    justify-content: start;   
+    align-content: start;
+  }
 
-  .video-grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  padding: 10px;
-  justify-content: center;   
-  justify-items: center;       
-  align-content: start;
-}
-
-.video-container {
-  position: relative;
-  background-color: #000;
-  border-radius: 10px;
-  overflow: hidden;
-  height: 140px;
-  max-width: 160px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s, box-shadow 0.3s;
-}
+  .video-container {
+    width: 160px;
+    height: 140px;
+    max-width: unset; 
+  }
 
 
   .video-container p {
