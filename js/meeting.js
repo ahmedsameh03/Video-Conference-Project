@@ -52,15 +52,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   await testLocalStream();
 });
 
-// Fetch ICE Servers (STUN only for now)
 async function fetchIceServers() {
-  console.log("🔄 Using multiple STUN servers for better connectivity...");
   return [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "openai",
+      credential: "openai"
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "openai",
+      credential: "openai"
+    }
   ];
 }
+
 
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
@@ -141,24 +148,28 @@ ws.onmessage = async (message) => {
         if (data.user !== name) {
           addParticipant(data.user);
           if (localStream) {
-            await createOffer(data.user);
+            peers[data.user] = peers[data.user] || {};
+      peers[data.user]._flags = peers[data.user]._flags || {};
+      peers[data.user]._flags.isPolite = name.localeCompare(data.user) > 0;
+      await createOffer(data.user);
           } else {
             console.warn("⚠️ Local stream not ready when new user joined.");
           }
         }
         break;
 
+        
         case "offer":
           console.log(`📨 Offer received from ${data.user}`);
 
           const peer = peers[data.user] || await createPeer(data.user);
-          const offerCollision = makingOffer || peer.signalingState !== "stable";
-
-          isPolite = name.localeCompare(data.user) > 0;
+          peers[data.user] = peer;
+          peers[data.user]._flags = peers[data.user]._flags || {};
+          const offerCollision = peers[data.user]._flags.makingOffer || peer.signalingState !== "stable";
 
           if (offerCollision) {
-            if (!isPolite) {
-              ignoreOffer = true;
+            if (!peers[data.user]._flags.isPolite) {
+              peers[data.user]._flags.ignoreOffer = true;
               console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
               return;
             }
@@ -176,6 +187,8 @@ ws.onmessage = async (message) => {
             console.error("❌ Failed to handle offer:", e);
           }
           break;
+
+
 
         case "answer":
     console.log(`📬 Answer received from ${data.user}`);
@@ -199,7 +212,7 @@ ws.onmessage = async (message) => {
             await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
             console.log(`✅ ICE candidate added for ${data.user}`);
           } catch (e) {
-            if (!ignoreOffer) {
+            if (!peers[data.user]._flags?.ignoreOffer) {
               console.error("❌ Error adding ICE candidate:", e.message, e.stack);
             }
           }
@@ -295,7 +308,8 @@ async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
-    makingOffer = true;
+    peers[user]._flags = peers[user]._flags || {};
+    peers[user]._flags.makingOffer = true;
     const peer = peers[user];
     console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
     const offer = await peer.createOffer();
@@ -305,7 +319,7 @@ async function createOffer(user) {
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
   } finally {
-    makingOffer = false;
+    peers[user]._flags.makingOffer = false;
   }
 }
 
