@@ -318,7 +318,6 @@ async function createOffer(user) {
   }
 }
 
-
 async function createAnswer(offer, user) {
   console.log(`📬 Creating answer for ${user}`);
   if (!peers[user]) await createPeer(user);
