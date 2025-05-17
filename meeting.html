@@ -251,40 +251,88 @@
     left: 6px;
   }
 
-  .chat-container {
-    width: 90%;             /* ⬅️ أصغر وملائم للموبايل */
-    right: 5%;
-    bottom: 70px;
-    max-height: 180px;
-  }
+ /* ✅ صندوق الشات */
+.chat-container {
+  position: fixed;
+  bottom: 80px;
+  right: 10px;                  /* ⬅️ مكانه في اليمين */
+  width: 230px;                 /* ⬅️ الحجم أصغر */
+  max-height: 220px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+}
 
-  .participants-container {
-    width: 85%;
-    left: 5%;
-    bottom: 70px;
-    max-height: 180px;
-  }
+/* ✅ صندوق المشاركين */
+.participants-container {
+  position: fixed;
+  bottom: 80px;
+  left: 10px;                   /* ⬅️ مكانه في الشمال */
+  width: 230px;
+  max-height: 220px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+}
 
-  .chat-input input {
-    font-size: 0.85rem;
-    padding: 6px 8px;
-  }
+/* ✅ إظهار عند .visible */
+.chat-container.visible,
+.participants-container.visible {
+  display: flex;
+}
 
-  .chat-input button {
-    padding: 6px 10px;
-    font-size: 0.85rem;
-  }
+/* ✅ الهيدر */
+.chat-header,
+.participants-header {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  background-color: #007bff;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
-  .chat-header,
-  .participants-header {
-    font-size: 0.95rem;
-    padding: 6px 10px;
-  }
+/* ✅ محتوى الرسائل */
+.chat-messages,
+.participants-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 0.85rem;
+}
 
-  .chat-messages,
-  .participants-list {
-    font-size: 0.85rem;
-  }
+/* ✅ إدخال الرسائل */
+.chat-input {
+  display: flex;
+  padding: 6px;
+  border-top: 1px solid #ddd;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  border: 1px solid #ccc;
+}
+
+.chat-input button {
+  margin-left: 5px;
+  padding: 6px 10px;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
 }
 
 
