@@ -116,82 +116,102 @@
     .leave-btn:hover {
       background-color: #ff1a1a;
     }
-.chat-container {
-  position: fixed;
-  bottom: 90px;
-  right: 20px;
-  width: 260px;
-  max-height: 220px;
-  background-color: white;
-  border-radius: 10px;
-  overflow: hidden;
-  z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  font-size: 0.85rem;
-}
-
+.chat-container,
 .participants-container {
   position: fixed;
   bottom: 90px;
-  right: 290px; 
-  width: 260px;
-  max-height: 220px;
   background-color: white;
   border-radius: 10px;
-  overflow: hidden;
-  z-index: 1000;
+  width: 260px;
+  max-height: 250px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: all 0.3s ease-in-out;
+}
+
+/* ✅ الشات يظهر يمين */
+.chat-container {
+  right: 20px;
+}
+
+/* ✅ المشاركين بجانب الشات */
+.participants-container {
+  right: 300px;
+}
+
+/* ✅ ظهور عند إضافة .visible */
+.chat-container.visible,
+.participants-container.visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ✅ رأس الصندوق */
+.chat-header,
+.participants-header {
+  padding: 10px;
+  background-color: #007bff;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ✅ الرسائل */
+.chat-messages {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  background-color: #f9f9f9;
   font-size: 0.85rem;
 }
 
+/* ✅ الكتابة والإرسال */
+.chat-input {
+  display: flex;
+  padding: 8px;
+  border-top: 1px solid #ccc;
+}
 
-    .chat-container.visible,
-    .participants-container.visible {
-      transform: translateY(0);
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .chat-header, .participants-header {
-      padding: 10px;
-      background-color: #007bff;
-      color: #fff;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .chat-messages {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
-      background-color: #f9f9f9;
-    }
-    .chat-input {
-      display: flex;
-      padding: 10px;
-      border-top: 1px solid #ccc;
-    }
-    .chat-input input {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 20px;
-    }
-    .chat-input button {
-      margin-left: 5px;
-      border-radius: 20px;
-      padding: 8px 12px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-    }
-    .participants-list {
-      padding: 10px;
-      overflow-y: auto;
-      flex: 1;
-    }
-    .participants-list p {
-      margin-bottom: 5px;
-    }
+.chat-input input {
+  flex: 1;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.chat-input button {
+  margin-left: 8px;
+  padding: 6px 10px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ✅ المشاركين */
+.participants-list {
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.participants-list p {
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
 @media (max-width: 768px) {
   .controls {
     flex-direction: row !important;
