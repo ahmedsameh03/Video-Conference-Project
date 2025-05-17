@@ -173,22 +173,30 @@
     }
 @media (max-width: 768px) {
     .controls {
-        flex-direction: row;       /* زي اللابتوب */
+        flex-direction: row;
         flex-wrap: wrap;
         justify-content: center;
+        gap: 10px;
+    }
+
+    .chat-container, .participants-container {
+        width: 90%;
+        left: 5%;
+        right: 5%;
+        bottom: 100px;
+    }
+
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 10px;
         padding: 10px;
     }
 
-    .video-grid {
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); /* مربعات أصغر */
-        gap: 10px;
-        padding: 15px;
-    }
-
     .video-container {
-        height: 160px; /* تصغير ارتفاع المربعات */
+        height: 130px;
     }
+}
+
 
     .video-container p {
         font-size: 0.75rem;
