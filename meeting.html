@@ -38,6 +38,7 @@
     gap: 10px;
     padding: 10px 20px;
     justify-items: start;
+    align-content: start;
   
 }
 
@@ -179,14 +180,16 @@
       margin-bottom: 5px;
     }
 @media (max-width: 768px) {
-    .controls {
-        flex-direction: row;  
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-    }
-
-    }
+   .controls {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+ .control-btn {
+    width: 45px;
+    height: 45px;
+    margin: 3px;
+  }
 
     .chat-container, .participants-container {
         width: 90%;
@@ -201,10 +204,11 @@
         padding: 10px;
     }
 
-    .video-container {
-        height: 130px;
-    }
-}
+  .video-container {
+    height: 140px;
+    max-width: 160px;
+    margin: 0 auto;
+  }
 
 
     .video-container p {
