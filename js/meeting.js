@@ -19,6 +19,9 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 
 const peers = {};
 let localStream;
+let isMakingOffer = false;
+let isPolite = false;
+let isSettingRemoteAnswerPending = false;
 
 // اختبار بسيط للـ Local Stream
 async function testLocalStream() {
@@ -146,13 +149,33 @@ ws.onmessage = async (message) => {
 
       case "offer":
         console.log(`📨 Offer received from ${data.user}`);
-        if (localStream) {
-          await createAnswer(data.offer, data.user);
-        } else {
-          console.warn("⚠️ Local stream not ready when offer received.");
+        if (!peers[data.user]) await createPeer(data.user);
+
+        const peer = peers[data.user];
+        const offerCollision = isMakingOffer || peer.signalingState !== "stable";
+
+        isPolite = data.user.localeCompare(name) > 0; // Assign polite based on name order
+
+        if (offerCollision) {
+          if (!isPolite) {
+            console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
+            return;
+          }
+          console.warn(`🤝 Polite peer resolving offer collision with ${data.user}`);
+        }
+
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+          console.log(`✅ Remote offer set for ${data.user}`);
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          console.log(`✅ Answer created and set for ${data.user}`);
+          ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+        } catch (e) {
+          console.error(`❌ Error during setting offer from ${data.user}:`, e.message);
         }
         break;
-        
+
         case "answer":
     console.log(`📬 Answer received from ${data.user}`);
     if (peers[data.user]) {
