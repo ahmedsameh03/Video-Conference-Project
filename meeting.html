@@ -37,20 +37,20 @@
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
     gap: 10px;
     padding: 10px 20px;
-    justify-items: start;
-    align-content: start;
+   justify-items: center; 
+   align-content: start;  
   
 }
 
-  .video-container {
-    position: relative;
-    background-color: #000;
-    border-radius: 10px;
-    overflow: hidden;
-    height: 140px; 
-    max-width: 300px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.3s, box-shadow 0.3s;
+ .video-container {
+  position: relative;
+  background-color: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 140px;
+  max-width: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .video-container video {
@@ -180,64 +180,51 @@
       margin-bottom: 5px;
     }
 @media (max-width: 768px) {
-   .controls {
-    flex-direction: row !important;
+  .controls {
+    flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+    padding: 10px;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
   }
- .control-btn {
+
+  .control-btn {
     width: 45px;
     height: 45px;
-    margin: 3px;
+    margin: 5px;
   }
 
-    .chat-container, .participants-container {
-        width: 90%;
-        left: 5%;
-        right: 5%;
-        bottom: 100px;
-    }
-
-    .video-grid {
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 10px;
-        padding: 10px;
-    }
+  .video-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    padding: 10px;
+    justify-items: center;
+    align-content: start;
+  }
 
   .video-container {
     height: 140px;
     max-width: 160px;
-    margin: 0 auto;
   }
 
+  .video-container p {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    bottom: 6px;
+    left: 6px;
+  }
 
-    .video-container p {
-        font-size: 0.75rem;
-        padding: 3px 8px;
-        bottom: 6px;
-        left: 6px;
-    }
-
-    .chat-container,
-    .participants-container {
-        width: 280px;
-        left: unset;
-        right: 10px;
-        bottom: 90px;
-    }
-
-    .chat-input input {
-        font-size: 0.9rem;
-    }
-
-    .chat-input button {
-        font-size: 0.9rem;
-    }
-
-    .participants-list p {
-        font-size: 0.85rem;
-    }
+  .chat-container, .participants-container {
+    width: 90%;
+    left: 5%;
+    right: 5%;
+    bottom: 100px;
+  }
 }
+
 
 
   </style>
