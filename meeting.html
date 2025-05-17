@@ -283,6 +283,50 @@
     font-size: 0.85rem;
   }
 }
+@media (min-width: 769px) {
+  .chat-container {
+    position: fixed;
+    width: 350px;         /* ⬅️ حجم مناسب */
+    right: 30px;          /* ⬅️ يظهر في أقصى اليمين */
+    bottom: 80px;
+    max-height: 300px;
+    font-size: 0.9rem;
+    z-index: 999;
+  }
+
+  .participants-container {
+    position: fixed;
+    width: 300px;
+    left: 30px;           /* ⬅️ يظهر في أقصى الشمال */
+    bottom: 80px;
+    max-height: 300px;
+    font-size: 0.9rem;
+    z-index: 999;
+  }
+
+  .chat-header,
+  .participants-header {
+    font-size: 1rem;
+    padding: 10px 12px;
+  }
+
+  .chat-input input {
+    font-size: 0.9rem;
+    padding: 8px 10px;
+  }
+
+  .chat-input button {
+    font-size: 0.9rem;
+    padding: 8px 12px;
+  }
+
+  .chat-messages,
+  .participants-list {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+}
+
 
   </style>
 </head>
