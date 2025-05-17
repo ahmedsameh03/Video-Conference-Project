@@ -143,50 +143,44 @@ ws.onmessage = async (message) => {
     if (!data.type) return;
 
     switch (data.type) {
-      case "new-user":
-        console.log(`✨ New user joined: ${data.user}`);
-        if (data.user !== name) {
-          addParticipant(data.user);
-          if (localStream) {
-            peers[data.user] = peers[data.user] || {};
-      peers[data.user]._flags = peers[data.user]._flags || {};
-      peers[data.user]._flags.isPolite = name.localeCompare(data.user) > 0;
-      await createOffer(data.user);
-          } else {
-            console.warn("⚠️ Local stream not ready when new user joined.");
-          }
+        case "new-user":
+    console.log(`✨ New user joined: ${data.user}`);
+    if (data.user !== name) {
+      addParticipant(data.user);
+      if (localStream) {
+        if (!peers[data.user]) {
+          await createPeer(data.user);
         }
-        break;
+        await createOffer(data.user);
+      } else {
+        console.warn("⚠️ Local stream not ready when new user joined.");
+      }
+    }
+    break;
 
-        
         case "offer":
-          console.log(`📨 Offer received from ${data.user}`);
+    console.log(`📨 Offer received from ${data.user}`);
+    const peer = peers[data.user] || await createPeer(data.user);
+    const offerCollision = isMakingOffer || peer.signalingState !== "stable";
 
-          const peer = peers[data.user] || await createPeer(data.user);
-          peers[data.user] = peer;
-          peers[data.user]._flags = peers[data.user]._flags || {};
-          const offerCollision = peers[data.user]._flags.makingOffer || peer.signalingState !== "stable";
+    isPolite = name.localeCompare(data.user) > 0;
+    if (offerCollision && !isPolite) {
+      console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
+      return;
+    }
 
-          if (offerCollision) {
-            if (!peers[data.user]._flags.isPolite) {
-              peers[data.user]._flags.ignoreOffer = true;
-              console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
-              return;
-            }
-            console.warn(`🤝 Polite peer resolving offer collision with ${data.user}`);
-          }
+    try {
+      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      console.log(`✅ Remote offer set for ${data.user}`);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      console.log(`✅ Answer created and set for ${data.user}`);
+      ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+    } catch (e) {
+      console.error("❌ Failed to handle offer:", e);
+    }
+    break;
 
-          try {
-            await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-            console.log(`✅ Remote offer set for ${data.user}`);
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            console.log(`✅ Answer created and set for ${data.user}`);
-            ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-          } catch (e) {
-            console.error("❌ Failed to handle offer:", e);
-          }
-          break;
 
 
 
