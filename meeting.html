@@ -171,37 +171,53 @@
     .participants-list p {
       margin-bottom: 5px;
     }
-  @media (max-width: 768px) {
+@media (max-width: 768px) {
     .controls {
+        flex-direction: row;       /* زي اللابتوب */
         flex-wrap: wrap;
         justify-content: center;
-        padding: 10px;
         gap: 10px;
+        padding: 10px;
     }
 
     .video-grid {
-        grid-template-columns: 1fr;
-        padding: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); /* مربعات أصغر */
         gap: 10px;
+        padding: 15px;
     }
 
     .video-container {
-        height: 200px;
-        border-radius: 10px;
+        height: 160px; /* تصغير ارتفاع المربعات */
     }
 
     .video-container p {
-        font-size: 0.8rem;
-        padding: 4px 8px;
+        font-size: 0.75rem;
+        padding: 3px 8px;
         bottom: 6px;
         left: 6px;
     }
 
-    .controls .control-btn {
-        width: 48px;
-        height: 48px;
+    .chat-container,
+    .participants-container {
+        width: 280px;
+        left: unset;
+        right: 10px;
+        bottom: 90px;
+    }
+
+    .chat-input input {
+        font-size: 0.9rem;
+    }
+
+    .chat-input button {
+        font-size: 0.9rem;
+    }
+
+    .participants-list p {
+        font-size: 0.85rem;
     }
 }
+
 
   </style>
 </head>
