@@ -34,7 +34,7 @@
   .video-grid {
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
     gap: 10px;
     padding: 10px 20px;
   
@@ -45,16 +45,19 @@
     background-color: #000;
     border-radius: 10px;
     overflow: hidden;
-    height: 150px; 
+    height: 140px; 
+    max-width: 300px;
+    margin: auto;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     transition: transform 0.3s, box-shadow 0.3s;
 }
 
-    .video-container video {
-      width: 40%;
-      height: 40%;
-      object-fit: cover;
-    }
+.video-container video {
+   width: 100%;
+   height: 100%;
+   object-fit: cover;
+}
+
     .video-container p {
       position: absolute;
       bottom: 10px;
