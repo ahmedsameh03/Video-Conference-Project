@@ -31,15 +31,17 @@
       font-size: 1rem;
       color: #555;
     }
-    .video-grid {
-      flex: 1;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      padding: 20px;
-      overflow-y: auto;
-    }
-    .video-container {
+  .video-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+    gap: 10px;
+    padding: 10px 20px;
+    justify-items: center;
+    align-items: center;
+}
+
+  .video-container {
     position: relative;
     background-color: #000;
     border-radius: 10px;
