@@ -171,22 +171,38 @@
     .participants-list p {
       margin-bottom: 5px;
     }
-    @media (max-width: 768px) {
-      .video-grid {
+  @media (max-width: 768px) {
+    .controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .video-grid {
         grid-template-columns: 1fr;
         padding: 10px;
-      }
-      .controls {
-        flex-wrap: nowrap;
-        flex-direction: row;
-      }
-      .chat-container,
-      .participants-container {
-        width: 90%;
-        left: 5%;
-        right: 5%;
-      }
+        gap: 10px;
     }
+
+    .video-container {
+        height: 200px;
+        border-radius: 10px;
+    }
+
+    .video-container p {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+        bottom: 6px;
+        left: 6px;
+    }
+
+    .controls .control-btn {
+        width: 48px;
+        height: 48px;
+    }
+}
+
   </style>
 </head>
 <body>
