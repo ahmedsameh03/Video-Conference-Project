@@ -18,10 +18,11 @@ console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 
 const peers = {};
-let localStream;
 let isMakingOffer = false;
 let isPolite = false;
 let isSettingRemoteAnswerPending = false;
+let localStream;
+
 
 // اختبار بسيط للـ Local Stream
 async function testLocalStream() {
@@ -147,34 +148,34 @@ ws.onmessage = async (message) => {
         }
         break;
 
-      case "offer":
-        console.log(`📨 Offer received from ${data.user}`);
-        if (!peers[data.user]) await createPeer(data.user);
+        case "offer":
+          console.log(`📨 Offer received from ${data.user}`);
 
-        const peer = peers[data.user];
-        const offerCollision = isMakingOffer || peer.signalingState !== "stable";
+          const peer = peers[data.user] || await createPeer(data.user);
+          const offerCollision = makingOffer || peer.signalingState !== "stable";
 
-        isPolite = data.user.localeCompare(name) > 0; // Assign polite based on name order
+          isPolite = name.localeCompare(data.user) > 0;
 
-        if (offerCollision) {
-          if (!isPolite) {
-            console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
-            return;
+          if (offerCollision) {
+            if (!isPolite) {
+              ignoreOffer = true;
+              console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
+              return;
+            }
+            console.warn(`🤝 Polite peer resolving offer collision with ${data.user}`);
           }
-          console.warn(`🤝 Polite peer resolving offer collision with ${data.user}`);
-        }
 
-        try {
-          await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-          console.log(`✅ Remote offer set for ${data.user}`);
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
-          console.log(`✅ Answer created and set for ${data.user}`);
-          ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-        } catch (e) {
-          console.error(`❌ Error during setting offer from ${data.user}:`, e.message);
-        }
-        break;
+          try {
+            await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+            console.log(`✅ Remote offer set for ${data.user}`);
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            console.log(`✅ Answer created and set for ${data.user}`);
+            ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+          } catch (e) {
+            console.error("❌ Failed to handle offer:", e);
+          }
+          break;
 
         case "answer":
     console.log(`📬 Answer received from ${data.user}`);
@@ -191,14 +192,16 @@ ws.onmessage = async (message) => {
     }
     break;
 
-    case "candidate":
+      case "candidate":
         console.log(`🧊 ICE candidate received from ${data.user}`);
         if (peers[data.user]) {
           try {
             await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
             console.log(`✅ ICE candidate added for ${data.user}`);
           } catch (e) {
-            console.error("❌ Error adding ICE candidate:", e.message, e.stack);
+            if (!ignoreOffer) {
+              console.error("❌ Error adding ICE candidate:", e.message, e.stack);
+            }
           }
         }
         break;
@@ -292,6 +295,7 @@ async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
   if (!peers[user]) await createPeer(user);
   try {
+    makingOffer = true;
     const peer = peers[user];
     console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
     const offer = await peer.createOffer();
@@ -300,8 +304,11 @@ async function createOffer(user) {
     ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
+  } finally {
+    makingOffer = false;
   }
 }
+
 
 async function createAnswer(offer, user) {
   console.log(`📬 Creating answer for ${user}`);
