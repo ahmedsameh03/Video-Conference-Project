@@ -116,37 +116,37 @@
     .leave-btn:hover {
       background-color: #ff1a1a;
     }
-/* ✅ حاوية الشات */
+/* ✅ صندوق الشات على اليمين */
 .chat-container {
   position: fixed;
   bottom: 80px;
-  right: 10px; /* 👈 تظهر على اليمين */
-  width: 300px;
-  max-height: 250px;
+  right: 10px;
+  width: 280px;           /* ⬅️ حجم أصغر */
+  max-height: 200px;      /* ⬅️ ارتفاع أصغر */
   background: white;
   border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  z-index: 1000;
-  display: none; /* تظهر فقط لما تبقى visible */
+  box-shadow: 0 0 10px rgba(0,0,0,0.15);
+  display: none;
   flex-direction: column;
+  z-index: 1000;
 }
 
-/* ✅ حاوية المشاركين */
+/* ✅ صندوق المشاركين على الشمال */
 .participants-container {
   position: fixed;
   bottom: 80px;
-  left: 10px; /* 👈 تظهر على الشمال */
+  left: 10px;
   width: 250px;
-  max-height: 250px;
+  max-height: 200px;
   background: white;
   border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  z-index: 1000;
+  box-shadow: 0 0 10px rgba(0,0,0,0.15);
   display: none;
   flex-direction: column;
+  z-index: 1000;
 }
 
-/* ✅ لما تبقى ظاهرة */
+/* ✅ اظهارهم عند اضافة .visible */
 .chat-container.visible,
 .participants-container.visible {
   display: flex;
@@ -155,26 +155,50 @@
   pointer-events: auto;
 }
 
-/* ✅ تصغير الهيدر والكونتنت */
-.chat-header, .participants-header {
-  padding: 8px 10px;
+/* ✅ الهيدر */
+.chat-header,
+.participants-header {
+  padding: 8px 12px;
   font-size: 1rem;
+  background-color: #007bff;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
+/* ✅ الرسائل */
+.chat-messages,
+.participants-list {
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+/* ✅ إدخال الرسالة */
+.chat-input {
+  display: flex;
+  padding: 8px;
+  border-top: 1px solid #ddd;
+}
 .chat-input input {
-  font-size: 0.9rem;
+  flex: 1;
   padding: 6px 10px;
+  font-size: 0.9rem;
+  border-radius: 20px;
+  border: 1px solid #ccc;
 }
-
 .chat-input button {
+  margin-left: 5px;
   padding: 6px 10px;
+  border-radius: 50%;
+  background-color: #007bff;
+  color: white;
+  border: none;
   font-size: 0.9rem;
 }
 
-.participants-list p {
-  font-size: 0.9rem;
-  padding: 3px 10px;
-}
 
 
 @media (max-width: 768px) {
