@@ -16,6 +16,12 @@ server.on("connection", (ws, req) => {
   console.log("🔗 New WebSocket connection established from", origin);
 
   ws.on("message", (message) => {
+    const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
+if (!allowedTypes.includes(data.type)) {
+  console.warn(`❌ Rejected unknown message type: ${data.type}`);
+  return;
+}
+
     try {
       const data = JSON.parse(message);
       if (!data.type || !data.room) return;
@@ -25,21 +31,24 @@ server.on("connection", (ws, req) => {
       console.log(`📩 Received message of type "${data.type}" in room "${data.room}" from ${ws.user || 'unknown'}`);
 
       switch (data.type) {
-        case "join":
-          rooms[data.room].push(ws);
-          ws.room = data.room;
-          ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
-          console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
+case "join":
+  if (!rooms[data.room].includes(ws)) {
+    rooms[data.room].push(ws);
+  }
+  ws.room = data.room;
+  ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
+  console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
  
-          const existingUsers = rooms[data.room]
-            .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
-            .map(client => client.user);
-          existingUsers.forEach(user => {
-            ws.send(JSON.stringify({ type: "new-user", user }));
-          });
+  const existingUsers = rooms[data.room]
+    .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
+    .map(client => client.user);
+  existingUsers.forEach(user => {
+    ws.send(JSON.stringify({ type: "new-user", user }));
+  });
 
-          broadcast(ws, data.room, { type: "new-user", user: ws.user });
-          break;
+  broadcast(ws, data.room, { type: "new-user", user: ws.user });
+  break;
+
 
         case "offer":
           console.log(`📢 Broadcasting offer from ${ws.user} in room "${data.room}"`);

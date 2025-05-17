@@ -54,19 +54,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function fetchIceServers() {
   return [
-    { urls: "stun:stun.l.google.com:19302" },
     {
-      urls: "turn:global.relay.metered.ca:80",
-      username: "openai",
-      credential: "openai"
+      urls: ["stun:fr-turn7.xirsys.com"]
     },
     {
-      urls: "turn:global.relay.metered.ca:443",
-      username: "openai",
-      credential: "openai"
+      username: "L2a-fvFXKem5bHUHPf_WEX4oi-Ixl0BHHXuz4z_7KSgyjpfxuzhcVM2Tu_DfwOTUAAAAAGgpFR1haG1lZHNhbWVoMDM=",
+      credential: "c3c10bb4-3372-11f0-a269-fadfa0afc433",
+      urls: [
+        "turn:fr-turn7.xirsys.com:80?transport=udp",
+        "turn:fr-turn7.xirsys.com:3478?transport=udp",
+        "turn:fr-turn7.xirsys.com:80?transport=tcp",
+        "turn:fr-turn7.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn7.xirsys.com:443?transport=tcp",
+        "turns:fr-turn7.xirsys.com:5349?transport=tcp"
+      ]
     }
   ];
 }
+
 
 
 ws.onopen = async () => {
@@ -171,6 +176,18 @@ ws.onmessage = async (message) => {
 
     try {
       await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      if (peer._bufferedCandidates?.length) {
+  for (const candidate of peer._bufferedCandidates) {
+    try {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
+    } catch (e) {
+      console.error(`❌ Error adding buffered ICE candidate:`, e);
+    }
+  }
+  peer._bufferedCandidates = [];
+}
+
       console.log(`✅ Remote offer set for ${data.user}`);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
@@ -190,6 +207,18 @@ ws.onmessage = async (message) => {
       const peer = peers[data.user];
       try {
         await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+        if (peer._bufferedCandidates?.length) {
+  for (const candidate of peer._bufferedCandidates) {
+    try {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
+    } catch (e) {
+      console.error(`❌ Error adding buffered ICE candidate:`, e);
+    }
+  }
+  peer._bufferedCandidates = [];
+}
+
         console.log(`✅ Remote description (answer) set for ${data.user}`);
       } catch (e) {
         console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
@@ -199,19 +228,25 @@ ws.onmessage = async (message) => {
     }
     break;
 
-      case "candidate":
-        console.log(`🧊 ICE candidate received from ${data.user}`);
-        if (peers[data.user]) {
-          try {
-            await peers[data.user].addIceCandidate(new RTCIceCandidate(data.candidate));
-            console.log(`✅ ICE candidate added for ${data.user}`);
-          } catch (e) {
-            if (!peers[data.user]._flags?.ignoreOffer) {
-              console.error("❌ Error adding ICE candidate:", e.message, e.stack);
-            }
-          }
+        case "candidate":
+    console.log(`🧊 ICE candidate received from ${data.user}`);
+    const peerConn = peers[data.user];
+    if (peerConn) {
+      if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
+        try {
+          await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
+          console.log(`✅ ICE candidate added for ${data.user}`);
+        } catch (e) {
+          console.error(`❌ Error adding ICE candidate for ${data.user}:`, e);
         }
-        break;
+      } else {
+        console.log(`📥 Buffering ICE candidate for ${data.user} until remote description is set`);
+        peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
+        peerConn._bufferedCandidates.push(data.candidate);
+      }
+    }
+    break;
+
 
       case "user-left":
         console.log(`🚪 User left: ${data.user}`);
