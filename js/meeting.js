@@ -302,6 +302,7 @@ async function createPeer(user) {
   }
 
   peers[user] = peer;
+  return peer; 
 }
 
 async function createOffer(user) {
