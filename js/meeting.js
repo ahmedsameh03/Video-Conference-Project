@@ -152,24 +152,23 @@ ws.onmessage = async (message) => {
           console.warn("⚠️ Local stream not ready when offer received.");
         }
         break;
+        
+        case "answer":
+    console.log(`📬 Answer received from ${data.user}`);
+    if (peers[data.user]) {
+      const peer = peers[data.user];
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log(`✅ Remote description (answer) set for ${data.user}`);
+      } catch (e) {
+        console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
+      }
+    } else {
+      console.warn(`⚠️ No peer connection found for ${data.user}`);
+    }
+    break;
 
-      case "answer":
-        console.log(`📬 Answer received from ${data.user}`);
-        if (peers[data.user]) {
-          const peer = peers[data.user];
-          console.log(`🔍 Current signaling state for ${data.user}:`, peer.signalingState);
-          if (peer.signalingState === "have-local-offer") {
-            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-            console.log(`✅ Remote description (answer) set for ${data.user}`);
-          } else {
-            console.error(`❌ Cannot set remote answer for ${data.user}. Expected state: 'have-local-offer', but got:`, peer.signalingState);
-          }
-        } else {
-          console.warn(`⚠️ No peer connection found for ${data.user}`);
-        }
-        break;
-
-      case "candidate":
+    case "candidate":
         console.log(`🧊 ICE candidate received from ${data.user}`);
         if (peers[data.user]) {
           try {
