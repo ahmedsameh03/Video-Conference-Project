@@ -181,21 +181,27 @@
     }
 @media (max-width: 768px) {
   .controls {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: row !important;
+    flex-wrap: nowrap;
     justify-content: center;
-    padding: 10px;
+    align-items: center;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     width: auto;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 50px;
+    padding: 10px 20px;
+    gap: 10px;
   }
 
   .control-btn {
-    width: 45px;
-    height: 45px;
-    margin: 5px;
+    width: 50px;
+    height: 50px;
+    margin: 0;
   }
+}
+
 
   .video-grid {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
