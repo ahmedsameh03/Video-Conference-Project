@@ -5,7 +5,6 @@ const server = new WebSocket.Server({ port: PORT });
 const rooms = {};
 
 console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
-
 server.on("connection", (ws, req) => {
 const origin = req.headers.origin || "";
 const allowedOrigins = [
