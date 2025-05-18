@@ -7,12 +7,19 @@ const rooms = {};
 console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
 server.on("connection", (ws, req) => {
-  const origin = req.headers.origin;
-  if (origin !== "https://seenmeet.vercel.app") {
-    ws.close(1008, "Unauthorized origin");
-    console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
-    return;
-  }
+const origin = req.headers.origin || "";
+const allowedOrigins = [
+  "https://seenmeet.vercel.app",  // ✅ Your Vercel frontend
+  "http://localhost:5500",        // ✅ Local dev (adjust if needed)
+  "http://127.0.0.1:5500"
+];
+
+if (!allowedOrigins.includes(origin)) {
+  ws.close(1008, "Unauthorized origin");
+  console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
+  return;
+}
+
   console.log("🔗 New WebSocket connection established from", origin);
 
   ws.on("message", (message) => {
