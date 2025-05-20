@@ -452,15 +452,26 @@ async function shareScreen() {
   console.log("🖥️ Attempting to share screen...");
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+
     screenVideoElement = document.createElement("video");
     screenVideoElement.srcObject = screenStream;
     screenVideoElement.autoplay = true;
     screenVideoElement.id = "screen-share";
     videoGrid.appendChild(screenVideoElement);
 
-    Object.values(peers).forEach(peer => {
-      const sender = peer.getSenders().find(s => s.track?.kind === "video");
-      sender?.replaceTrack(screenStream.getVideoTracks()[0]);
+    // ✅ Make sure each peer is a valid RTCPeerConnection
+    Object.entries(peers).forEach(([user, peer]) => {
+      if (peer instanceof RTCPeerConnection) {
+        const sender = peer.getSenders().find(s => s.track?.kind === "video");
+        if (sender) {
+          sender.replaceTrack(screenStream.getVideoTracks()[0]);
+          console.log(`🔁 Replaced video track for ${user}`);
+        } else {
+          console.warn(`⚠️ No video sender found for ${user}`);
+        }
+      } else {
+        console.warn(`❌ Peer object for ${user} is invalid:`, peer);
+      }
     });
 
     screenStream.getVideoTracks()[0].onended = () => {
@@ -473,18 +484,38 @@ async function shareScreen() {
   }
 }
 
+
 function stopScreenShare() {
   console.log("🛑 Stopping screen share...");
-  screenStream?.getTracks().forEach(t => t.stop());
-  screenVideoElement?.remove();
-  screenStream = null;
 
+  // Stop all tracks from screen stream
+  screenStream?.getTracks().forEach(t => t.stop());
+
+  // Remove screen share video element and its container if present
+  if (screenVideoElement) {
+    const container = screenVideoElement.closest(".video-container");
+    if (container) {
+      container.remove(); // ✅ removes the black box
+    } else {
+      screenVideoElement.remove(); // fallback in case no container
+    }
+  }
+
+  screenStream = null;
+  screenVideoElement = null;
+
+  // Revert to local camera
   const cameraTrack = localStream.getVideoTracks()[0];
   Object.values(peers).forEach(peer => {
-    const sender = peer.getSenders().find(s => s.track?.kind === "video");
-    sender?.replaceTrack(cameraTrack);
+    if (peer instanceof RTCPeerConnection) {
+      const sender = peer.getSenders().find(s => s.track?.kind === "video");
+      if (sender) {
+        sender.replaceTrack(cameraTrack);
+      }
+    }
   });
 }
+
 
 function sendMessage() {
   const msg = chatInputField.value.trim();
