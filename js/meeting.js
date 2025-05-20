@@ -82,7 +82,6 @@ ws.onopen = async () => {
       throw new Error("Local stream not initialized or no tracks available.");
     }
     console.log("📹 Local Stream initialized with tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
-    peers[name] = {};
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
   } catch (error) {
@@ -149,33 +148,22 @@ ws.onmessage = async (message) => {
     if (!data.type) return;
 
     switch (data.type) {
-        case "new-user":
-    case "new-user":
+case "new-user":
   console.log(`✨ New user joined: ${data.user}`);
-  if (data.user !== name) {
-    addParticipant(data.user);
 
-    // أنشئ peer له لو مش موجود
-    if (!peers[data.user]) {
-      await createPeer(data.user);
-    }
+  // Don't connect to yourself
+  if (data.user === name) return;
 
-    // أرسل offer له
+  // Add to participant list
+  addParticipant(data.user);
+
+  // If not already connected, create a peer and send an offer
+  if (!peers[data.user]) {
+    await createPeer(data.user);
     await createOffer(data.user);
   }
-
-  // ولو أنا الجديد، لازم أعمل peer واتصال مع كل اللي موجودين قبلي
-  else {
-    Object.keys(peers).forEach(async (existingUser) => {
-      if (existingUser !== name) {
-        if (!peers[existingUser]) {
-          await createPeer(existingUser);
-        }
-        await createOffer(existingUser);
-      }
-    });
-  }
   break;
+
 
 
         case "offer":
@@ -243,19 +231,18 @@ ws.onmessage = async (message) => {
     }
     break;
 
-        case "candidate":
-    console.log(`🧊 ICE candidate received from ${data.user}`);
-    const peerConn = peers[data.user];
-    if (peerConn) {
-  if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
-    await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
-  } else {
-    peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
-    peerConn._bufferedCandidates.push(data.candidate);
+case "candidate":
+  const peerConn = peers[data.user];
+  if (peerConn) {
+    if (peerConn.remoteDescription?.type) {
+      await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
+    } else {
+      peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
+      peerConn._bufferedCandidates.push(data.candidate);
+    }
   }
-}
+  break;
 
-    break;
 
 
       case "user-left":
