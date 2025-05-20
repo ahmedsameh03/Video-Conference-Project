@@ -5,31 +5,35 @@ const server = new WebSocket.Server({ port: PORT });
 const rooms = {};
 
 console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
-server.on("connection", (ws, req) => {
-const origin = req.headers.origin || "";
-const allowedOrigins = [
-  "https://seenmeet.vercel.app",  // ✅ Your Vercel frontend
-  "http://localhost:5500",        // ✅ Local dev (adjust if needed)
-  "http://127.0.0.1:5500"
-];
 
-if (!allowedOrigins.includes(origin)) {
-  ws.close(1008, "Unauthorized origin");
-  console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
-  return;
-}
+// ✅ WebSocket connection handler
+server.on("connection", (ws, req) => {
+  const origin = req.headers.origin || "";
+  const allowedOrigins = [
+    "https://seenmeet.vercel.app",  // ✅ Vercel frontend
+    "http://localhost:5500",        // ✅ local dev
+    "http://127.0.0.1:5500"
+  ];
+
+  if (!allowedOrigins.includes(origin)) {
+    ws.close(1008, "Unauthorized origin");
+    console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
+    return;
+  }
 
   console.log("🔗 New WebSocket connection established from", origin);
 
+  // ✅ Handle incoming WebSocket messages
   ws.on("message", (message) => {
-    const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
-if (!allowedTypes.includes(data.type)) {
-  console.warn(`❌ Rejected unknown message type: ${data.type}`);
-  return;
-}
-
     try {
-      const data = JSON.parse(message);
+      const data = JSON.parse(message);  // ✅ parse before using it
+
+      const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
+      if (!allowedTypes.includes(data.type)) {
+        console.warn(`❌ Rejected unknown message type: ${data.type}`);
+        return;
+      }
+
       if (!data.type || !data.room) return;
 
       if (!rooms[data.room]) rooms[data.room] = [];
@@ -37,51 +41,65 @@ if (!allowedTypes.includes(data.type)) {
       console.log(`📩 Received message of type "${data.type}" in room "${data.room}" from ${ws.user || 'unknown'}`);
 
       switch (data.type) {
-case "join":
-  if (!rooms[data.room].includes(ws)) {
-    rooms[data.room].push(ws);
-  }
-  ws.room = data.room;
-  ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
-  console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
- 
-  const existingUsers = rooms[data.room]
-    .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
-    .map(client => client.user);
-  existingUsers.forEach(user => {
-    ws.send(JSON.stringify({ type: "new-user", user }));
-  });
+        case "join":
+          if (!rooms[data.room].includes(ws)) {
+            rooms[data.room].push(ws);
+          }
+          ws.room = data.room;
+          ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
+          console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
 
-  broadcast(ws, data.room, { type: "new-user", user: ws.user });
-  break;
+          // Send existing users to new user
+          const existingUsers = rooms[data.room]
+            .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
+            .map(client => client.user);
+          existingUsers.forEach(user => {
+            ws.send(JSON.stringify({ type: "new-user", user }));
+          });
 
+          // Notify others about the new user
+          broadcast(ws, data.room, { type: "new-user", user: ws.user });
+          break;
 
         case "offer":
-          console.log(`📢 Broadcasting offer from ${ws.user} in room "${data.room}"`);
-          broadcast(ws, data.room, { type: "offer", offer: data.offer, user: ws.user, room: data.room });
+          broadcast(ws, data.room, {
+            type: "offer",
+            offer: data.offer,
+            user: ws.user,
+            room: data.room,
+          });
           break;
 
         case "answer":
-          console.log(`📢 Broadcasting answer from ${ws.user} in room "${data.room}"`);
-          broadcast(ws, data.room, { type: "answer", answer: data.answer, user: ws.user, room: data.room });
+          broadcast(ws, data.room, {
+            type: "answer",
+            answer: data.answer,
+            user: ws.user,
+            room: data.room,
+          });
           break;
 
         case "candidate":
-          console.log(`📢 Broadcasting candidate from ${ws.user} in room "${data.room}"`);
-          broadcast(ws, data.room, { type: "candidate", candidate: data.candidate, user: ws.user, room: data.room });
+          broadcast(ws, data.room, {
+            type: "candidate",
+            candidate: data.candidate,
+            user: ws.user,
+            room: data.room,
+          });
           break;
 
         case "chat":
-          console.log(`📢 Broadcasting chat message from ${ws.user} in room "${data.room}"`);
-          broadcast(ws, data.room, { type: "chat", user: ws.user, text: data.text, room: data.room });
+          broadcast(ws, data.room, {
+            type: "chat",
+            user: ws.user,
+            text: data.text,
+            room: data.room,
+          });
           break;
 
         case "leave":
           removeUserFromRoom(ws);
           break;
-
-        default:
-          console.warn(`⚠️ Unknown message type: ${data.type}`);
       }
     } catch (error) {
       console.error("❌ Error processing message:", error);
@@ -120,6 +138,7 @@ case "join":
   }
 });
 
+// ✅ Server startup logging
 server.on("listening", () => {
   console.log(`✅ WebSocket Server is running on port ${PORT}`);
 });
