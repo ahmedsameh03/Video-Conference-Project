@@ -15,7 +15,7 @@ class E2EEManager {
     this.options = {
       roomId: options.roomId || '',
       ratchetInterval: options.ratchetInterval || 60000, // 1 minute default
-      workerPath: options.workerPath || || new URL('e2ee-worker.js', document.currentScript?.src || window.location.href).href
+      workerPath: options.workerPath || new URL('e2ee-worker.js', document.currentScript?.src || window.location.href).href
     };
     
     this.keyManager = null;
