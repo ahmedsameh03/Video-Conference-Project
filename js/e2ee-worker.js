@@ -5,8 +5,10 @@
  * to prevent blocking the main thread in WebRTC applications.
  */
 
-// Import required modules
-importScripts('e2ee-crypto.js');
+
+// Import required modules - use self.location to resolve relative paths
+self.importScripts(new URL('e2ee-crypto.js', self.location.href).href);
+
 
 // Initialize crypto module
 let cryptoModule = null;
