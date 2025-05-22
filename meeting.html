@@ -337,6 +337,118 @@
 
 
   </style>
+<style>
+  /* E2EE Styles */
+  .e2ee-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    width: 300px;
+    max-width: 90%;
+    z-index: 1001;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .e2ee-container.visible {
+    display: flex;
+  }
+  
+  .e2ee-header {
+    padding: 10px;
+    background-color: #007bff;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .e2ee-header h5 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  
+  .e2ee-header button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  
+  .e2ee-content {
+    padding: 15px;
+  }
+  
+  .e2ee-status {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .e2ee-status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 10px;
+  }
+  
+  .e2ee-status-enabled {
+    background-color: #4CAF50;
+  }
+  
+  .e2ee-status-disabled {
+    background-color: #f44336;
+  }
+  
+  .e2ee-input-group {
+    margin-bottom: 15px;
+  }
+  
+  .e2ee-input-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 5px;
+  }
+  
+  .e2ee-buttons {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .e2ee-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  
+  .e2ee-btn-enable {
+    background-color: #4CAF50;
+    color: white;
+  }
+  
+  .e2ee-btn-disable {
+    background-color: #f44336;
+    color: white;
+    display: none;
+  }
+  
+  .e2ee-participant-indicator {
+    color: #4CAF50;
+    margin-left: 5px;
+  }
+</style>
+
+  
 </head>
 <body>
     <!-- Top Navbar -->
