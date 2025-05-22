@@ -461,6 +461,11 @@
                 </ul>
                 <span class="navbar-text meeting-info">
                     Meeting ID: <strong id="meeting-id-display">#123456789</strong>
+
+                    <span id="e2ee-indicator" style="margin-left: 10px; display: none;">
+                        <i class="fas fa-lock" style="color: #4CAF50;" title="End-to-End Encrypted"></i>
+                    </span>
+                  
                 </span>
             </div>
         </div>
@@ -520,6 +525,13 @@
         <button onclick="openAIFeatures()" class="control-btn" title="AI Features" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="Open AI Features">
             <i class="fas fa-robot"></i>
         </button>
+
+      
+        <button onclick="toggleE2EESettings()" class="control-btn" title="End-to-End Encryption">
+            <i class="fas fa-lock"></i> 
+        </button>
+
+
         <button onclick="leaveMeeting()" class="control-btn leave-btn" title="Leave Meeting" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="Leave the Meeting">
             <i class="fas fa-phone-slash"></i>
         </button>
@@ -544,5 +556,37 @@
             // You can add more functionality here, such as opening a modal or a sidebar with AI features.
         }
     </script> 
+
+<!-- E2EE Settings Box -->
+<div class="e2ee-container" id="e2ee-container">
+  <div class="e2ee-header">
+    <h5>End-to-End Encryption</h5>
+    <button onclick="toggleE2EESettings()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="e2ee-content">
+    <div class="e2ee-status">
+      <div class="e2ee-status-indicator e2ee-status-disabled" id="e2ee-status-indicator"></div>
+      <span id="e2ee-status-text">E2EE is disabled</span>
+    </div>
+    <div class="e2ee-input-group">
+      <label for="e2ee-password">Encryption Password</label>
+      <input type="password" id="e2ee-password" placeholder="Enter encryption password">
+      <small>All participants must use the same password</small>
+    </div>
+    <div class="e2ee-buttons">
+      <button id="e2ee-enable-btn" onclick="enableE2EE()" class="e2ee-btn e2ee-btn-enable">Enable E2EE</button>
+      <button id="e2ee-disable-btn" onclick="disableE2EE()" class="e2ee-btn e2ee-btn-disable">Disable E2EE</button>
+    </div>
+  </div>
+</div>
+
+<!-- E2EE Scripts -->
+<script src="js/e2ee-key-manager.js"></script>
+<script src="js/e2ee-crypto.js"></script>
+<script src="js/e2ee-worker.js"></script>
+<script src="js/e2ee-manager.js"></script>
+<script src="js/meeting-e2ee.js"></script>
+
+  
 </body>
 </html>
