@@ -9,16 +9,21 @@
 let e2eeManager = null;
 
 // Initialize E2EE manager with room ID
+
 function initializeE2EE() {
     console.log('🔒 Initializing E2EE manager');
+    
+    // Get base URL for scripts
+    const baseUrl = new URL('.', document.currentScript?.src || window.location.href).href;
     
     // Create E2EE manager with current room ID
     e2eeManager = new E2EEManager({
         roomId: room, // From meeting.js
         ratchetInterval: 60000, // 1 minute key rotation
-        workerPath: 'js/e2ee-worker.js'
+        workerPath: baseUrl + 'js/e2ee-worker.js'
     });
-    
+
+
     // Check browser support
     const supportInfo = e2eeManager.getSupportInfo();
     console.log(`🌐 E2EE Browser support: ${JSON.stringify(supportInfo)}`);
