@@ -19,6 +19,8 @@ try {
   
   self.importScripts(cryptoScriptPath);
   console.log("Worker: Successfully imported e2ee-crypto.js.");
+  self.postMessage({ type: "worker_ready" });
+
 
   // Verify that the expected class/functions are now available
   if (typeof E2EECrypto === 'undefined') {
