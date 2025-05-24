@@ -7,123 +7,102 @@
 let cryptoModule = null;
 let isCryptoReady = false; // Flag to track crypto module readiness
 
-console.log("Worker: Script starting execution.");
+console.log("🛠️ Worker: Starting execution...");
 
-// Import required modules
 try {
-  console.log("Worker: Attempting to import e2ee-crypto.js...");
-  // Use a dynamic path relative to the worker's location
-  const workerScriptPath = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
-  const cryptoScriptPath = workerScriptPath + "e2ee-crypto.js";
-  console.log(`Worker: Resolving crypto script path: ${cryptoScriptPath}`);
-  
-  self.importScripts(cryptoScriptPath);
-  console.log("Worker: Successfully imported e2ee-crypto.js.");
+  console.log("🔄 Worker: Attempting to import e2ee-crypto.js...");
 
-  // Verify that the expected class/functions are now available
+  // Resolve relative path
+  const basePath = self.location.href.substring(0, self.location.href.lastIndexOf("/") + 1);
+  const cryptoPath = basePath + "e2ee-crypto.js";
+
+  console.log(`📦 Worker: Loading script from: ${cryptoPath}`);
+  self.importScripts(cryptoPath);
+
   if (typeof E2EECrypto === 'undefined') {
-    throw new Error("E2EECrypto class not found after importScripts.");
+    throw new Error("E2EECrypto class not defined after import.");
   }
-  console.log("Worker: E2EECrypto class confirmed available.");
-  
-  // Create the crypto module instance immediately
+
   cryptoModule = new E2EECrypto();
-  console.log("Worker: E2EECrypto instance created (waiting for key).");
+  console.log("✅ Worker: E2EECrypto module initialized.");
 
-  // Signal readiness to the main thread AFTER successful import and verification
   self.postMessage({ type: "worker_ready" });
-  console.log("Worker: Sent worker_ready message.");
+  console.log("📤 Worker: Sent worker_ready message to main thread.");
 
-} catch (e) {
-  console.error("❌ Worker: Error during importScripts or verification:", e.message, e.stack);
-  // Send error back to main thread
-  self.postMessage({ 
-    type: "error", 
-    error: `Failed to import or verify crypto script: ${e.message}`,
-    details: e.stack
+} catch (error) {
+  console.error("❌ Worker: Failed to import crypto module:", error.message, error.stack);
+  self.postMessage({
+    type: "error",
+    error: "Import error: " + error.message,
+    details: error.stack
   });
 }
 
-// Handle messages from main thread
-self.onmessage = async function(event) {
+// Handle messages from E2EEManager
+self.onmessage = async function (event) {
   const { operation, frame, keyData } = event.data;
 
   try {
-    // Initialize or update crypto module and key
     if (operation === "init") {
-      console.log("Worker: Received 'init' operation with key data.");
-      
-      if (!cryptoModule) {
-        console.log("Worker: Creating new E2EECrypto instance.");
-        cryptoModule = new E2EECrypto();
-      }
-      
-      if (keyData) {
-        console.log("Worker: Setting encryption key.");
-        await cryptoModule.setKey(keyData);
-        isCryptoReady = true; // Mark as ready only after key is set
-        console.log("Worker: Key set successfully. Crypto module is ready.");
-        // Send confirmation back to manager
-        self.postMessage({ type: "initialized" });
-      } else {
-        console.warn("Worker: 'init' operation received without keyData.");
-        isCryptoReady = false;
-        self.postMessage({ 
-          type: "error", 
-          error: "No key data provided for initialization" 
+      if (!cryptoModule) cryptoModule = new E2EECrypto();
+
+      if (!keyData) {
+        self.postMessage({
+          type: "error",
+          error: "Missing keyData in init operation"
         });
+        return;
       }
-      return; // Initialization complete for this message
+
+      await cryptoModule.setKey(keyData);
+      isCryptoReady = true;
+      console.log("🔑 Worker: Key imported and ready.");
+      self.postMessage({ type: "initialized" });
+      return;
     }
 
-    // Check if crypto module is ready for encrypt/decrypt operations
+    // Guard against uninitialized crypto
     if (!isCryptoReady || !cryptoModule) {
+      console.warn("⚠️ Worker: Operation skipped, crypto not initialized.");
       self.postMessage({
         type: "error",
-        error: `Crypto module not initialized or no key set for operation: ${operation}`,
-        operation: operation
+        error: "Crypto not ready for operation: " + operation
       });
       return;
     }
 
-    // Perform encryption/decryption
-    let resultFrame;
-    switch (operation) {
-      case "encrypt":
-        resultFrame = await cryptoModule.encryptFrame(frame);
-        self.postMessage({
-          type: "encrypted",
-          frame: resultFrame
-        }, [resultFrame.data]); // Transfer frame data
-        break;
-        
-      case "decrypt":
-        resultFrame = await cryptoModule.decryptFrame(frame);
-        self.postMessage({
-          type: "decrypted",
-          frame: resultFrame
-        }, [resultFrame.data]); // Transfer frame data
-        break;
-        
-      default:
-        console.warn(`Worker: Unknown operation received: ${operation}`);
-        self.postMessage({
-          type: "error",
-          error: `Unknown operation: ${operation}`,
-          operation: operation
-        });
+    // Encryption
+    if (operation === "encrypt") {
+      const encrypted = await cryptoModule.encryptFrame(frame);
+      self.postMessage({ type: "encrypted", frame: encrypted }, [encrypted.data]);
+      return;
     }
-  } catch (error) {
-    console.error(`❌ Worker: Error during operation ${operation}:`, error.message, error.stack);
-    // Send detailed error back to main thread
+
+    // Decryption
+    if (operation === "decrypt") {
+      const decrypted = await cryptoModule.decryptFrame(frame);
+      self.postMessage({ type: "decrypted", frame: decrypted }, [decrypted.data]);
+      return;
+    }
+
+    // Unknown
     self.postMessage({
       type: "error",
-      error: `Worker error during ${operation}: ${error.message}`,
-      operation: operation,
-      frameInfo: frame ? { type: frame.type, timestamp: frame.timestamp } : null
+      error: "Unknown operation: " + operation
+    });
+
+  } catch (err) {
+    console.error(`❌ Worker: Error during ${operation}:`, err.message, err.stack);
+    self.postMessage({
+      type: "error",
+      error: `Worker error during ${operation}: ${err.message}`,
+      operation,
+      frameInfo: frame ? {
+        type: frame.type,
+        timestamp: frame.timestamp
+      } : null
     });
   }
 };
 
-// Log when the worker script finishes initial execution
-console.log("Worker: Script initial execution finished.");
+console.log("📦 Worker: Ready to receive messages.");
