@@ -12,9 +12,8 @@ console.log("Worker: Script starting execution.");
 // Import required modules
 try {
   console.log("Worker: Attempting to import e2ee-crypto.js...");
-  // Use a fixed relative path assuming it's in the same directory
-  // If deployed structure differs, this might need adjustment (e.g., '/js/e2ee-crypto.js')
-  self.importScripts("e2ee-crypto.js");
+  // Use a dynamic path relative to the worker's location
+  self.importScripts(self.location.href.substring(0, self.location.href.lastIndexOf(\'/\') + 1) + "e2ee-crypto.js");
   console.log("Worker: Successfully imported e2ee-crypto.js.");
 
   // Verify that the expected class/functions are now available
@@ -39,7 +38,8 @@ try {
 self.onmessage = async function(event) {
   const { operation, frame, keyData } = event.data;
 
-  console.log(`Worker: Received message - Operation: ${operation}`);
+  // Avoid logging every frame message if it becomes too noisy
+  // console.log(`Worker: Received message - Operation: ${operation}`);
 
   try {
     // Initialize or update crypto module and key
@@ -70,26 +70,35 @@ self.onmessage = async function(event) {
 
     // Check if crypto module is ready for encrypt/decrypt operations
     if (!isCryptoReady || !cryptoModule) {
-      console.error(`❌ Worker: Crypto module not ready or key not set for operation '${operation}'.`);
-      throw new Error(`Crypto module not initialized or no key set for operation: ${operation}`);
+      // Log this error less frequently if it floods the console
+      // console.error(`❌ Worker: Crypto module not ready or key not set for operation '${operation}'.`);
+      // Send error back, but maybe only once or periodically?
+      self.postMessage({
+        type: "error",
+        error: `Crypto module not initialized or no key set for operation: ${operation}`,
+        operation: operation
+      });
+      // Instead of throwing, just drop the frame by returning
+      return; 
+      // throw new Error(`Crypto module not initialized or no key set for operation: ${operation}`);
     }
 
     // Perform encryption/decryption
     let resultFrame;
     switch (operation) {
       case "encrypt":
-        console.log("Worker: Performing encryption...");
+        // console.log("Worker: Performing encryption..."); // Reduce noise
         resultFrame = await cryptoModule.encryptFrame(frame);
-        console.log("Worker: Encryption complete.");
+        // console.log("Worker: Encryption complete."); // Reduce noise
         self.postMessage({
           type: "encrypted",
           frame: resultFrame
         }, [resultFrame.data]); // Transfer frame data
         break;
       case "decrypt":
-        console.log("Worker: Performing decryption...");
+        // console.log("Worker: Performing decryption..."); // Reduce noise
         resultFrame = await cryptoModule.decryptFrame(frame);
-        console.log("Worker: Decryption complete.");
+        // console.log("Worker: Decryption complete."); // Reduce noise
         self.postMessage({
           type: "decrypted",
           frame: resultFrame
@@ -97,7 +106,13 @@ self.onmessage = async function(event) {
         break;
       default:
         console.warn(`Worker: Unknown operation received: ${operation}`);
-        throw new Error(`Unknown operation: ${operation}`);
+        // Send error back for unknown operation
+        self.postMessage({
+          type: "error",
+          error: `Unknown operation: ${operation}`,
+          operation: operation
+        });
+        // throw new Error(`Unknown operation: ${operation}`);
     }
   } catch (error) {
     console.error(`❌ Worker: Error during operation ${operation}:`, error.message, error.stack);
