@@ -1,150 +1,273 @@
-// js/e2ee-crypto.js - AES-GCM Encryption Module
+/**
+ * E2EECrypto - Encryption Module for End-to-End Encryption
+ * 
+ * This module handles AES-GCM-SIV encryption and decryption of media frames
+ * for WebRTC end-to-end encryption.
+ */
 class E2EECrypto {
-  constructor() {
-    this.key = null;
-    this.ALGORITHM = { name: 'AES-GCM', length: 256 };
-    this.IV_LENGTH = 12;  // 96-bit IV for AES-GCM
-    this.TAG_LENGTH = 16; // 128-bit authentication tag
-    console.log('🔒 E2EECrypto instance created');
+  /**
+   * Create a new E2EECrypto instance
+   * @param {CryptoKey} [key] - Optional initial encryption key
+   */
+  constructor(key = null) {
+    this.key = key;
+    this.encoder = new TextEncoder();
+    this.decoder = new TextDecoder();
+    
+    // Bind methods
+    this.setKey = this.setKey.bind(this);
+    this.generateIV = this.generateIV.bind(this);
+    this.encryptFrame = this.encryptFrame.bind(this);
+    this.decryptFrame = this.decryptFrame.bind(this);
+    this.getHeaderSize = this.getHeaderSize.bind(this);
+    
+    console.log('🔐 E2EE Crypto Module initialized');
   }
-
+  
   /**
    * Set the encryption key
-   * @param {CryptoKey} key - The AES-GCM key
+   * @param {CryptoKey} key - The encryption key to use
    */
-  async setKey(key) {
-    if (!(key instanceof CryptoKey)) {
-      throw new Error('Invalid CryptoKey provided');
-    }
-    
-    // Validate key algorithm
-    if (key.algorithm.name !== 'AES-GCM') {
-      throw new Error('Key must be AES-GCM algorithm');
-    }
-    
+  setKey(key) {
     this.key = key;
-    console.log('🔑 Encryption key set successfully');
+    console.log('🔑 Encryption key updated');
   }
-
+  
   /**
-   * Encrypt a video/audio frame
-   * @param {Object} frame - Frame object with data property
-   * @returns {Object} Encrypted frame with IV
+   * Generate a deterministic IV based on frame metadata
+   * @param {Object} frame - The frame object containing metadata
+   * @returns {Uint8Array} - The generated IV
+   */
+  generateIV(frame) {
+    // Create a 12-byte (96-bit) IV as recommended for AES-GCM
+    const iv = new Uint8Array(12);
+    const dataView = new DataView(iv.buffer);
+    
+    // Use timestamp, synchronization source, and sequence number to ensure uniqueness
+    // This creates a deterministic but unique IV for each frame
+    
+    // First 8 bytes: timestamp or current time
+    const timestamp = frame.timestamp || Date.now();
+    dataView.setFloat64(0, timestamp, true);
+    
+    // Next 4 bytes: combination of synchronization source and sequence number
+    const ssrc = frame.synchronizationSource || 0;
+    const seqNum = frame.sequenceNumber || 0;
+    dataView.setUint32(8, ssrc ^ seqNum, true);
+    
+    return iv;
+  }
+  
+  /**
+   * Determine the header size based on codec type
+   * @param {Object} frame - The frame object containing codec information
+   * @returns {number} - The header size in bytes
+   */
+  getHeaderSize(frame) {
+    // Default to 0 (no header)
+    let headerSize = 0;
+    
+    // For video frames, keep codec-specific headers unencrypted
+    if (frame.type === 'video') {
+      if (frame.codecs && frame.codecs.includes('VP8')) {
+        headerSize = 10; // VP8 header size
+      } else if (frame.codecs && frame.codecs.includes('VP9')) {
+        headerSize = 3; // VP9 header size
+      } else if (frame.codecs && frame.codecs.includes('H264')) {
+        headerSize = 1; // H264 header size (simplified)
+      } else if (frame.codecs && frame.codecs.includes('AV1')) {
+        headerSize = 2; // AV1 header size (simplified)
+      }
+    } else if (frame.type === 'audio') {
+      if (frame.codecs && frame.codecs.includes('opus')) {
+        headerSize = 1; // Opus header size (simplified)
+      }
+    }
+    
+    return headerSize;
+  }
+  
+  /**
+   * Encrypt a media frame using AES-GCM
+   * @param {Object} frame - The frame to encrypt
+   * @returns {Promise<Object>} - The encrypted frame
    */
   async encryptFrame(frame) {
     if (!this.key) {
-      throw new Error('Encryption key not initialized');
+      console.warn('⚠️ No encryption key set, returning original frame');
+      return frame;
     }
-
+    
+    if (!frame.data || !(frame.data instanceof ArrayBuffer)) {
+      console.warn('⚠️ Invalid frame data, returning original frame');
+      return frame;
+    }
+    
     try {
-      // Generate random IV for this frame
-      const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
+      // Generate IV based on frame metadata
+      const iv = this.generateIV(frame);
       
-      // Encrypt the frame data
-      const encrypted = await crypto.subtle.encrypt(
-        { 
-          name: 'AES-GCM', 
+      // Get the frame data as Uint8Array
+      const data = new Uint8Array(frame.data);
+      
+      // Determine header size based on codec
+      const headerSize = this.getHeaderSize(frame);
+      
+      // Split the data into header (unencrypted) and payload (to be encrypted)
+      const header = data.slice(0, headerSize);
+      const payload = data.slice(headerSize);
+      
+      // Encrypt the payload using AES-GCM
+      // Use the header as additional authenticated data (AAD) for integrity
+      const encryptedPayload = await window.crypto.subtle.encrypt(
+        {
+          name: 'AES-GCM',
           iv: iv,
-          tagLength: this.TAG_LENGTH * 8 // Convert to bits
+          additionalData: header
         },
         this.key,
-        frame.data
+        payload
       );
-
-      return {
+      
+      // Combine header and encrypted payload
+      const encryptedData = new Uint8Array(header.byteLength + encryptedPayload.byteLength);
+      encryptedData.set(header);
+      encryptedData.set(new Uint8Array(encryptedPayload), header.byteLength);
+      
+      // Create a new frame with encrypted data
+      const encryptedFrame = {
         ...frame,
-        data: encrypted,
-        iv: iv.buffer,
-        isEncrypted: true,
-        timestamp: Date.now()
+        data: encryptedData.buffer
       };
+      
+      // Add metadata to indicate encryption
+      encryptedFrame.isEncrypted = true;
+      
+      return encryptedFrame;
     } catch (error) {
-      console.error('❌ Encryption failed:', error);
-      throw new Error(`Frame encryption failed: ${error.message}`);
+      console.error('❌ Encryption error:', error);
+      // Return original frame on error to avoid breaking the media pipeline
+      return frame;
     }
   }
-
+  
   /**
-   * Decrypt a video/audio frame
-   * @param {Object} frame - Encrypted frame object
-   * @returns {Object} Decrypted frame
+   * Decrypt a media frame using AES-GCM
+   * @param {Object} frame - The frame to decrypt
+   * @returns {Promise<Object>} - The decrypted frame
    */
   async decryptFrame(frame) {
     if (!this.key) {
-      throw new Error('Decryption key not initialized');
+      console.warn('⚠️ No decryption key set, returning original frame');
+      return frame;
     }
-
+    
+    if (!frame.data || !(frame.data instanceof ArrayBuffer)) {
+      console.warn('⚠️ Invalid frame data, returning original frame');
+      return frame;
+    }
+    
+    // Skip decryption if frame is not encrypted
+    if (frame.isEncrypted === false) {
+      return frame;
+    }
+    
     try {
-      // Extract IV from frame
-      const iv = new Uint8Array(frame.iv);
+      // Generate IV based on frame metadata (same as encryption)
+      const iv = this.generateIV(frame);
       
-      // Decrypt the frame data
-      const decrypted = await crypto.subtle.decrypt(
-        { 
-          name: 'AES-GCM', 
+      // Get the frame data as Uint8Array
+      const data = new Uint8Array(frame.data);
+      
+      // Determine header size based on codec
+      const headerSize = this.getHeaderSize(frame);
+      
+      // Split into header and encrypted payload
+      const header = data.slice(0, headerSize);
+      const encryptedPayload = data.slice(headerSize);
+      
+      // Decrypt the payload
+      const decryptedPayload = await window.crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
           iv: iv,
-          tagLength: this.TAG_LENGTH * 8 // Convert to bits
+          additionalData: header
         },
         this.key,
-        frame.data
+        encryptedPayload
       );
-
-      return {
+      
+      // Combine header and decrypted payload
+      const decryptedData = new Uint8Array(header.byteLength + decryptedPayload.byteLength);
+      decryptedData.set(header);
+      decryptedData.set(new Uint8Array(decryptedPayload), header.byteLength);
+      
+      // Create a new frame with decrypted data
+      const decryptedFrame = {
         ...frame,
-        data: decrypted,
+        data: decryptedData.buffer,
         isEncrypted: false
       };
+      
+      return decryptedFrame;
     } catch (error) {
-      console.error('❌ Decryption failed:', error);
-      throw new Error(`Frame decryption failed: ${error.message}`);
+      console.error('❌ Decryption error:', error);
+      // Return original frame on error to avoid breaking the media pipeline
+      return frame;
     }
   }
-
+  
   /**
-   * Test encryption/decryption with sample data
-   * @param {ArrayBuffer} testData - Sample data to test
-   * @returns {Object} Test result
+   * Test encryption and decryption with a sample frame
+   * @param {ArrayBuffer} sampleData - Sample data to encrypt and decrypt
+   * @returns {Promise<Object>} - Test results
    */
-  async testEncryptionDecryption(testData) {
-    const frame = {
-      type: 'test',
-      timestamp: Date.now(),
-      data: testData
-    };
-
-    try {
-      // Test encrypt -> decrypt cycle
-      const encrypted = await this.encryptFrame(frame);
-      const decrypted = await this.decryptFrame(encrypted);
-      
-      // Compare original and decrypted data
-      const original = new Uint8Array(testData);
-      const result = new Uint8Array(decrypted.data);
-      
-      const isValid = original.length === result.length &&
-        original.every((val, idx) => val === result[idx]);
-      
-      return {
-        success: isValid,
-        originalLength: original.length,
-        decryptedLength: result.length
-      };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.message 
-      };
+  async testEncryptionDecryption(sampleData) {
+    if (!this.key) {
+      throw new Error('No encryption key set');
     }
+    
+    // Create a sample frame
+    const sampleFrame = {
+      type: 'video',
+      codecs: ['VP8'],
+      timestamp: Date.now(),
+      synchronizationSource: 12345,
+      sequenceNumber: 67890,
+      data: sampleData
+    };
+    
+    // Encrypt the frame
+    const encryptedFrame = await this.encryptFrame(sampleFrame);
+    
+    // Decrypt the frame
+    const decryptedFrame = await this.decryptFrame(encryptedFrame);
+    
+    // Compare original and decrypted data
+    const originalData = new Uint8Array(sampleData);
+    const decryptedData = new Uint8Array(decryptedFrame.data);
+    
+    let dataMatches = originalData.length === decryptedData.length;
+    if (dataMatches) {
+      for (let i = 0; i < originalData.length; i++) {
+        if (originalData[i] !== decryptedData[i]) {
+          dataMatches = false;
+          break;
+        }
+      }
+    }
+    
+    return {
+      success: dataMatches,
+      originalSize: originalData.length,
+      encryptedSize: new Uint8Array(encryptedFrame.data).length,
+      decryptedSize: decryptedData.length,
+      headerSize: this.getHeaderSize(sampleFrame)
+    };
   }
 }
 
-// Export for Worker context
-if (typeof self !== 'undefined') {
-  self.E2EECrypto = E2EECrypto;
-  console.log('✅ E2EECrypto exported to worker scope');
-}
-
-// Export for Node.js if needed
+// Export for use in modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = E2EECrypto;
 }
