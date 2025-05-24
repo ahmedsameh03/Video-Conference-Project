@@ -12,8 +12,9 @@ console.log("Worker: Script starting execution.");
 // Import required modules
 try {
   console.log("Worker: Attempting to import e2ee-crypto.js...");
-  // Use a dynamic path relative to the worker's location
-  self.importScripts(self.location.href.substring(0, self.location.href.lastIndexOf(\'/\') + 1) + "e2ee-crypto.js");
+  // Use a relative path assuming e2ee-crypto.js is in the same directory as the worker.
+  // If the deployment structure places worker/crypto scripts differently, adjust this path.
+  self.importScripts("e2ee-crypto.js");
   console.log("Worker: Successfully imported e2ee-crypto.js.");
 
   // Verify that the expected class/functions are now available
@@ -38,8 +39,7 @@ try {
 self.onmessage = async function(event) {
   const { operation, frame, keyData } = event.data;
 
-  // Avoid logging every frame message if it becomes too noisy
-  // console.log(`Worker: Received message - Operation: ${operation}`);
+  // console.log(`Worker: Received message - Operation: ${operation}`); // Reduce noise
 
   try {
     // Initialize or update crypto module and key
@@ -70,17 +70,14 @@ self.onmessage = async function(event) {
 
     // Check if crypto module is ready for encrypt/decrypt operations
     if (!isCryptoReady || !cryptoModule) {
-      // Log this error less frequently if it floods the console
-      // console.error(`❌ Worker: Crypto module not ready or key not set for operation '${operation}'.`);
-      // Send error back, but maybe only once or periodically?
+      console.error(`❌ Worker: Crypto module not ready or key not set for operation '${operation}'.`);
+      // Send error back instead of throwing, allows main thread to handle
       self.postMessage({
         type: "error",
-        error: `Crypto module not initialized or no key set for operation: ${operation}`,
+        error: `Worker not ready for operation: ${operation}`,
         operation: operation
       });
-      // Instead of throwing, just drop the frame by returning
-      return; 
-      // throw new Error(`Crypto module not initialized or no key set for operation: ${operation}`);
+      return; // Stop processing this frame
     }
 
     // Perform encryption/decryption
