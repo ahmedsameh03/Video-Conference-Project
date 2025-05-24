@@ -84,7 +84,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("user-name-display").textContent = name;
   }
   // Run the permission check early, but don't block WebSocket connection
-  checkMediaPermissions(); 
+  // checkMediaPermissions(); // Moved this check to happen just before getUserMedia
 });
 
 async function fetchIceServers() {
@@ -112,6 +112,12 @@ async function fetchIceServers() {
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
   try {
+    // Check permissions *just before* attempting to get the stream
+    const permissionsOk = await checkMediaPermissions();
+    if (!permissionsOk) {
+        throw new Error("Media permissions were not granted or available.");
+    }
+
     // Attempt to start the camera/mic *before* joining the room
     const stream = await startCameraAndMic(); 
     if (!stream || !stream.getTracks().length) {
@@ -128,9 +134,9 @@ ws.onopen = async () => {
     addParticipant(name); // Add self to participant list
 
   } catch (error) {
-    console.error("❌ Failed during WebSocket open sequence (camera/join):", error);
-    // Error already alerted in startCameraAndMic or handleGetUserMediaError
-    // Optionally, provide a more generic failure message here
+    console.error("❌ Failed during WebSocket open sequence (permissions/camera/join):", error);
+    // Error should have been alerted by checkMediaPermissions or startCameraAndMic
+    // Optionally, provide a more generic failure message here or disable UI
     // alert("Failed to initialize the meeting. Please check permissions and refresh.");
   }
 };
