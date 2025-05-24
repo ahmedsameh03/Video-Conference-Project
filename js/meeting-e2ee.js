@@ -1,366 +1,400 @@
+// js/meeting-e2ee.js
+
 /**
- * E2EE Integration for WebRTC Video Conference
- * 
- * This file integrates the E2EE modules with the main meeting.js functionality
- * to provide end-to-end encryption for WebRTC media streams.
+ * @fileoverview Integrates End-to-End Encryption (E2EE) functionality
+ * with the core meeting logic (meeting.js).
+ * Handles E2EE setup, UI interactions, and message interception for key exchange.
  */
 
-// Global E2EE manager instance
+// --- Global Variables ---
+
+/**
+ * Holds the single instance of the E2EEManager.
+ * @type {E2EEManager | null}
+ */
 let e2eeManager = null;
 
-// Initialize E2EE manager
+/**
+ * Stores the original WebSocket onmessage handler from meeting.js
+ * so we can wrap it and add E2EE message handling.
+ * @type {Function | null}
+ */
+let originalWsOnMessage = null;
+
+// --- Initialization ---
+
+/**
+ * Initializes the E2EE manager instance.
+ * Should be called early, but actual enabling requires user interaction.
+ */
 function initializeE2EE() {
-    console.log("🔒 Initializing E2EE manager");
-    
-    // --- Explicit Worker Path --- 
-    // Assuming the final structure on Vercel places JS files directly under /js/
-    // Adjust this path if your deployment structure is different.
-    const workerPath = "/js/e2ee-worker.js"; 
-    console.log(`Using explicit worker path: ${workerPath}`);
-    // --- End Explicit Worker Path ---
-
-    try {
-        // Create E2EE manager with current room ID and explicit worker path
-        e2eeManager = new E2EEManager({
-            roomId: room, // Assumes global
-            ratchetInterval: 60000, // 1 minute key rotation
-            workerPath: workerPath
-        });
-    } catch (managerError) {
-        console.error("❌ Failed to instantiate E2EEManager:", managerError);
-        updateE2EEStatusText(`فشل تهيئة E2EE: ${managerError.message}`);
-        const enableBtnElement = document.getElementById("e2ee-enable-btn");
-        if (enableBtnElement) enableBtnElement.disabled = true;
-        return false;
-    }
-
-    // Check browser support
-    const supportInfo = e2eeManager.getSupportInfo();
-    console.log(`🌐 E2EE Browser support: ${JSON.stringify(supportInfo)}`);
-    
-    const statusTextElement = document.getElementById("e2ee-status-text");
-    const enableBtnElement = document.getElementById("e2ee-enable-btn");
-
-    if (!supportInfo.supported) {
-        console.warn(`⚠️ E2EE not supported in this browser (${supportInfo.browser})`);
-        if (statusTextElement) statusTextElement.textContent = "E2EE غير مدعوم في هذا المتصفح";
-        if (enableBtnElement) enableBtnElement.disabled = true;
-        return false;
-    }
-    
-    if (statusTextElement) statusTextElement.textContent = "E2EE جاهز للتفعيل";
-    if (enableBtnElement) enableBtnElement.disabled = false;
+  // Prevent multiple initializations
+  if (e2eeManager) {
+    console.log("[E2EE Integration] E2EE Manager already initialized.");
     return true;
+  }
+
+  console.log("[E2EE Integration] Initializing E2EE manager instance...");
+
+  // --- Worker Path Configuration ---
+  // IMPORTANT: This path must correctly point to the e2ee-worker.js script
+  // relative to the *HTML file* (meeting.html) or as an absolute path.
+  const workerPath = new URL("js/e2ee-worker.js", window.location.href).href;
+  console.log(`[E2EE Integration] Using worker path: ${workerPath}`);
+  // --- End Worker Path Configuration ---
+
+  try {
+    // Create the E2EEManager instance
+    e2eeManager = new E2EEManager({
+      roomId: room, // Assumes `room` is a global variable from meeting.js
+      ratchetInterval: 60000, // Key rotation interval (1 minute)
+      workerPath: workerPath,
+    });
+
+    // Check and log browser support
+    const supportInfo = e2eeManager.getSupportInfo();
+    console.log(`[E2EE Integration] Browser E2EE Support: ${JSON.stringify(supportInfo)}`);
+    
+    // Update UI based on support
+    if (!supportInfo.supported) {
+      updateE2EEStatusText("E2EE not supported by this browser.");
+      // Disable UI elements if not supported
+      const enableBtnElement = document.getElementById("e2ee-enable-btn");
+      if (enableBtnElement) enableBtnElement.disabled = true;
+      
+      // Update status indicator in settings popup
+      const statusIndicator = document.getElementById("e2ee-status-indicator");
+      if (statusIndicator) {
+        statusIndicator.classList.remove("e2ee-status-enabled");
+        statusIndicator.classList.add("e2ee-status-disabled");
+      }
+      
+      return false; // Indicate initialization failed due to lack of support
+    } else {
+      // Browser supports E2EE
+      updateE2EEStatusText("E2EE Available (Disabled)");
+    }
+
+    console.log("✅ [E2EE Integration] E2EE Manager instance created successfully.");
+    return true; // Indicate successful initialization
+
+  } catch (managerError) {
+    console.error("❌ [E2EE Integration] CRITICAL ERROR instantiating E2EEManager:", managerError);
+    updateE2EEStatusText(`E2EE Init Failed: ${managerError.message}`);
+    // Disable UI elements on critical failure
+    const enableBtnElement = document.getElementById("e2ee-enable-btn");
+    if (enableBtnElement) enableBtnElement.disabled = true;
+    const settingsBtnElement = document.getElementById("e2ee-settings-btn");
+    if (settingsBtnElement) settingsBtnElement.disabled = true;
+    return false; // Indicate initialization failed
+  }
 }
 
-// Enable E2EE with the provided password
+// --- E2EE Control Functions ---
+
+/**
+ * Enables E2EE using the provided password.
+ * Handles UI updates and error reporting.
+ */
 async function enableE2EE() {
-    const passwordInput = document.getElementById("e2ee-password");
-    const password = passwordInput.value.trim();
-    const enableBtn = document.getElementById("e2ee-enable-btn");
-    const disableBtn = document.getElementById("e2ee-disable-btn");
-    
-    if (!password) {
-        alert("الرجاء إدخال كلمة مرور للتشفير");
-        return;
-    }
-    
-    // Disable buttons during activation
+  const passwordInput = document.getElementById("e2ee-password-input");
+  const password = passwordInput?.value;
+
+  if (!password) {
+    alert("Please enter an encryption password.");
+    return;
+  }
+
+  // Ensure manager is initialized
+  if (!e2eeManager && !initializeE2EE()) {
+      alert("Cannot enable E2EE: Initialization failed.");
+      return;
+  }
+
+  console.log("[E2EE Integration] Attempting to enable E2EE...");
+  updateE2EEStatusText("Enabling E2EE...");
+  const enableBtn = document.getElementById("e2ee-enable-btn");
+  const disableBtn = document.getElementById("e2ee-disable-btn");
+  if (enableBtn) enableBtn.disabled = true;
+  if (disableBtn) disableBtn.disabled = true;
+
+  try {
+    // Call the manager's enable method
+    await e2eeManager.enable(password);
+
+    // E2EE is now enabled and ready
+    console.log("✅ [E2EE Integration] E2EE enabled successfully via manager.");
+    updateE2EEStatusText("E2EE Enabled");
     if (enableBtn) enableBtn.disabled = true;
-    if (disableBtn) disableBtn.disabled = true;
-    updateE2EEStatusText("جاري تفعيل التشفير...");
-
-    try {
-        console.log("🔒 Enabling E2EE...");
-        
-        // Initialize if not already done
-        if (!e2eeManager) {
-            console.log("E2EE Manager not initialized, initializing now...");
-            if (!initializeE2EE()) {
-                 throw new Error("فشل تهيئة مدير E2EE.");
-            }
-            console.log("E2EE Manager initialized.");
-        }
-        
-        // Enable E2EE with password
-        console.log("Calling e2eeManager.enable()...");
-        await e2eeManager.enable(password);
-        console.log("e2eeManager.enable() completed.");
-        
-        // Apply E2EE to all existing peer connections
-        console.log("Applying E2EE to existing peers...");
-        if (typeof peers !== "undefined" && peers) { 
-            Object.values(peers).forEach(peer => {
-                if (peer instanceof RTCPeerConnection) { 
-                    console.log(`Applying E2EE to peer for user: ${Object.keys(peers).find(key => peers[key] === peer)}`);
-                    e2eeManager.setupPeerConnection(peer);
-                }
-            });
-        }
-        console.log("Finished applying E2EE to peers.");
-        
-        // Update UI
-        updateE2EEStatus(true);
-        updateE2EEStatusText("التشفير مفعل");
-        
-        // Notify other participants
-        console.log("Notifying other participants...");
-        if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) { 
-             ws.send(JSON.stringify({ 
-                type: "e2ee-status", 
-                enabled: true, 
-                room, 
-                user: name 
-            }));
-        }
-        
-        console.log("✅ E2EE enabled successfully");
-
-    } catch (error) {
-        console.error("❌ Error enabling E2EE:", error.message, error.stack);
-        // Display the specific error message
-        const errorMessage = `فشل تفعيل E2EE: ${error.message}`;
-        alert(errorMessage); 
-        updateE2EEStatusText(errorMessage); // Show specific error in status too
-        updateE2EEStatus(false); // Ensure UI reflects disabled state
-    } finally {
-        console.log("Running finally block for enableE2EE UI update.");
-        // Re-enable appropriate button after attempt
-        const isCurrentlyEnabled = e2eeManager && e2eeManager.isEnabled();
-        console.log(`E2EE is currently ${isCurrentlyEnabled ? 'enabled' : 'disabled'}`);
-        if (isCurrentlyEnabled) {
-             if (enableBtn) enableBtn.style.display = "none";
-             if (disableBtn) {
-                 disableBtn.style.display = "block";
-                 disableBtn.disabled = false;
-             }
-        } else {
-             if (enableBtn) {
-                 enableBtn.style.display = "block";
-                 // Only re-enable if supported
-                 const isSupported = e2eeManager && e2eeManager.getSupportInfo().supported;
-                 console.log(`E2EE support status: ${isSupported}`);
-                 enableBtn.disabled = !isSupported;
-             }
-             if (disableBtn) disableBtn.style.display = "none";
-        }
-        console.log("Enable/Disable buttons updated.");
-    }
-}
-
-// Disable E2EE
-function disableE2EE() {
-    const enableBtn = document.getElementById("e2ee-enable-btn");
-    const disableBtn = document.getElementById("e2ee-disable-btn");
-
-    // Disable buttons during deactivation
-    if (enableBtn) enableBtn.disabled = true;
-    if (disableBtn) disableBtn.disabled = true;
-    updateE2EEStatusText("جاري إلغاء تفعيل التشفير...");
-
-    try {
-        console.log("🔓 Disabling E2EE...");
-        
-        if (e2eeManager) {
-            e2eeManager.disable();
-        }
-        
-        // Update UI
-        updateE2EEStatus(false);
-        updateE2EEStatusText("التشفير معطل");
-        
-        // Notify other participants
-        if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) { 
-            ws.send(JSON.stringify({ 
-                type: "e2ee-status", 
-                enabled: false, 
-                room, 
-                user: name 
-            }));
-        }
-        
-        console.log("✅ E2EE disabled");
-    } catch (error) {
-        console.error("❌ Error disabling E2EE:", error);
-        const errorMessage = `فشل إلغاء تفعيل E2EE: ${error.message}`;
-        alert(errorMessage);
-        updateE2EEStatusText(errorMessage);
-        // Restore UI to previous state on error
-        updateE2EEStatus(e2eeManager ? e2eeManager.isEnabled() : false);
-    } finally {
-         // Re-enable appropriate button after attempt
-        const isCurrentlyEnabled = e2eeManager && e2eeManager.isEnabled();
-        if (isCurrentlyEnabled) {
-             if (enableBtn) enableBtn.style.display = "none";
-             if (disableBtn) {
-                 disableBtn.style.display = "block";
-                 disableBtn.disabled = false;
-             }
-        } else {
-             if (enableBtn) {
-                 enableBtn.style.display = "block";
-                 const isSupported = e2eeManager && e2eeManager.getSupportInfo().supported;
-                 enableBtn.disabled = !isSupported;
-             }
-             if (disableBtn) disableBtn.style.display = "none";
-        }
-    }
-}
-
-// Update E2EE status text helper
-function updateE2EEStatusText(text) {
-    const statusTextElement = document.getElementById("e2ee-status-text");
-    if (statusTextElement) {
-        statusTextElement.textContent = text;
-        console.log(`UI Status Text Updated: ${text}`);
-    }
-}
-
-// Update E2EE status in UI (visual indicators)
-function updateE2EEStatus(enabled) {
+    if (disableBtn) disableBtn.disabled = false;
+    
+    // Update status indicator in settings popup
     const statusIndicator = document.getElementById("e2ee-status-indicator");
+    if (statusIndicator) {
+      statusIndicator.classList.remove("e2ee-status-disabled");
+      statusIndicator.classList.add("e2ee-status-enabled");
+    }
+    
+    // Show E2EE indicator in the UI
+    const e2eeIndicator = document.getElementById("e2ee-indicator");
+    if (e2eeIndicator) {
+      e2eeIndicator.style.display = "inline";
+    }
+
+    // Apply transforms to existing peer connections
+    console.log("[E2EE Integration] Applying E2EE setup to existing peer connections...");
+    Object.values(peers).forEach(peer => {
+        if (peer && peer.connectionState !== "closed") {
+            e2eeManager.setupPeerConnection(peer);
+        }
+    });
+
+    // Broadcast E2EE status to other participants
+    broadcastE2EEStatus(true);
+
+    // Close the settings popup
+    toggleE2EESettings(false); // Force close
+
+  } catch (error) {
+    console.error("❌ [E2EE Integration] Failed to enable E2EE:", error);
+    alert(`Failed to enable E2EE: ${error.message}`);
+    updateE2EEStatusText("E2EE Disabled (Error)");
+    if (enableBtn) enableBtn.disabled = false; // Re-enable button on failure
+    if (disableBtn) disableBtn.disabled = true;
+  }
+}
+
+/**
+ * Disables E2EE.
+ * Handles UI updates.
+ */
+async function disableE2EE() {
+  if (!e2eeManager || !e2eeManager.isE2EEEnabled) {
+    console.log("[E2EE Integration] E2EE is not currently enabled.");
+    return;
+  }
+
+  console.log("[E2EE Integration] Disabling E2EE...");
+  updateE2EEStatusText("Disabling E2EE...");
+  const enableBtn = document.getElementById("e2ee-enable-btn");
+  const disableBtn = document.getElementById("e2ee-disable-btn");
+  if (enableBtn) enableBtn.disabled = true;
+  if (disableBtn) disableBtn.disabled = true;
+
+  try {
+    // Call the manager's disable method
+    await e2eeManager.disable();
+
+    console.log("✅ [E2EE Integration] E2EE disabled successfully via manager.");
+    updateE2EEStatusText("E2EE Available (Disabled)");
+    if (enableBtn) enableBtn.disabled = false;
+    if (disableBtn) disableBtn.disabled = true;
+    
+    // Update status indicator in settings popup
+    const statusIndicator = document.getElementById("e2ee-status-indicator");
+    if (statusIndicator) {
+      statusIndicator.classList.remove("e2ee-status-enabled");
+      statusIndicator.classList.add("e2ee-status-disabled");
+    }
+    
+    // Hide E2EE indicator in the UI
+    const e2eeIndicator = document.getElementById("e2ee-indicator");
+    if (e2eeIndicator) {
+      e2eeIndicator.style.display = "none";
+    }
+
+    // Broadcast E2EE status change
+    broadcastE2EEStatus(false);
+
+    // Close the settings popup
+    toggleE2EESettings(false); // Force close
+
+  } catch (error) {
+    // Disabling should generally not throw errors, but handle defensively
+    console.error("❌ [E2EE Integration] Error during E2EE disable:", error);
+    alert(`An error occurred while disabling E2EE: ${error.message}`);
+    // Update UI to reflect intended state even if cleanup had issues
+    updateE2EEStatusText("E2EE Disabled (Error)");
+    if (enableBtn) enableBtn.disabled = false;
+    if (disableBtn) disableBtn.disabled = true;
+  }
+}
+
+// --- UI Interaction ---
+
+/**
+ * Toggles the visibility of the E2EE settings popup.
+ * @param {boolean} [forceState] - Optional: true to force open, false to force close.
+ */
+function toggleE2EESettings(forceState) {
+  const popup = document.getElementById("e2ee-container");
+  if (!popup) return;
+
+  const shouldBeOpen = typeof forceState === "boolean" ? forceState : popup.style.display === "none";
+
+  if (shouldBeOpen) {
+    // Initialize manager if not already done when opening the popup
+    if (!e2eeManager) {
+        initializeE2EE();
+    }
+    // Update button states based on current E2EE status
     const enableBtn = document.getElementById("e2ee-enable-btn");
     const disableBtn = document.getElementById("e2ee-disable-btn");
-    const e2eeIndicator = document.getElementById("e2ee-indicator"); // Main meeting indicator
-    
-    console.log(`Updating main E2EE status indicators to: ${enabled ? 'enabled' : 'disabled'}`);
-    if (enabled) {
-        if (statusIndicator) {
-            statusIndicator.classList.remove("e2ee-status-disabled");
-            statusIndicator.classList.add("e2ee-status-enabled");
-        }
-        if (enableBtn) enableBtn.style.display = "none";
-        if (disableBtn) disableBtn.style.display = "block";
-        if (e2eeIndicator) e2eeIndicator.style.display = "inline";
+    if (enableBtn) enableBtn.disabled = e2eeManager?.isE2EEEnabled ?? false;
+    if (disableBtn) {
+      disableBtn.disabled = !e2eeManager?.isE2EEEnabled ?? true;
+      disableBtn.style.display = e2eeManager?.isE2EEEnabled ? "block" : "none";
+    }
+
+    popup.style.display = "flex";
+    console.log("[UI] E2EE Settings Popup Opened.");
+  } else {
+    popup.style.display = "none";
+    console.log("[UI] E2EE Settings Popup Closed.");
+  }
+}
+
+/**
+ * Updates the text indicating the current E2EE status in the UI.
+ * @param {string} statusText - The text to display.
+ */
+function updateE2EEStatusText(statusText) {
+  const statusElement = document.getElementById("e2ee-status-text");
+  if (statusElement) {
+    statusElement.textContent = statusText;
+  }
+  
+  // Update the main status indicator if available
+  const mainStatusIndicator = document.getElementById("e2ee-indicator");
+  if (mainStatusIndicator) {
+    if (statusText === "E2EE Enabled") {
+      mainStatusIndicator.style.display = "inline";
+      mainStatusIndicator.title = "End-to-End Encryption Enabled";
     } else {
-        if (statusIndicator) {
-            statusIndicator.classList.remove("e2ee-status-enabled");
-            statusIndicator.classList.add("e2ee-status-disabled");
-        }
-        if (enableBtn) enableBtn.style.display = "block";
-        if (disableBtn) disableBtn.style.display = "none";
-        if (e2eeIndicator) e2eeIndicator.style.display = "none";
+      mainStatusIndicator.style.display = "none";
+      mainStatusIndicator.title = "End-to-End Encryption Disabled";
     }
-    // Ensure buttons are enabled/disabled correctly based on support
-    if (enableBtn) {
-        const isSupported = e2eeManager && e2eeManager.getSupportInfo().supported;
-        enableBtn.disabled = !isSupported;
-    }
-     if (disableBtn) {
-        disableBtn.disabled = false; // Disable button is always enabled if shown
-    }
+  }
 }
 
-// Toggle E2EE settings panel
-function toggleE2EESettings() {
-    const e2eeContainer = document.getElementById("e2ee-container");
-    if (e2eeContainer) {
-        e2eeContainer.classList.toggle("visible");
-        console.log(`E2EE settings panel visibility toggled to: ${e2eeContainer.classList.contains("visible")}`);
-    }
+// --- WebSocket Message Handling Enhancement ---
+
+/**
+ * Broadcasts the current E2EE status to other users via WebSocket.
+ * @param {boolean} isEnabled - Whether E2EE is currently enabled.
+ */
+function broadcastE2EEStatus(isEnabled) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    console.log(`[E2EE Integration] Broadcasting E2EE status: ${isEnabled ? "Enabled" : "Disabled"}`);
+    ws.send(JSON.stringify({
+      type: "e2ee-status",
+      enabled: isEnabled,
+      room: room, // Assumes global
+      user: name, // Assumes global
+    }));
+  } else {
+    console.warn("[E2EE Integration] Cannot broadcast E2EE status: WebSocket not open.");
+  }
 }
 
-// Handle E2EE status messages from other participants
-function handleE2EEStatusMessage(data) {
-    if (!data || !data.user || data.user === name) return; // Ignore self
-    console.log(`🔒 E2EE status update from ${data.user}: ${data.enabled ? "enabled" : "disabled"}`);
-    
-    // Update UI to show which participants have E2EE enabled
-    const participantElement = document.getElementById(`participant-${data.user}`);
-    if (participantElement) {
-        let indicator = participantElement.querySelector(".e2ee-participant-indicator");
-        if (data.enabled) {
-            if (!indicator) {
-                indicator = document.createElement("span");
-                indicator.className = "e2ee-participant-indicator";
-                indicator.innerHTML = " 🔒"; // Lock icon
-                indicator.title = "End-to-End Encrypted";
-                participantElement.appendChild(indicator);
-            }
-        } else {
-            if (indicator) {
-                indicator.remove();
-            }
-        }
-    }
-}
-
-// --- Integration with meeting.js --- 
-
-// Function to be called by meeting.js when a new peer connection is created
-function setupE2EEForPeer(peerConnection) {
-     if (e2eeManager && e2eeManager.isEnabled() && peerConnection) {
-        console.log(`🔒 Applying E2EE to peer connection (State: ${peerConnection.connectionState})`);
-        e2eeManager.setupPeerConnection(peerConnection);
-    } else {
-        // console.log("Skipping E2EE setup for peer (E2EE not enabled or peer invalid)");
-    }
-}
-
-// Initialize E2EE when the page loads
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("DOM Content Loaded - Initializing E2EE UI");
-    // Initialize E2EE manager and update UI based on support
-    const supported = initializeE2EE();
-    updateE2EEStatus(false); // Start as disabled
-    if (!supported) {
-         updateE2EEStatusText("E2EE غير مدعوم");
-    }
-});
-
-// Extend WebSocket message handler (ensure this runs AFTER ws is defined in meeting.js)
+/**
+ * Enhances the original WebSocket `onmessage` handler from meeting.js
+ * to intercept and handle E2EE-specific messages.
+ */
 function enhanceWebSocketHandler() {
-    if (typeof ws !== "undefined" && ws) {
-        const originalWsOnMessage = ws.onmessage;
-        console.log("Enhancing WebSocket onmessage handler...");
-        ws.onmessage = async (message) => {
-            let data;
-            try {
-                data = JSON.parse(message.data);
-                
-                // Handle E2EE status messages first
-                if (data.type === "e2ee-status") {
-                    handleE2EEStatusMessage(data);
-                    return; // Don't pass to original handler
-                }
-            } catch (error) {
-                console.error("❌ Error parsing WebSocket message or handling E2EE status:", error);
-                // Still call original handler if parsing failed but original exists
-                if (originalWsOnMessage) {
-                    try {
-                         // console.log("Passing message to original handler after parse error...");
-                         await originalWsOnMessage(message);
-                    } catch (originalHandlerError) {
-                         console.error("❌ Error in original WebSocket handler after parse error:", originalHandlerError);
-                    }
-                }
-                return; // Exit after handling error
-            }
-
-            // Call the original handler for other message types
-            if (originalWsOnMessage) {
-                 try {
-                    // console.log("Passing message to original handler...");
-                    await originalWsOnMessage(message);
-                 } catch (originalHandlerError) {
-                    console.error("❌ Error in original WebSocket handler:", originalHandlerError);
-                 }
-            }
-        };
-        console.log("✅ WebSocket handler enhanced for E2EE messages.");
-    } else {
-        console.warn("WebSocket (ws) not defined when trying to enhance handler. Retrying soon...");
-        // Retry after a short delay
-        setTimeout(enhanceWebSocketHandler, 500);
+  // Ensure WebSocket object (ws) exists (might be initialized slightly after this script runs)
+  if (typeof ws !== "undefined" && ws) {
+    // Store the original handler if not already stored
+    if (!originalWsOnMessage) {
+      originalWsOnMessage = ws.onmessage;
+      console.log("[E2EE Integration] Stored original WebSocket onmessage handler.");
     }
+
+    // Replace the WebSocket onmessage handler with our wrapper
+    ws.onmessage = async (message) => {
+      let data;
+      try {
+        data = JSON.parse(message.data);
+
+        // --- E2EE Message Interception ---
+        if (data && data.type === "e2ee-status") {
+          console.log(`[E2EE Integration] Received E2EE status from ${data.user}: ${data.enabled ? "Enabled" : "Disabled"}`);
+          // Update UI or take action based on remote user's E2EE status if needed.
+          // For example, display an indicator next to the participant's name.
+          const participantElement = document.getElementById(`participant-${data.user}`);
+          if (participantElement) {
+              const statusIndicator = participantElement.querySelector(".e2ee-indicator") || document.createElement("span");
+              statusIndicator.className = "e2ee-indicator";
+              statusIndicator.textContent = data.enabled ? " 🔒" : "";
+              statusIndicator.title = data.enabled ? "E2EE Enabled" : "E2EE Disabled";
+              if (!participantElement.querySelector(".e2ee-indicator")) {
+                  participantElement.appendChild(statusIndicator);
+              }
+          }
+          return; // Stop processing here, don't pass to original handler
+        }
+
+        // --- Pass Non-E2EE Messages to Original Handler ---
+        if (originalWsOnMessage) {
+          await originalWsOnMessage(message); // Call the original handler from meeting.js
+        }
+
+      } catch (error) {
+        console.error("❌ [E2EE Integration] Error in enhanced WebSocket handler:", error, "Raw data:", message.data);
+        // If parsing failed, still try to pass to original handler if it exists
+        if (originalWsOnMessage && !data) { // Only if parsing failed
+            try {
+                await originalWsOnMessage(message);
+            } catch (originalHandlerError) {
+                 console.error("❌ [E2EE Integration] Error in original WebSocket handler after parse error:", originalHandlerError);
+            }
+        }
+      }
+    };
+    console.log("✅ [E2EE Integration] WebSocket onmessage handler enhanced successfully.");
+
+  } else {
+    // If ws is not ready yet, retry shortly
+    console.warn("[E2EE Integration] WebSocket (ws) not defined when trying to enhance handler. Retrying in 500ms...");
+    setTimeout(enhanceWebSocketHandler, 500);
+  }
 }
 
-// Ensure the enhancement runs after meeting.js likely initializes ws
+// --- Initial Setup Execution ---
+
+// Add event listeners for E2EE UI elements when the DOM is ready.
 document.addEventListener("DOMContentLoaded", () => {
-    // Delay slightly to ensure meeting.js setup runs
-    console.log("Scheduling WebSocket handler enhancement...");
-    setTimeout(enhanceWebSocketHandler, 200); // Increased delay slightly
+  console.log("[E2EE Integration] Setting up E2EE UI event listeners...");
+  
+  // Find the E2EE settings button and add click handler
+  const settingsBtn = document.getElementById("e2ee-settings-btn");
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", () => toggleE2EESettings());
+  }
+  
+  // Find the enable/disable buttons and add click handlers
+  const enableBtn = document.getElementById("e2ee-enable-btn");
+  if (enableBtn) {
+    enableBtn.addEventListener("click", enableE2EE);
+  }
+  
+  const disableBtn = document.getElementById("e2ee-disable-btn");
+  if (disableBtn) {
+    disableBtn.addEventListener("click", disableE2EE);
+    // Initially hide the disable button
+    disableBtn.style.display = "none";
+  }
+
+  // Attempt to enhance the WebSocket handler shortly after DOM load,
+  // giving meeting.js time to potentially initialize the `ws` variable.
+  console.log("[E2EE Integration] Scheduling WebSocket handler enhancement...");
+  setTimeout(enhanceWebSocketHandler, 300); // Delay slightly
+
+  // Initialize the E2EE status display
+  updateE2EEStatusText("E2EE Available (Disabled)");
+  
+  // Initialize E2EE manager
+  setTimeout(initializeE2EE, 500);
 });
 
-console.log("meeting-e2ee.js loaded");
-
+console.log("[E2EE Integration] meeting-e2ee.js script loaded.");
