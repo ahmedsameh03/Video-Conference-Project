@@ -1,3 +1,5 @@
+// الملف: js/meeting.js
+
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -14,34 +16,66 @@ const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
   ? "ws://localhost:3001"
   : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production-65d5.up.railway.app`;
 
-console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
+console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL );
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 
-const peers = {};
+const peers = {}; // Stores RTCPeerConnection objects, keyed by user name
 let isMakingOffer = false;
 let isPolite = false;
 let isSettingRemoteAnswerPending = false;
-let localStream;
+let localStream = null; // Initialize localStream to null
 
+// Function to handle getUserMedia errors more gracefully
+function handleGetUserMediaError(error, context = "startCamera") {
+    console.error(`❌ ${context} Error:`, error.name, error.message, error.stack);
+    let userMessage = `Failed to access camera/microphone (${context}): ${error.name}.`;
 
-// اختبار بسيط للـ Local Stream
-async function testLocalStream() {
-  console.log("🧪 Testing local camera and microphone...");
-  try {
-    const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    console.log("✅ Test Stream successful! Tracks:", testStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
-    localVideo.srcObject = testStream;
-    localVideo.muted = true;
-    await localVideo.play().catch(e => console.error("❌ Test Video play failed:", e));
-    testStream.getTracks().forEach(track => track.stop());
-    console.log("🧪 Test completed. Local camera and microphone are working.");
-  } catch (error) {
-    console.error("❌ Test Stream failed:", error.name, error.message, error.stack);
-    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`);
-  }
+    switch (error.name) {
+        case "NotAllowedError":
+        case "SecurityError":
+            userMessage += " Please ensure you have granted camera and microphone permissions in your browser settings for this site.";
+            break;
+        case "NotFoundError":
+            userMessage += " No camera or microphone found. Please ensure they are connected and enabled.";
+            break;
+        case "NotReadableError":
+            userMessage += " Camera or microphone is currently in use by another application or hardware error occurred.";
+            break;
+        case "OverconstrainedError":
+            userMessage += " No camera/microphone found that meets the specified constraints.";
+            break;
+        case "AbortError":
+             userMessage += " The request was aborted, possibly due to a timeout or navigation.";
+             break;
+        default:
+            userMessage += " An unknown error occurred.";
+    }
+    alert(userMessage);
+    // Depending on the error, you might want to disable related UI elements
 }
 
-// تشغيل الاختبار البسيط عند تحميل الصفحة
+// Simplified test function - focuses only on checking permissions/availability
+async function checkMediaPermissions() {
+    console.log("🧪 Checking media permissions...");
+    let testStream = null;
+    try {
+        // Request both, but don't display or keep the stream
+        testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        console.log("✅ Permission Check: Camera and microphone access seems available.");
+        return true;
+    } catch (error) {
+        handleGetUserMediaError(error, "Permission Check");
+        return false;
+    } finally {
+        // Stop the test stream tracks immediately
+        if (testStream) {
+            testStream.getTracks().forEach(track => track.stop());
+            console.log("🛑 Permission check stream tracks stopped.");
+        }
+    }
+}
+
+// Run permission check early on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
@@ -49,10 +83,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("user-name-display")) {
     document.getElementById("user-name-display").textContent = name;
   }
-  await testLocalStream();
+  // Run the permission check early, but don't block WebSocket connection
+  checkMediaPermissions(); 
 });
 
 async function fetchIceServers() {
+  // Using hardcoded Xirsys STUN/TURN for now
+  // In production, fetch dynamically or use environment variables
   return [
     {
       urls: ["stun:fr-turn7.xirsys.com"]
@@ -72,21 +109,29 @@ async function fetchIceServers() {
   ];
 }
 
-
-
 ws.onopen = async () => {
   console.log("✅ WebSocket connected!");
   try {
-    await startCamera();
-    if (!localStream || !localStream.getTracks().length) {
-      throw new Error("Local stream not initialized or no tracks available.");
+    // Attempt to start the camera/mic *before* joining the room
+    const stream = await startCameraAndMic(); 
+    if (!stream || !stream.getTracks().length) {
+      throw new Error("Local stream not initialized or no tracks available after startCameraAndMic.");
     }
+    localStream = stream; // Assign the successfully obtained stream
     console.log("📹 Local Stream initialized with tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
+    
+    // Display local stream *after* it's confirmed and assigned
+    await displayLocalStream();
+
+    // Now join the room
     ws.send(JSON.stringify({ type: "join", room, user: name }));
-    addParticipant(name);
+    addParticipant(name); // Add self to participant list
+
   } catch (error) {
-    console.error("❌ Failed to start camera before joining:", error);
-    alert("Failed to start camera/microphone. Please check permissions and try again.");
+    console.error("❌ Failed during WebSocket open sequence (camera/join):", error);
+    // Error already alerted in startCameraAndMic or handleGetUserMediaError
+    // Optionally, provide a more generic failure message here
+    // alert("Failed to initialize the meeting. Please check permissions and refresh.");
   }
 };
 
@@ -100,6 +145,13 @@ ws.onclose = (event) => {
   if (!event.wasClean) {
     alert("WebSocket connection closed unexpectedly. Please try refreshing the page.");
   }
+  // Clean up resources on close
+  if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      localStream = null;
+  }
+  Object.values(peers).forEach(peer => peer.close());
+  peers = {};
 };
 
 function getQueryParams() {
@@ -110,172 +162,290 @@ function getQueryParams() {
   return params;
 }
 
-async function startCamera() {
+// Renamed function to be more specific
+async function startCameraAndMic() {
   console.log("🎥 Attempting to start camera and microphone...");
+  let stream = null;
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    // Prioritize getting both video and audio
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
-    console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
+    console.warn("⚠️ Attempt 1 (Video+Audio) failed:", error.name, error.message);
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      // Fallback to video only
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       console.log("✅ Attempt 2: Camera only accessed successfully.");
     } catch (error2) {
-      console.warn("⚠️ Attempt 2 failed:", error2.name, error2.message);
+      console.warn("⚠️ Attempt 2 (Video Only) failed:", error2.name, error2.message);
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        // Fallback to audio only
+        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         console.log("✅ Attempt 3: Microphone only accessed successfully.");
       } catch (error3) {
-        console.error("❌ All attempts failed:", error3.name, error3.message, error3.stack);
-        throw new Error("Failed to access camera or microphone after all attempts.");
+        handleGetUserMediaError(error3, "startCameraAndMic - All Attempts");
+        throw error3; // Re-throw the final error to be caught by the caller (ws.onopen)
       }
     }
   }
 
-  if (!localStream.getTracks().length) {
-    throw new Error("No tracks (video or audio) available.");
+  if (!stream || !stream.getTracks().length) {
+    const error = new Error("No tracks (video or audio) available even after successful getUserMedia call.");
+    handleGetUserMediaError(error, "startCameraAndMic - No Tracks");
+    throw error;
   }
-  console.log("✅ Final Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
-  localVideo.srcObject = localStream;
-  localVideo.muted = true;
-  await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
+  
+  return stream; // Return the successfully obtained stream
 }
 
+// Function to display the local stream
+async function displayLocalStream() {
+    if (!localStream) {
+        console.error("Cannot display local stream: stream is null."); // Changed warn to error
+        return;
+    }
+    if (!localVideo) {
+        console.error("Cannot display local stream: localVideo element not found."); // Changed warn to error
+        return;
+    }
+
+    console.log("📺 Displaying local stream with tracks:", 
+                localStream.getTracks().map(t => `${t.kind}:${t.enabled}`).join(", "));
+
+    // Force a clean slate for the video element
+    if (localVideo.srcObject) {
+        localVideo.srcObject = null;
+    }
+
+    // Set the stream and ensure muted for local preview
+    localVideo.srcObject = localStream;
+    localVideo.muted = true;
+
+    try {
+        // Add a visible UI indicator while waiting for video
+        document.body.classList.add("loading-video");
+
+        // Play with timeout and visual feedback
+        await Promise.race([
+            localVideo.play(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Video play timeout")), 8000) // Reduced timeout
+            )
+        ]);
+
+        console.log("✅ Local video playback started successfully.");
+    } catch (error) {
+        console.error(`❌ Local video play failed: ${error.message}`);
+
+        // Try one more time with a delay
+        setTimeout(async () => {
+            try {
+                await localVideo.play();
+                console.log("✅ Local video playback started on retry.");
+            } catch (retryError) {
+                console.error(`❌ Local video play retry failed: ${retryError.message}`);
+                alert(`Could not display camera: ${error.name}. Please refresh and try again.`);
+            } finally {
+                document.body.classList.remove("loading-video");
+            }
+        }, 1000);
+    } finally {
+        // Remove loading indicator in normal case
+        document.body.classList.remove("loading-video");
+    }
+}
+
+
+// Main WebSocket message handler (will be enhanced by meeting-e2ee.js)
 ws.onmessage = async (message) => {
+  let data;
   try {
-    const data = JSON.parse(message.data);
-    console.log("📩 WebSocket message received:", data);
-    if (!data.type) return;
+    data = JSON.parse(message.data);
+    // console.log("📩 WebSocket message received:", data); // Reduce noise, log specific types
+    if (!data || !data.type) return;
 
     switch (data.type) {
-case "new-user":
-  console.log(`✨ New user joined: ${data.user}`);
+      case "new-user":
+        console.log(`✨ New user joined: ${data.user}`);
+        // Don't connect to yourself
+        if (data.user === name) return;
+        // Add to participant list
+        addParticipant(data.user);
+        // If not already connected, create a peer and send an offer
+        if (!peers[data.user]) {
+          const peer = await createPeer(data.user); // Create peer first
+          if (peer) { // Ensure peer creation was successful
+             await createOffer(data.user);
+          }
+        }
+        break;
 
-  // Don't connect to yourself
-  if (data.user === name) return;
+      case "offer":
+        console.log(`📨 Offer received from ${data.user}`);
+        // Ensure peer exists or create it
+        const offeringPeer = peers[data.user] || await createPeer(data.user);
+        if (!offeringPeer) {
+            console.error(`Failed to create/get peer for offer from ${data.user}`);
+            return;
+        }
+        
+        // Handle offer collision (impolite peer ignores)
+        const offerCollision = isMakingOffer || offeringPeer.signalingState !== "stable";
+        // Determine politeness based on name comparison (consistent tie-breaking)
+        isPolite = name.localeCompare(data.user) > 0; 
+        
+        console.log(`Handling offer from ${data.user}. Politeness: ${isPolite ? "polite" : "impolite"}. Collision: ${offerCollision}. Signaling State: ${offeringPeer.signalingState}`);
 
-  // Add to participant list
-  addParticipant(data.user);
+        if (offerCollision && !isPolite) {
+          console.warn(`⚠️ Offer collision from ${data.user}, dropping offer (impolite).`);
+          return;
+        }
+        
+        // If polite and collision, potentially rollback local offer (more complex, skip for now)
+        // if (offerCollision && isPolite) { ... }
 
-  // If not already connected, create a peer and send an offer
-  if (!peers[data.user]) {
-    await createPeer(data.user);
-    await createOffer(data.user);
-  }
-  break;
+        try {
+          await offeringPeer.setRemoteDescription(new RTCSessionDescription(data.offer));
+          console.log(`✅ Remote offer set for ${data.user}. Signaling state: ${offeringPeer.signalingState}`);
+          
+          // Add buffered candidates if any
+          await addBufferedCandidates(offeringPeer, data.user);
 
+          // Create and send answer
+          const answer = await offeringPeer.createAnswer();
+          await offeringPeer.setLocalDescription(answer);
+          console.log(`✅ Answer created and set for ${data.user}. Signaling state: ${offeringPeer.signalingState}`);
+          ws.send(JSON.stringify({ type: "answer", answer, room, user: name, targetUser: data.user }));
+        } catch (e) {
+          console.error(`❌ Failed to handle offer from ${data.user}:`, e);
+        }
+        break;
 
+      case "answer":
+        console.log(`📬 Answer received from ${data.user}`);
+        if (peers[data.user]) {
+          const answeringPeer = peers[data.user];
+          try {
+            // Ensure local description is set before setting remote answer
+            if (answeringPeer.signalingState === "have-local-offer") {
+                await answeringPeer.setRemoteDescription(new RTCSessionDescription(data.answer));
+                console.log(`✅ Remote answer set for ${data.user}. Signaling state: ${answeringPeer.signalingState}`);
+                // Add buffered candidates if any
+                await addBufferedCandidates(answeringPeer, data.user);
+            } else {
+                console.warn(`⚠️ Received answer from ${data.user} but signaling state is not 'have-local-offer'. State: ${answeringPeer.signalingState}. Buffering answer might be needed.`);
+                // TODO: Implement answer buffering if needed for complex scenarios
+            }
+          } catch (e) {
+            console.error(`❌ Failed to set remote answer for ${data.user}:`, e);
+          }
+        } else {
+          console.warn(`⚠️ No peer connection found for ${data.user} to set answer.`);
+        }
+        break;
 
-        case "offer":
-    console.log(`📨 Offer received from ${data.user}`);
-    const peer = peers[data.user] || await createPeer(data.user);
-    const offerCollision = isMakingOffer || peer.signalingState !== "stable";
-
-    isPolite = name.localeCompare(data.user) > 0;
-    if (offerCollision && !isPolite) {
-      console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
-      return;
-    }
-
-    try {
-      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-      if (peer._bufferedCandidates?.length) {
-  for (const candidate of peer._bufferedCandidates) {
-    try {
-      await peer.addIceCandidate(new RTCIceCandidate(candidate));
-      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
-    } catch (e) {
-      console.error(`❌ Error adding buffered ICE candidate:`, e);
-    }
-  }
-  peer._bufferedCandidates = [];
-}
-
-      console.log(`✅ Remote offer set for ${data.user}`);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      console.log(`✅ Answer created and set for ${data.user}`);
-      ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-    } catch (e) {
-      console.error("❌ Failed to handle offer:", e);
-    }
-    break;
-
-
-
-
-        case "answer":
-    console.log(`📬 Answer received from ${data.user}`);
-    if (peers[data.user]) {
-      const peer = peers[data.user];
-      try {
-        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-        if (peer._bufferedCandidates?.length) {
-  for (const candidate of peer._bufferedCandidates) {
-    try {
-      await peer.addIceCandidate(new RTCIceCandidate(candidate));
-      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
-    } catch (e) {
-      console.error(`❌ Error adding buffered ICE candidate:`, e);
-    }
-  }
-  peer._bufferedCandidates = [];
-}
-
-        console.log(`✅ Remote description (answer) set for ${data.user}`);
-      } catch (e) {
-        console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
-      }
-    } else {
-      console.warn(`⚠️ No peer connection found for ${data.user}`);
-    }
-    break;
-
-case "candidate":
-  const peerConn = peers[data.user];
-  if (peerConn) {
-    if (peerConn.remoteDescription?.type) {
-      await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } else {
-      peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
-      peerConn._bufferedCandidates.push(data.candidate);
-    }
-  }
-  break;
-
-
+      case "candidate":
+        // console.log(`🧊 Candidate received from ${data.user}`); // Reduce noise
+        const candidatePeer = peers[data.user];
+        if (candidatePeer) {
+          // Buffer candidate if remote description is not yet set or peer is closed
+          if (candidatePeer.remoteDescription && candidatePeer.remoteDescription.type && candidatePeer.connectionState !== "closed") {
+            try {
+                await candidatePeer.addIceCandidate(new RTCIceCandidate(data.candidate));
+                // console.log(`✅ ICE candidate added for ${data.user}`); // Reduce noise
+            } catch (e) {
+                // Ignore benign errors
+                if (!e.message.includes("Cannot add ICE candidate when connection is closed") && 
+                    !e.message.includes("Error processing ICE candidate") &&
+                    !e.message.includes("InvalidStateError")) { // Firefox error when state is wrong
+                     console.error(`❌ Error adding ICE candidate for ${data.user}:`, e);
+                }
+            }
+          } else {
+            // Buffer the candidate
+            candidatePeer._bufferedCandidates = candidatePeer._bufferedCandidates || [];
+            candidatePeer._bufferedCandidates.push(data.candidate);
+            console.log(`🧊 Candidate buffered for ${data.user} (remote desc not set or peer closed)`);
+          }
+        } else {
+             console.warn(`⚠️ No peer connection found for ${data.user} to add candidate.`);
+        }
+        break;
 
       case "user-left":
         console.log(`🚪 User left: ${data.user}`);
-        removeVideoStream(data.user);
-        removeParticipant(data.user);
+        removePeer(data.user);
         break;
 
       case "chat":
-        console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
+        console.log(`💬 Chat message received from ${data.user}: ${data.text}`);
         displayMessage({ user: data.user, text: data.text, own: data.user === name });
         break;
 
+      // Note: 'e2ee-status' is handled by the enhanced handler in meeting-e2ee.js
+
       default:
-        console.warn(`❓ Unknown message type: ${data.type}`);
+        console.warn(`❓ Unknown message type received: ${data.type}`);
     }
   } catch (error) {
     console.error("❌ Error handling WebSocket message:", error.name, error.message, error.stack);
+    // Avoid crashing if one message fails
   }
 };
 
+// Helper to add buffered ICE candidates
+async function addBufferedCandidates(peer, user) {
+    if (peer._bufferedCandidates?.length) {
+        console.log(`Processing ${peer._bufferedCandidates.length} buffered ICE candidates for ${user}`);
+        for (const candidate of peer._bufferedCandidates) {
+            try {
+                // Check state before adding
+                if (peer.remoteDescription && peer.remoteDescription.type && peer.connectionState !== "closed") {
+                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                    // console.log(`✅ Buffered ICE candidate added for ${user}`); // Reduce noise
+                } else {
+                    console.warn(`Skipping buffered candidate for ${user}, peer state not suitable.`);
+                }
+            } catch (e) {
+                 if (!e.message.includes("Cannot add ICE candidate when connection is closed") && 
+                     !e.message.includes("Error processing ICE candidate") &&
+                     !e.message.includes("InvalidStateError")) {
+                    console.error(`❌ Error adding buffered ICE candidate for ${user}:`, e);
+                 }
+            }
+        }
+        peer._bufferedCandidates = []; // Clear buffer
+    }
+}
+
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
-  const iceServers = await fetchIceServers();
-  console.log("🧊 ICE Servers used:", iceServers);
+  if (peers[user]) {
+      console.warn(`Peer connection for ${user} already exists. Closing old one.`);
+      peers[user].close(); // Close existing before creating new
+  }
+
+  let iceServers;
+  try {
+      iceServers = await fetchIceServers();
+      console.log("🧊 Using ICE Servers:", JSON.stringify(iceServers));
+  } catch (error) {
+      console.error("❌ Failed to fetch ICE servers:", error);
+      alert("Failed to get network configuration (ICE servers). Cannot establish connection.");
+      return null; // Indicate failure
+  }
+  
   const peer = new RTCPeerConnection({
     iceServers: iceServers
   });
 
+  // Add event listeners
   peer.oniceconnectionstatechange = () => {
-    console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
+    console.log(`🔌 ICE connection state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
-      console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
+      console.warn(`🔌 ICE connection for ${user} state: ${peer.iceConnectionState}. May need cleanup or restart.`);
+      // Consider attempting ICE restart or closing the connection more formally
+      // removePeer(user); // Clean up UI and peer object if state persists
     }
   };
   peer.onconnectionstatechange = () => {
@@ -283,261 +453,195 @@ async function createPeer(user) {
     if (peer.connectionState === "connected") {
       console.log(`✅ Peer connection established with ${user}`);
     } else if (peer.connectionState === "failed") {
-      console.error(`❌ Peer connection failed with ${user}`);
+      console.error(`❌ Peer connection failed with ${user}. Attempting cleanup.`);
+      removePeer(user); // Clean up failed connection
+    } else if (peer.connectionState === "closed") {
+      console.log(`🚪 Peer connection closed with ${user}.`);
+      // Ensure cleanup happens if not already done
+      removePeer(user);
     }
   };
 
   peer.onicecandidate = (event) => {
     if (event.candidate) {
-      console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
-      ws.send(JSON.stringify({ type: "candidate", candidate: event.candidate, room, user }));
+      // console.log(`🧊 Sending ICE candidate to ${user}`); // Reduce noise
+      // Send candidate to the specific target user
+      ws.send(JSON.stringify({ type: "candidate", candidate: event.candidate, room, user: name, targetUser: user }));
     } else {
-      console.log(`🏁 All ICE candidates sent for ${user}`);
+      console.log(`🏁 All ICE candidates gathered for ${user}`);
     }
   };
 
   peer.onicegatheringstatechange = () => {
-    console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
+    // console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState); // Reduce noise
   };
 
   peer.ontrack = (event) => {
-    console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(`🎞️ Received streams:`, event.streams.map(s => ({ id: s.id, active: s.active })));
+    console.log(`🎞️ Track received from ${user}:`, event.track, `Stream(s):`, event.streams);
     if (event.streams && event.streams[0]) {
-      addVideoStream(event.streams[0], user);
+      addRemoteStream(event.streams[0], user);
     } else {
-      console.warn(`⚠️ No streams received from ${user}. Check if tracks are sent.`);
+      console.warn(`⚠️ Track received from ${user} without a stream.`);
+      // Handle tracks without streams if necessary (e.g., create a new stream)
     }
   };
 
+  // Add local stream tracks to the peer connection
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
-      if (track.enabled) {
-        const sender = peer.addTrack(track, localStream);
-        console.log(`✅ Added ${track.kind} track with sender:`, sender);
-      } else {
-        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`);
-        track.enabled = true;
-        const sender = peer.addTrack(track, localStream);
-        console.log(`✅ Forced enabled and added ${track.kind} track with sender:`, sender);
+      try {
+        console.log(`➕ Adding local ${track.kind} track to peer for ${user}`);
+        peer.addTrack(track, localStream);
+      } catch (e) {
+        console.error(`❌ Error adding local ${track.kind} track for ${user}:`, e);
       }
     });
   } else {
-    console.error("❌ No localStream available for peer:", user);
+    console.error(`❌ Cannot add tracks for ${user}: Local stream is not initialized.`);
   }
 
+  // Store the peer connection
   peers[user] = peer;
-  return peer; 
+
+  // --- E2EE Integration --- 
+  // Call the setup function from meeting-e2ee.js if it exists
+  if (typeof setupE2EEForPeer === "function") {
+    setupE2EEForPeer(peer);
+  } else {
+    console.warn("setupE2EEForPeer function not found. E2EE will not be applied to this peer.");
+  }
+  // --- End E2EE Integration ---
+
+  return peer;
 }
 
 async function createOffer(user) {
-  console.log(`📨 Creating offer for ${user}`);
-  if (!peers[user]) await createPeer(user);
+  if (!peers[user]) {
+    console.error(`Cannot create offer for ${user}: Peer connection does not exist.`);
+    return;
+  }
+  const peer = peers[user];
+  console.log(`✉️ Creating offer for ${user}...`);
+  isMakingOffer = true;
   try {
-    peers[user]._flags = peers[user]._flags || {};
-    peers[user]._flags.makingOffer = true;
-    const peer = peers[user];
-    console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
-    ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
+    console.log(`✅ Offer created and set for ${user}. Signaling state: ${peer.signalingState}`);
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: name, targetUser: user }));
   } catch (e) {
-    console.error("❌ Error creating offer:", e.message, e.stack);
+    console.error(`❌ Failed to create offer for ${user}:`, e);
   } finally {
-    peers[user]._flags.makingOffer = false;
+    isMakingOffer = false;
   }
 }
 
-async function createAnswer(offer, user) {
-  console.log(`📬 Creating answer for ${user}`);
-  if (!peers[user]) await createPeer(user);
-  try {
-    const peer = peers[user];
-    console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
-    await peer.setRemoteDescription(new RTCSessionDescription(offer));
-    console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
-    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-  } catch (e) {
-    console.error("❌ Error creating answer:", e.message, e.stack);
+function addRemoteStream(stream, user) {
+  console.log(`➕ Adding remote stream for user: ${user}`);
+  let videoElement = document.getElementById(`video-${user}`);
+  if (!videoElement) {
+    videoElement = document.createElement("video");
+    videoElement.id = `video-${user}`;
+    videoElement.autoplay = true;
+    videoElement.playsInline = true; // Important for mobile
+    videoElement.classList.add("remote-video");
+
+    const videoContainer = document.createElement("div");
+    videoContainer.id = `container-${user}`;
+    videoContainer.classList.add("video-container");
+    
+    const nameTag = document.createElement("div");
+    nameTag.classList.add("name-tag");
+    nameTag.textContent = user;
+    
+    videoContainer.appendChild(videoElement);
+    videoContainer.appendChild(nameTag);
+    videoGrid.appendChild(videoContainer);
   }
+  
+  videoElement.srcObject = stream;
+  videoElement.play().catch(e => console.error(`Error playing remote video for ${user}:`, e));
 }
 
-function addVideoStream(stream, user) {
-  if (document.querySelector(`video[data-user="${user}"]`)) return;
-  console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
-  const container = document.createElement("div");
-  container.classList.add("video-container");
-  container.setAttribute("data-user-container", user);
-
-  const videoEl = document.createElement("video");
-  videoEl.srcObject = stream;
-  videoEl.autoplay = true;
-  videoEl.playsInline = true;
-  videoEl.setAttribute("data-user", user);
-
-  const nameTag = document.createElement("p");
-  nameTag.textContent = user;
-
-  container.appendChild(videoEl);
-  container.appendChild(nameTag);
-  videoGrid.appendChild(container);
-}
-
-function removeVideoStream(user) {
-  console.log(`➖ Removing video stream for ${user}`);
-  const container = document.querySelector(`div[data-user-container="${user}"]`);
-  if (container) container.remove();
+function removePeer(user) {
+  console.log(`➖ Removing peer and UI for user: ${user}`);
   if (peers[user]) {
     peers[user].close();
     delete peers[user];
   }
-}
-
-function addParticipant(user) {
-  if (document.getElementById(`participant-${user}`)) return;
-  const p = document.createElement("p");
-  p.textContent = user;
-  p.id = `participant-${user}`;
-  participantsList.appendChild(p);
-}
-
-function removeParticipant(user) {
-  const p = document.getElementById(`participant-${user}`);
-  if (p) p.remove();
-}
-
-function toggleMute() {
-  if (!localStream) return console.error("No local stream");
-  const audioTracks = localStream.getAudioTracks();
-  if (audioTracks.length) {
-    isMuted = !isMuted;
-    audioTracks[0].enabled = !isMuted;
-    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}`);
-    document.getElementById("mute-btn")?.classList.toggle("active", isMuted);
+  const videoContainer = document.getElementById(`container-${user}`);
+  if (videoContainer) {
+    videoContainer.remove();
   }
-}
-
-function toggleVideo() {
-  if (!localStream) return console.error("No local stream");
-  const videoTracks = localStream.getVideoTracks();
-  if (videoTracks.length) {
-    isVideoOff = !isVideoOff;
-    videoTracks[0].enabled = !isVideoOff;
-    console.log(`📹 Video ${isVideoOff ? "off" : "on"}`);
-    document.getElementById("video-btn")?.classList.toggle("active", isVideoOff);
-  }
-}
-
-let screenStream, screenVideoElement;
-
-async function shareScreen() {
-  console.log("🖥️ Attempting to share screen...");
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-
-    screenVideoElement = document.createElement("video");
-    screenVideoElement.srcObject = screenStream;
-    screenVideoElement.autoplay = true;
-    screenVideoElement.id = "screen-share";
-    videoGrid.appendChild(screenVideoElement);
-
-    // ✅ Make sure each peer is a valid RTCPeerConnection
-    Object.entries(peers).forEach(([user, peer]) => {
-      if (peer instanceof RTCPeerConnection) {
-        const sender = peer.getSenders().find(s => s.track?.kind === "video");
-        if (sender) {
-          sender.replaceTrack(screenStream.getVideoTracks()[0]);
-          console.log(`🔁 Replaced video track for ${user}`);
-        } else {
-          console.warn(`⚠️ No video sender found for ${user}`);
-        }
-      } else {
-        console.warn(`❌ Peer object for ${user} is invalid:`, peer);
-      }
-    });
-
-    screenStream.getVideoTracks()[0].onended = () => {
-      console.log("🛑 Screen share ended.");
-      stopScreenShare();
-    };
-  } catch (error) {
-    console.error("❌ Error sharing screen:", error);
-    alert(`Error sharing screen: ${error.name} - ${error.message}`);
-  }
-}
-
-
-function stopScreenShare() {
-  console.log("🛑 Stopping screen share...");
-
-  // Stop all tracks from screen stream
-  screenStream?.getTracks().forEach(t => t.stop());
-
-  // Remove screen share video element and its container if present
-  if (screenVideoElement) {
-    const container = screenVideoElement.closest(".video-container");
-    if (container) {
-      container.remove(); // ✅ removes the black box
-    } else {
-      screenVideoElement.remove(); // fallback in case no container
-    }
-  }
-
-  screenStream = null;
-  screenVideoElement = null;
-
-  // Revert to local camera
-  const cameraTrack = localStream.getVideoTracks()[0];
-  Object.values(peers).forEach(peer => {
-    if (peer instanceof RTCPeerConnection) {
-      const sender = peer.getSenders().find(s => s.track?.kind === "video");
-      if (sender) {
-        sender.replaceTrack(cameraTrack);
-      }
-    }
-  });
-}
-
-
-function sendMessage() {
-  const msg = chatInputField.value.trim();
-  if (!msg) return;
-  console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
-  displayMessage({ user: name, text: msg, own: true });
-  chatInputField.value = "";
+  removeParticipant(user);
 }
 
 function displayMessage({ user, text, own }) {
-  console.log(`📩 Displaying message from ${user}: ${text}`);
-  const el = document.createElement("p");
-  el.innerHTML = `<strong>${user}:</strong> ${text}`;
-  if (own) el.classList.add("own-message");
-  chatMessages.appendChild(el);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function toggleChat() {
-  document.getElementById("chat-container").classList.toggle("visible");
-}
-
-function toggleParticipants() {
-  document.getElementById("participants-container").classList.toggle("visible");
-}
-
-function leaveMeeting() {
-  if (!confirm("Are you sure you want to leave the meeting?")) return;
-  console.log("🚪 Leaving meeting...");
-  localStream?.getTracks().forEach(t => t.stop());
-  Object.values(peers).forEach(p => p.close());
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "leave", room, user: name }));
-    ws.close();
+  const messageElement = document.createElement("div");
+  messageElement.classList.add("message");
+  if (own) {
+    messageElement.classList.add("own-message");
   }
-  window.location.href = "dashboard.html";
+  messageElement.innerHTML = `<strong>${own ? "You" : user}:</strong> ${text}`;
+  chatMessages.appendChild(messageElement);
+  chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
 }
+
+function sendMessage() {
+  const text = chatInputField.value.trim();
+  if (text) {
+    const message = { type: "chat", text, room, user: name };
+    ws.send(JSON.stringify(message));
+    displayMessage({ user: name, text, own: true }); // Display own message immediately
+    chatInputField.value = ""; // Clear input field
+  }
+}
+
+// Add participant to the list
+function addParticipant(user) {
+    if (document.getElementById(`participant-${user}`)) return; // Already exists
+    const participantElement = document.createElement("li");
+    participantElement.id = `participant-${user}`;
+    participantElement.textContent = user;
+    participantsList.appendChild(participantElement);
+}
+
+// Remove participant from the list
+function removeParticipant(user) {
+    const participantElement = document.getElementById(`participant-${user}`);
+    if (participantElement) {
+        participantElement.remove();
+    }
+}
+
+// Event listeners for UI controls
+document.getElementById("mute-btn")?.addEventListener("click", () => {
+  isMuted = !isMuted;
+  localStream?.getAudioTracks().forEach(track => track.enabled = !isMuted);
+  document.getElementById("mute-btn").textContent = isMuted ? "Unmute" : "Mute";
+});
+
+document.getElementById("video-off-btn")?.addEventListener("click", () => {
+  isVideoOff = !isVideoOff;
+  localStream?.getVideoTracks().forEach(track => track.enabled = !isVideoOff);
+  document.getElementById("video-off-btn").textContent = isVideoOff ? "Video On" : "Video Off";
+});
+
+document.getElementById("send-chat-btn")?.addEventListener("click", sendMessage);
+document.getElementById("chat-input-field")?.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+});
+
+document.getElementById("leave-btn")?.addEventListener("click", () => {
+  ws.close();
+  window.location.href = "/dashboard.html"; // Redirect to dashboard or home page
+});
+
+// E2EE related buttons (ensure these exist in your HTML)
+document.getElementById("e2ee-settings-btn")?.addEventListener("click", toggleE2EESettings);
+document.getElementById("e2ee-enable-btn")?.addEventListener("click", enableE2EE);
+document.getElementById("e2ee-disable-btn")?.addEventListener("click", disableE2EE);
+
+console.log("meeting.js loaded");
+
