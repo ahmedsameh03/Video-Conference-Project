@@ -1,153 +1,129 @@
-// js/e2ee-worker.js - Web Worker for E2EE Encryption/Decryption Operations
-console.log('🔒 E2EE Worker Starting...');
+// js/e2ee-worker.js
 
-// ===== Worker State Variables =====
-let cryptoModule = null; // Holds the crypto module instance
-let isReady = false;     // Tracks if crypto module is loaded
-let keySet = false;      // Tracks if encryption key is set
+/**
+ * E2EE Worker - Web Worker for offloading encryption/decryption operations
+ */
 
-// ===== Function to Load Crypto Module Safely =====
-function loadCryptoModule() {
-  // List of possible paths to load the crypto module
-  const paths = [
-    'e2ee-crypto.js',                    // Same directory
-    './e2ee-crypto.js',                  // Explicit same directory
-    '/js/e2ee-crypto.js',                // Absolute path
-    new URL('e2ee-crypto.js', self.location.href).href // URL resolution
-  ];
+let cryptoModule = null;
+let isCryptoReady = false; // Flag to track crypto module readiness
 
-  console.log('🔄 Loading crypto module...');
-  console.log('Worker location:', self.location.href);
+console.log("Worker: Script starting execution.");
 
-  // Try each path until successful
-  for (const path of paths) {
-    try {
-      console.log(`🔄 Trying path: ${path}`);
-      self.importScripts(path);
-      
-      // Check if the E2EECrypto class is now available
-      if (typeof E2EECrypto !== 'undefined') {
-        cryptoModule = new E2EECrypto();
-        isReady = true;
-        console.log(`✅ Crypto module loaded from: ${path}`);
-        
-        // Notify main thread that worker is ready
-        self.postMessage({ type: 'worker_ready' });
-        return true;
-      }
-    } catch (error) {
-      console.warn(`⚠️ Failed to load from ${path}:`, error.message);
-    }
-  }
+// Import required modules
+try {
+  console.log("Worker: Attempting to import e2ee-crypto.js...");
+  // Use a dynamic path relative to the worker's location
+  const workerScriptPath = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
+  const cryptoScriptPath = workerScriptPath + "e2ee-crypto.js";
+  console.log(`Worker: Resolving crypto script path: ${cryptoScriptPath}`);
   
-  // If all paths fail, notify main thread of failure
-  console.error('❌ Failed to load crypto module from all paths');
+  self.importScripts(cryptoScriptPath);
+  console.log("Worker: Successfully imported e2ee-crypto.js.");
+
+  // Verify that the expected class/functions are now available
+  if (typeof E2EECrypto === 'undefined') {
+    throw new Error("E2EECrypto class not found after importScripts.");
+  }
+  console.log("Worker: E2EECrypto class confirmed available.");
+  
+  // Create the crypto module instance immediately
+  cryptoModule = new E2EECrypto();
+  console.log("Worker: E2EECrypto instance created (waiting for key).");
+
+  // Signal readiness to the main thread AFTER successful import and verification
+  self.postMessage({ type: "worker_ready" });
+  console.log("Worker: Sent worker_ready message.");
+
+} catch (e) {
+  console.error("❌ Worker: Error during importScripts or verification:", e.message, e.stack);
+  // Send error back to main thread
   self.postMessage({ 
-    type: 'crypto_load_failed',
-    error: 'Failed to load crypto module from all paths'
+    type: "error", 
+    error: `Failed to import or verify crypto script: ${e.message}`,
+    details: e.stack
   });
-  return false;
 }
 
-// ===== Load Crypto Module on Worker Startup =====
-loadCryptoModule();
-
-// ===== Message Handler for Worker Operations =====
+// Handle messages from main thread
 self.onmessage = async function(event) {
-  const { operation, payload } = event.data;
-  
-  console.log(`📨 Received operation: ${operation}, Ready: ${isReady}, KeySet: ${keySet}`);
-  
+  const { operation, frame, keyData } = event.data;
+
   try {
-    // Ensure crypto module is loaded before processing any operation
-    if (!isReady || !cryptoModule) {
-      throw new Error('Crypto module not ready - module not loaded');
+    // Initialize or update crypto module and key
+    if (operation === "init") {
+      console.log("Worker: Received 'init' operation with key data.");
+      
+      if (!cryptoModule) {
+        console.log("Worker: Creating new E2EECrypto instance.");
+        cryptoModule = new E2EECrypto();
+      }
+      
+      if (keyData) {
+        console.log("Worker: Setting encryption key.");
+        await cryptoModule.setKey(keyData);
+        isCryptoReady = true; // Mark as ready only after key is set
+        console.log("Worker: Key set successfully. Crypto module is ready.");
+        // Send confirmation back to manager
+        self.postMessage({ type: "initialized" });
+      } else {
+        console.warn("Worker: 'init' operation received without keyData.");
+        isCryptoReady = false;
+        self.postMessage({ 
+          type: "error", 
+          error: "No key data provided for initialization" 
+        });
+      }
+      return; // Initialization complete for this message
     }
 
+    // Check if crypto module is ready for encrypt/decrypt operations
+    if (!isCryptoReady || !cryptoModule) {
+      self.postMessage({
+        type: "error",
+        error: `Crypto module not initialized or no key set for operation: ${operation}`,
+        operation: operation
+      });
+      return;
+    }
+
+    // Perform encryption/decryption
+    let resultFrame;
     switch (operation) {
-      case 'init':
-        await handleInit(payload);
+      case "encrypt":
+        resultFrame = await cryptoModule.encryptFrame(frame);
+        self.postMessage({
+          type: "encrypted",
+          frame: resultFrame
+        }, [resultFrame.data]); // Transfer frame data
         break;
         
-      case 'encrypt':
-      case 'decrypt':
-        // Ensure key is set before encryption/decryption operations
-        if (!keySet) {
-          throw new Error('Crypto module not ready - key not set');
-        }
-        
-        if (operation === 'encrypt') {
-          await handleEncrypt(payload);
-        } else {
-          await handleDecrypt(payload);
-        }
+      case "decrypt":
+        resultFrame = await cryptoModule.decryptFrame(frame);
+        self.postMessage({
+          type: "decrypted",
+          frame: resultFrame
+        }, [resultFrame.data]); // Transfer frame data
         break;
         
       default:
-        throw new Error(`Unknown operation: ${operation}`);
+        console.warn(`Worker: Unknown operation received: ${operation}`);
+        self.postMessage({
+          type: "error",
+          error: `Unknown operation: ${operation}`,
+          operation: operation
+        });
     }
   } catch (error) {
-    console.error(`❌ Error in ${operation}:`, error);
+    console.error(`❌ Worker: Error during operation ${operation}:`, error.message, error.stack);
+    // Send detailed error back to main thread
     self.postMessage({
-      type: 'error',
-      error: error.message,
-      operation: operation
+      type: "error",
+      error: `Worker error during ${operation}: ${error.message}`,
+      operation: operation,
+      frameInfo: frame ? { type: frame.type, timestamp: frame.timestamp } : null
     });
   }
 };
 
-// ===== Operation Handler Functions =====
-async function handleInit(payload) {
-  console.log('🔑 Initializing encryption key...');
-  
-  if (!payload || !payload.keyData) {
-    throw new Error('No key data provided for initialization');
-  }
-  
-  try {
-    // Import the key data as a CryptoKey for AES-GCM
-    const key = await crypto.subtle.importKey(
-      'raw',
-      payload.keyData,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt', 'decrypt']
-    );
-    
-    // Set the key in the crypto module
-    await cryptoModule.setKey(key);
-    keySet = true;
-    
-    console.log('✅ Key set successfully');
-    self.postMessage({ type: 'initialized' });
-  } catch (error) {
-    keySet = false;
-    throw new Error(`Key initialization failed: ${error.message}`);
-  }
-}
-
-async function handleEncrypt(payload) {
-  console.log('🔒 Encrypting frame...');
-  
-  const encrypted = await cryptoModule.encryptFrame(payload.frame);
-  self.postMessage({
-    type: 'encrypted',
-    frame: encrypted
-  }, [encrypted.data]); // Transfer ArrayBuffer to main thread
-  
-  console.log('✅ Encryption complete');
-}
-
-async function handleDecrypt(payload) {
-  console.log('🔓 Decrypting frame...');
-  
-  const decrypted = await cryptoModule.decryptFrame(payload.frame);
-  self.postMessage({
-    type: 'decrypted',
-    frame: decrypted
-  }, [decrypted.data]); // Transfer ArrayBuffer to main thread
-  
-  console.log('✅ Decryption complete');
-}
-
-console.log('🔒 Worker script loaded and ready for messages');
+// Log when the worker script finishes initial execution
+console.log("Worker: Script initial execution finished.");
