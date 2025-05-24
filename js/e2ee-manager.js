@@ -216,11 +216,18 @@ class E2EEManager {
            // this._rejectWorkerInitialized(new Error(`Worker error: ${error}`));
         }
         // Handle pending frames if error occurred during encrypt/decrypt
-        if (frame && frame.id && this.pendingFrames.has(frame.id)) {
-          console.warn(`[E2EE Manager] Worker error during frame processing (ID: ${frame.id}). Forwarding original frame.`);
-          const controller = this.pendingFrames.get(frame.id);
-          controller.enqueue(frame); // Forward original frame
-          this.pendingFrames.delete(frame.id);
+        const frameIdOnError = event.data.frameInfo?.id || event.data.frame?.id; // Get frame ID if available
+        if (frameIdOnError && this.pendingFrames.has(frameIdOnError)) {
+          console.warn(`[E2EE Manager] Worker error during frame processing (ID: ${frameIdOnError}). Forwarding original frame.`);
+          const controller = this.pendingFrames.get(frameIdOnError);
+          // Need the original frame to forward, which we don't have here directly.
+          // Best effort: close the controller to signal an error downstream.
+          try {
+              controller.error(new Error(`Worker error processing frame: ${error}`));
+          } catch (e) {
+              console.warn("[E2EE Manager] Error closing controller after worker error:", e);
+          }
+          this.pendingFrames.delete(frameIdOnError);
         }
         break;
         
@@ -327,15 +334,10 @@ class E2EEManager {
     this.enabled = false; // Set enabled to false immediately
     
     // Remove transforms from all senders and receivers
-    console.log("[E2EE Manager] Removing transforms...");
-    this.senders.forEach((transform, sender) => {
-      this.removeSenderTransform(sender);
-    });
-    this.receivers.forEach((transform, receiver) => {
-      this.removeReceiverTransform(receiver);
-    });
-    
-    // Clear maps
+    // Note: Removing transforms directly isn't standard. Instead, the transform functions
+    //       will now check this.enabled and pass frames through.
+    //       We just need to clean up state.
+    console.log("[E2EE Manager] Clearing transform state (transforms will bypass)...");
     this.senders.clear();
     this.receivers.clear();
     this.pendingFrames.clear();
@@ -369,7 +371,9 @@ class E2EEManager {
    * @returns {boolean} - True if E2EE is enabled and worker is initialized
    */
   isReady() {
-    return this.enabled && this.workerReady && this.workerInitialized;
+    const ready = this.enabled && this.workerReady && this.workerInitialized;
+    // if (!ready) console.log(`[isReady Check] Enabled: ${this.enabled}, WorkerReady: ${this.workerReady}, WorkerInitialized: ${this.workerInitialized}`); // Debug log
+    return ready;
   }
   
   /**
@@ -378,6 +382,7 @@ class E2EEManager {
    */
   setupSenderTransform(sender) {
     // Check if E2EE is *intended* to be enabled, not necessarily fully ready yet
+    // Also check if already transformed
     if (!this.enabled || !sender || this.senders.has(sender) || !sender.track) {
       console.log(`[E2EE Manager] Skipping sender transform setup for track ${sender?.track?.id} (enabled: ${this.enabled}, sender exists: ${!!sender}, already transformed: ${this.senders.has(sender)}, track exists: ${!!sender?.track})`);
       return;
@@ -410,6 +415,7 @@ class E2EEManager {
    */
   setupReceiverTransform(receiver) {
     // Check if E2EE is *intended* to be enabled
+    // Also check if already transformed
     if (!this.enabled || !receiver || this.receivers.has(receiver) || !receiver.track) {
        console.log(`[E2EE Manager] Skipping receiver transform setup for track ${receiver?.track?.id} (enabled: ${this.enabled}, receiver exists: ${!!receiver}, already transformed: ${this.receivers.has(receiver)}, track exists: ${!!receiver?.track})`);
       return;
@@ -464,22 +470,28 @@ class E2EEManager {
           // Store controller for later use when worker responds
           this.pendingFrames.set(frameId, controller);
           
-          // Send to worker for encryption, transferring buffer ownership
-          this.worker.postMessage({
-            operation: "encrypt",
+          // Construct the message with a valid operation
+          const messageToWorker = {
+            operation: "encrypt", // Ensure operation is always set
             frame: encodedFrame
-          }, [encodedFrame.data]);
+          };
+          // console.log(`[Sender Transform] Sending frame ${frameId} to worker for encryption.`); // Reduce noise
+          
+          // Send to worker for encryption, transferring buffer ownership
+          this.worker.postMessage(messageToWorker, [encodedFrame.data]);
         } catch (error) {
-          console.error("❌ [E2EE Manager] Error in sender transform:", error);
-          // Ensure frame is still enqueued if postMessage fails or worker error occurs
-          if (this.pendingFrames.has(encodedFrame.id)) {
-             this.pendingFrames.delete(encodedFrame.id);
-          }
+          console.error("❌ [E2EE Manager] Error in sender transform stream:", error);
+          // Forward original frame on error
           controller.enqueue(encodedFrame);
+          // Clean up pending frame if error occurs before worker response
+          const frameId = encodedFrame.id; // Get the ID we tried to set
+          if (frameId && this.pendingFrames.has(frameId)) {
+            this.pendingFrames.delete(frameId);
+          }
         }
       }
     });
-    
+
     // Connect the streams
     readable
       .pipeThrough(transformStream)
@@ -487,6 +499,7 @@ class E2EEManager {
       .catch(error => {
         console.error("❌ [E2EE Manager] Error in sender transform pipeline:", error);
       });
+    console.log(`[E2EE Manager] Chrome sender transform pipeline setup for track ${sender?.track?.id}`);
   }
   
   /**
@@ -502,7 +515,7 @@ class E2EEManager {
          // --- CRITICAL GUARD --- 
         // Only attempt decryption if E2EE is fully enabled AND worker is initialized
         if (!this.isReady()) {
-          // console.log("[Receiver Transform] E2EE not ready, passing frame through undecrypted."); // Reduce noise
+          // console.log("[Receiver Transform] E2EE not ready, passing frame through unencrypted."); // Reduce noise
           controller.enqueue(encodedFrame);
           return;
         }
@@ -517,22 +530,28 @@ class E2EEManager {
           // Store controller for later use
           this.pendingFrames.set(frameId, controller);
           
-          // Send to worker for decryption, transferring buffer ownership
-          this.worker.postMessage({
-            operation: "decrypt",
+           // Construct the message with a valid operation
+          const messageToWorker = {
+            operation: "decrypt", // Ensure operation is always set
             frame: encodedFrame
-          }, [encodedFrame.data]);
+          };
+          // console.log(`[Receiver Transform] Sending frame ${frameId} to worker for decryption.`); // Reduce noise
+
+          // Send to worker for decryption, transferring buffer ownership
+          this.worker.postMessage(messageToWorker, [encodedFrame.data]);
         } catch (error) {
-          console.error("❌ [E2EE Manager] Error in receiver transform:", error);
-          // Ensure frame is still enqueued if postMessage fails or worker error occurs
-          if (this.pendingFrames.has(encodedFrame.id)) {
-             this.pendingFrames.delete(encodedFrame.id);
-          }
+          console.error("❌ [E2EE Manager] Error in receiver transform stream:", error);
+          // Forward original frame on error
           controller.enqueue(encodedFrame);
+          // Clean up pending frame if error occurs before worker response
+          const frameId = encodedFrame.id; // Get the ID we tried to set
+          if (frameId && this.pendingFrames.has(frameId)) {
+            this.pendingFrames.delete(frameId);
+          }
         }
       }
     });
-    
+
     // Connect the streams
     readable
       .pipeThrough(transformStream)
@@ -540,115 +559,79 @@ class E2EEManager {
       .catch(error => {
         console.error("❌ [E2EE Manager] Error in receiver transform pipeline:", error);
       });
+    console.log(`[E2EE Manager] Chrome receiver transform pipeline setup for track ${receiver?.track?.id}`);
   }
   
   /**
    * Set up sender transform using standard RTCRtpScriptTransform API
-   * (Used by Firefox/Safari)
    * @param {RTCRtpSender} sender - The sender to transform
    */
   setupSenderTransformStandard(sender) {
-    console.log(`[E2EE Manager] Setting up Standard sender transform for track ${sender?.track?.id}`);
+    console.log(`[E2EE Manager] Setting up standard sender transform for track ${sender?.track?.id}`);
     if (!this.worker) {
-        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
+        console.error("Cannot setup standard transform: Worker not initialized.");
         return;
     }
-    try {
-      // Create a transform linked to our worker
-      // Note: Standard API doesn't have the same fine-grained readiness check as Insertable Streams
-      // The worker itself needs to handle cases where it receives frames before being ready.
-      const transform = new RTCRtpScriptTransform(this.worker, {
-        operation: "encrypt", // Pass operation type
-        kind: "sender"
-      });
-      
-      // Apply transform to sender
-      sender.transform = transform;
-      console.log("✅ [E2EE Manager] Standard sender transform applied.");
-    } catch (error) {
-      console.error("❌ [E2EE Manager] Error setting up standard sender transform:", error);
-    }
+    sender.transform = new RTCRtpScriptTransform(this.worker, {
+      operation: "encrypt"
+    });
+    console.log(`[E2EE Manager] Standard sender transform applied for track ${sender?.track?.id}`);
   }
   
   /**
    * Set up receiver transform using standard RTCRtpScriptTransform API
-   * (Used by Firefox/Safari)
    * @param {RTCRtpReceiver} receiver - The receiver to transform
    */
   setupReceiverTransformStandard(receiver) {
-     console.log(`[E2EE Manager] Setting up Standard receiver transform for track ${receiver?.track?.id}`);
+    console.log(`[E2EE Manager] Setting up standard receiver transform for track ${receiver?.track?.id}`);
      if (!this.worker) {
-        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
+        console.error("Cannot setup standard transform: Worker not initialized.");
         return;
     }
-    try {
-      // Create a transform linked to our worker
-      const transform = new RTCRtpScriptTransform(this.worker, {
-        operation: "decrypt", // Pass operation type
-        kind: "receiver"
-      });
-      
-      // Apply transform to receiver
-      receiver.transform = transform;
-      console.log("✅ [E2EE Manager] Standard receiver transform applied.");
-    } catch (error) {
-      console.error("❌ [E2EE Manager] Error setting up standard receiver transform:", error);
-    }
+    receiver.transform = new RTCRtpScriptTransform(this.worker, {
+      operation: "decrypt"
+    });
+     console.log(`[E2EE Manager] Standard receiver transform applied for track ${receiver?.track?.id}`);
   }
-  
+
   /**
-   * Remove transform from a sender
-   * @param {RTCRtpSender} sender - The sender to remove transform from
+   * Remove sender transform (Not directly possible with standard APIs, relies on disable logic)
+   * @param {RTCRtpSender} sender - The sender
    */
   removeSenderTransform(sender) {
-    if (!sender) return;
-    console.log(`[E2EE Manager] Removing sender transform for track ${sender?.track?.id}`);
-    try {
-      // For standard API, set transform to null
-      if (this.browserSupport.scriptTransform && sender.transform) {
-        sender.transform = null;
-        console.log("[E2EE Manager] Standard sender transform removed.");
-      }
-      // For Chrome API, the pipeline disconnects automatically when disabling/closing, 
-      // but explicitly removing helps ensure cleanup.
-      if (this.browserSupport.insertableStreams && sender.transport && sender.transport.rtpSender === sender) {
-         // No direct 'remove transform' API for Insertable Streams, relies on disable() cleanup
-      }
-      
-      // Remove from map
-      this.senders.delete(sender);
-    } catch (error) {
-      console.error("❌ [E2EE Manager] Error removing sender transform:", error);
+    if (sender.transform) {
+      // Standard API: Setting transform to null might work, but not guaranteed
+      // sender.transform = null; 
+      console.log(`[E2EE Manager] Standard sender transform cannot be reliably removed for track ${sender?.track?.id}. Relying on disable logic.`);
+    }
+    if (sender.encodedInsertableStreams) {
+        // Chrome API: Close the streams?
+        // sender.encodedInsertableStreams.readable.cancel();
+        // sender.encodedInsertableStreams.writable.abort();
+        console.log(`[E2EE Manager] Chrome sender transform cannot be reliably removed for track ${sender?.track?.id}. Relying on disable logic.`);
     }
   }
-  
+
   /**
-   * Remove transform from a receiver
-   * @param {RTCRtpReceiver} receiver - The receiver to remove transform from
+   * Remove receiver transform (Not directly possible with standard APIs, relies on disable logic)
+   * @param {RTCRtpReceiver} receiver - The receiver
    */
   removeReceiverTransform(receiver) {
-    if (!receiver) return;
-    console.log(`[E2EE Manager] Removing receiver transform for track ${receiver?.track?.id}`);
-    try {
-      // For standard API, set transform to null
-      if (this.browserSupport.scriptTransform && receiver.transform) {
-        receiver.transform = null;
-        console.log("[E2EE Manager] Standard receiver transform removed.");
-      }
-      // For Chrome API, relies on disable() cleanup
-      if (this.browserSupport.insertableStreams && receiver.transport && receiver.transport.rtpReceiver === receiver) {
-         // No direct 'remove transform' API
-      }
-
-      // Remove from map
-      this.receivers.delete(receiver);
-    } catch (error) {
-      console.error("❌ [E2EE Manager] Error removing receiver transform:", error);
+     if (receiver.transform) {
+      // Standard API: Setting transform to null might work, but not guaranteed
+      // receiver.transform = null;
+      console.log(`[E2EE Manager] Standard receiver transform cannot be reliably removed for track ${receiver?.track?.id}. Relying on disable logic.`);
+    }
+     if (receiver.encodedInsertableStreams) {
+        // Chrome API: Close the streams?
+        // receiver.encodedInsertableStreams.readable.cancel();
+        // receiver.encodedInsertableStreams.writable.abort();
+        console.log(`[E2EE Manager] Chrome receiver transform cannot be reliably removed for track ${receiver?.track?.id}. Relying on disable logic.`);
     }
   }
   
   /**
-   * Apply transforms to all relevant senders and receivers in a peer connection
+   * Apply E2EE transforms to an existing PeerConnection
    * @param {RTCPeerConnection} peerConnection - The peer connection
    */
   setupPeerConnection(peerConnection) {
