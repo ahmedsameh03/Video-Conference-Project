@@ -17,28 +17,23 @@ class E2EEManager {
       roomId: options.roomId || "",
       ratchetInterval: options.ratchetInterval || 60000, // 1 minute default
       // Ensure workerPath is provided or correctly defaulted
-      workerPath: options.workerPath || new URL("e2ee-worker.js", document.currentScript?.src || window.location.href).href
+      workerPath: options.workerPath || "js/e2ee-worker.js"
     };
     
     this.keyManager = null;
     this.worker = null;
-    this.enabled = false; // Is E2EE *intended* to be active?
-    this.workerReady = false; // Has the worker script loaded?
-    this.workerInitialized = false; // Has the worker received the key?
+    this.isE2EEEnabled = false; // Is E2EE *intended* to be active?
+    this.isWorkerScriptReady = false; // Has the worker script loaded?
+    this.isWorkerKeyInitialized = false; // Has the worker received the key?
     this.senders = new Map();
     this.receivers = new Map();
     this.pendingFrames = new Map(); // Used for Chrome Insertable Streams
-    this.browserSupport = this.detectBrowserSupport();
-    this.workerReadyPromise = null; // Promise to track worker script loading
-    this.workerInitializedPromise = null; // Promise to track key initialization in worker
+    this.browserSupport = this._detectBrowserSupport();
+    this._workerReadyPromise = null; // Promise to track worker script loading
+    this._workerInitializedPromise = null; // Promise to track key initialization in worker
     
     // Bind methods
-    this.enable = this.enable.bind(this);
-    this.disable = this.disable.bind(this);
-    this.setupSenderTransform = this.setupSenderTransform.bind(this);
-    this.setupReceiverTransform = this.setupReceiverTransform.bind(this);
-    this.setupWorker = this.setupWorker.bind(this);
-    this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
+    this._handleWorkerMessage = this._handleWorkerMessage.bind(this);
     
     console.log("🔒 E2EE Manager initialized");
     console.log(`🌐 Browser support: ${JSON.stringify(this.browserSupport)}`);
@@ -55,8 +50,9 @@ class E2EEManager {
   /**
    * Detect browser support for E2EE APIs
    * @returns {Object} - Object containing support information
+   * @private
    */
-  detectBrowserSupport() {
+  _detectBrowserSupport() {
     const support = {
       insertableStreams: false,
       scriptTransform: false,
@@ -65,14 +61,14 @@ class E2EEManager {
     };
     
     // Detect browser
-    const userAgent = navigator.userAgent;
-    if (userAgent.includes("Chrome")) {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes("chrome")) {
       support.browser = "chrome";
-    } else if (userAgent.includes("Firefox")) {
+    } else if (userAgent.includes("firefox")) {
       support.browser = "firefox";
-    } else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) {
+    } else if (userAgent.includes("safari") && !userAgent.includes("chrome")) {
       support.browser = "safari";
-    } else if (userAgent.includes("Edge")) {
+    } else if (userAgent.includes("edge")) {
       support.browser = "edge";
     }
     
@@ -101,87 +97,93 @@ class E2EEManager {
    * Set up the Web Worker for encryption/decryption
    * Returns a promise that resolves when the worker is ready (imported scripts)
    * @returns {Promise<void>}
+   * @private
    */
-  setupWorker() {
+  _setupWorker() {
     // If already setting up or ready, return the existing promise
-    if (this.workerReadyPromise) {
-      return this.workerReadyPromise;
+    if (this._workerReadyPromise) {
+      return this._workerReadyPromise;
     }
 
-    this.workerReadyPromise = new Promise((resolve, reject) => {
+    this._workerReadyPromise = new Promise((resolve, reject) => {
       try {
         console.log(`[E2EE Manager] Creating worker from path: ${this.options.workerPath}`);
         this.worker = new Worker(this.options.workerPath);
         console.log("[E2EE Manager] Worker object created.");
 
         // Centralized message handler
-        this.worker.onmessage = this.handleWorkerMessage;
+        this.worker.onmessage = this._handleWorkerMessage;
         
         // Error handler
         this.worker.onerror = (error) => {
           console.error("❌ [E2EE Manager] Worker error event:", error);
           reject(new Error(`Worker error: ${error.message || 'Unknown worker error'}`)); 
-          this.workerReadyPromise = null; 
-          this.workerInitializedPromise = null;
-          this.workerReady = false;
-          this.workerInitialized = false;
+          this._workerReadyPromise = null; 
+          this._workerInitializedPromise = null;
+          this.isWorkerScriptReady = false;
+          this.isWorkerKeyInitialized = false;
         };
         
         // Timeout for worker readiness (importScripts)
         const readyTimeout = setTimeout(() => {
           console.error("❌ [E2EE Manager] Worker readiness timeout (waiting for worker_ready).");
           reject(new Error("Worker readiness timeout"));
-          this.workerReadyPromise = null; 
-          this.workerInitializedPromise = null;
-          this.workerReady = false;
-          this.workerInitialized = false;
+          this._workerReadyPromise = null; 
+          this._workerInitializedPromise = null;
+          this.isWorkerScriptReady = false;
+          this.isWorkerKeyInitialized = false;
         }, 15000); // 15 seconds timeout
 
         // Store resolve/reject for worker_ready signal
         this._resolveWorkerReady = () => {
             console.log("[E2EE Manager] Worker reported ready, resolving workerReadyPromise.");
-            this.workerReady = true;
+            this.isWorkerScriptReady = true;
+            clearTimeout(readyTimeout);
             resolve();
         };
-        this._rejectWorkerReady = reject;
-        this._clearReadyTimeout = () => clearTimeout(readyTimeout);
+        this._rejectWorkerReady = (error) => {
+            console.error("❌ [E2EE Manager] Worker ready promise rejected:", error);
+            clearTimeout(readyTimeout);
+            reject(error);
+        };
 
         // Also prepare promise for key initialization
-        this.workerInitializedPromise = new Promise((resolveInit, rejectInit) => {
+        this._workerInitializedPromise = new Promise((resolveInit, rejectInit) => {
           this._resolveWorkerInitialized = () => {
               console.log("[E2EE Manager] Worker reported initialized, resolving workerInitializedPromise.");
-              this.workerInitialized = true;
+              this.isWorkerKeyInitialized = true;
               resolveInit();
           };
-          this._rejectWorkerInitialized = rejectInit;
+          this._rejectWorkerInitialized = (error) => {
+              console.error("❌ [E2EE Manager] Worker initialization promise rejected:", error);
+              rejectInit(error);
+          };
         });
 
       } catch (error) {
         console.error("❌ [E2EE Manager] Error creating worker:", error);
         reject(error);
-        this.workerReadyPromise = null; 
-        this.workerInitializedPromise = null;
-        this.workerReady = false;
-        this.workerInitialized = false;
+        this._workerReadyPromise = null; 
+        this._workerInitializedPromise = null;
+        this.isWorkerScriptReady = false;
+        this.isWorkerKeyInitialized = false;
       }
     });
 
-    return this.workerReadyPromise;
+    return this._workerReadyPromise;
   }
   
   /**
    * Handle messages from the worker
    * @param {MessageEvent} event - The message event
+   * @private
    */
-  handleWorkerMessage(event) {
+  _handleWorkerMessage(event) {
     const { type, frame, error, message, result } = event.data;
     
-    // console.log(`[E2EE Manager] Received message from worker - Type: ${type}`); // Reduce noise
-
     switch (type) {
       case "worker_ready":
         console.log("✅ [E2EE Manager] Worker reported ready (worker_ready message).");
-        if (this._clearReadyTimeout) this._clearReadyTimeout();
         if (this._resolveWorkerReady) this._resolveWorkerReady();
         break;
 
@@ -211,9 +213,9 @@ class E2EEManager {
       case "error":
         console.error(`❌ [E2EE Manager] Received error from worker: ${error}`);
         // Reject initialization promise if error occurs during init
-        if (!this.workerInitialized && this._rejectWorkerInitialized) {
+        if (!this.isWorkerKeyInitialized && this._rejectWorkerInitialized) {
            console.error("❌ [E2EE Manager] Worker error occurred during initialization phase.");
-           // this._rejectWorkerInitialized(new Error(`Worker error: ${error}`));
+           // Don't reject here to allow retries
         }
         // Handle pending frames if error occurred during encrypt/decrypt
         if (frame && frame.id && this.pendingFrames.has(frame.id)) {
@@ -243,7 +245,7 @@ class E2EEManager {
    * @returns {Promise<void>}
    */
   async enable(password) {
-    if (this.enabled) {
+    if (this.isE2EEEnabled) {
       console.log("🔒 [E2EE Manager] E2EE already enabled");
       return;
     }
@@ -252,11 +254,6 @@ class E2EEManager {
       throw new Error(`E2EE not supported in this browser (${this.browserSupport.browser})`);
     }
     
-    // Reset state flags before enabling
-    this.enabled = false;
-    this.workerReady = false;
-    this.workerInitialized = false;
-
     try {
       console.log("🔒 [E2EE Manager] Enabling E2EE...");
       
@@ -267,6 +264,11 @@ class E2EEManager {
         ratchetInterval: this.options.ratchetInterval
       });
       
+      // Set up worker (returns promise that resolves on worker_ready)
+      console.log("[E2EE Manager] Setting up worker...");
+      await this._setupWorker(); 
+      console.log("✅ [E2EE Manager] Worker setup promise resolved (worker_ready received).");
+
       // Generate initial key
       console.log("[E2EE Manager] Generating initial key...");
       const exportedKey = await this.keyManager.generateInitialKey(password);
@@ -274,7 +276,7 @@ class E2EEManager {
 
       // Set up key ratcheting callback
       this.keyManager.onKeyRatchet = async (newKey) => {
-        if (this.worker && this.enabled && this.workerInitialized) { // Only send if worker exists, E2EE enabled, AND worker is initialized
+        if (this.worker && this.isE2EEEnabled && this.isWorkerKeyInitialized) {
           console.log("[E2EE Manager] Key ratcheted. Sending new key to worker.");
           this.worker.postMessage({
             operation: "init", // Use 'init' to update/set key
@@ -285,11 +287,6 @@ class E2EEManager {
         }
       };
       
-      // Set up worker (returns promise that resolves on worker_ready)
-      console.log("[E2EE Manager] Setting up worker...");
-      await this.setupWorker(); 
-      console.log("✅ [E2EE Manager] Worker setup promise resolved (worker_ready received). State: workerReady=", this.workerReady);
-
       // Initialize worker with the first key AFTER worker is ready
       console.log("[E2EE Manager] Sending initial key to worker...");
       this.worker.postMessage({
@@ -298,18 +295,18 @@ class E2EEManager {
       });
 
       // Wait for the worker to confirm key initialization
-      console.log("[E2EE Manager] Waiting for worker initialization confirmation (initialized message)...");
-      await this.workerInitializedPromise; // Wait for the 'initialized' signal
-      console.log("✅ [E2EE Manager] Worker initialization confirmed. State: workerInitialized=", this.workerInitialized);
+      console.log("[E2EE Manager] Waiting for worker initialization confirmation...");
+      await this._workerInitializedPromise; 
+      console.log("✅ [E2EE Manager] Worker initialization confirmed.");
       
-      // --- CRITICAL: Set enabled flag ONLY after successful initialization --- 
-      this.enabled = true;
-      console.log("✅ [E2EE Manager] E2EE enabled successfully. State: enabled=", this.enabled);
+      // Set enabled flag ONLY after successful initialization
+      this.isE2EEEnabled = true;
+      console.log("✅ [E2EE Manager] E2EE enabled successfully.");
 
     } catch (error) {
       console.error("❌ [E2EE Manager] Error enabling E2EE:", error);
       // Clean up on failure
-      await this.disable(); // Ensure disable runs fully
+      await this.disable();
       throw error; // Re-throw the error for the caller
     }
   }
@@ -317,22 +314,22 @@ class E2EEManager {
   /**
    * Disable end-to-end encryption
    */
-  async disable() { // Make disable async if needed for cleanup
-    if (!this.enabled && !this.worker && !this.keyManager) { // Check if already fully disabled
+  async disable() {
+    if (!this.isE2EEEnabled && !this.worker && !this.keyManager) {
       console.log("🔓 [E2EE Manager] E2EE already disabled or not initialized.");
       return;
     }
     
     console.log("🔓 [E2EE Manager] Disabling E2EE...");
-    this.enabled = false; // Set enabled to false immediately
+    this.isE2EEEnabled = false; // Set enabled to false immediately
     
     // Remove transforms from all senders and receivers
     console.log("[E2EE Manager] Removing transforms...");
     this.senders.forEach((transform, sender) => {
-      this.removeSenderTransform(sender);
+      this._removeSenderTransform(sender);
     });
     this.receivers.forEach((transform, receiver) => {
-      this.removeReceiverTransform(receiver);
+      this._removeReceiverTransform(receiver);
     });
     
     // Clear maps
@@ -356,10 +353,10 @@ class E2EEManager {
     }
 
     // Reset promises and flags
-    this.workerReadyPromise = null;
-    this.workerInitializedPromise = null;
-    this.workerReady = false;
-    this.workerInitialized = false;
+    this._workerReadyPromise = null;
+    this._workerInitializedPromise = null;
+    this.isWorkerScriptReady = false;
+    this.isWorkerKeyInitialized = false;
     
     console.log("✅ [E2EE Manager] E2EE disabled fully.");
   }
@@ -369,7 +366,7 @@ class E2EEManager {
    * @returns {boolean} - True if E2EE is enabled and worker is initialized
    */
   isReady() {
-    return this.enabled && this.workerReady && this.workerInitialized;
+    return this.isE2EEEnabled && this.isWorkerScriptReady && this.isWorkerKeyInitialized;
   }
   
   /**
@@ -378,8 +375,7 @@ class E2EEManager {
    */
   setupSenderTransform(sender) {
     // Check if E2EE is *intended* to be enabled, not necessarily fully ready yet
-    if (!this.enabled || !sender || this.senders.has(sender) || !sender.track) {
-      console.log(`[E2EE Manager] Skipping sender transform setup for track ${sender?.track?.id} (enabled: ${this.enabled}, sender exists: ${!!sender}, already transformed: ${this.senders.has(sender)}, track exists: ${!!sender?.track})`);
+    if (!this.isE2EEEnabled || !sender || this.senders.has(sender) || !sender.track) {
       return;
     }
     
@@ -388,10 +384,10 @@ class E2EEManager {
       
       if (this.browserSupport.insertableStreams && sender.createEncodedStreams) {
         // Chrome API
-        this.setupSenderTransformChrome(sender);
+        this._setupSenderTransformChrome(sender);
       } else if (this.browserSupport.scriptTransform && typeof RTCRtpScriptTransform !== "undefined") {
         // Firefox/Safari API
-        this.setupSenderTransformStandard(sender);
+        this._setupSenderTransformStandard(sender);
       } else {
         console.warn("⚠️ [E2EE Manager] No supported E2EE API available for sender transform");
         return;
@@ -410,8 +406,7 @@ class E2EEManager {
    */
   setupReceiverTransform(receiver) {
     // Check if E2EE is *intended* to be enabled
-    if (!this.enabled || !receiver || this.receivers.has(receiver) || !receiver.track) {
-       console.log(`[E2EE Manager] Skipping receiver transform setup for track ${receiver?.track?.id} (enabled: ${this.enabled}, receiver exists: ${!!receiver}, already transformed: ${this.receivers.has(receiver)}, track exists: ${!!receiver?.track})`);
+    if (!this.isE2EEEnabled || !receiver || this.receivers.has(receiver) || !receiver.track) {
       return;
     }
     
@@ -420,10 +415,10 @@ class E2EEManager {
       
       if (this.browserSupport.insertableStreams && receiver.createEncodedStreams) {
         // Chrome API
-        this.setupReceiverTransformChrome(receiver);
+        this._setupReceiverTransformChrome(receiver);
       } else if (this.browserSupport.scriptTransform && typeof RTCRtpScriptTransform !== "undefined") {
         // Firefox/Safari API
-        this.setupReceiverTransformStandard(receiver);
+        this._setupReceiverTransformStandard(receiver);
       } else {
         console.warn("⚠️ [E2EE Manager] No supported E2EE API available for receiver transform");
         return;
@@ -439,8 +434,9 @@ class E2EEManager {
   /**
    * Set up sender transform using Chrome's Insertable Streams API
    * @param {RTCRtpSender} sender - The sender to transform
+   * @private
    */
-  setupSenderTransformChrome(sender) {
+  _setupSenderTransformChrome(sender) {
     console.log(`[E2EE Manager] Setting up Chrome sender transform for track ${sender?.track?.id}`);
     const { readable, writable } = sender.createEncodedStreams();
     
@@ -449,7 +445,6 @@ class E2EEManager {
         // --- CRITICAL GUARD --- 
         // Only attempt encryption if E2EE is fully enabled AND worker is initialized
         if (!this.isReady()) {
-          // console.log("[Sender Transform] E2EE not ready, passing frame through unencrypted."); // Reduce noise
           controller.enqueue(encodedFrame);
           return;
         }
@@ -464,31 +459,18 @@ class E2EEManager {
           // Store controller for later use when worker responds
           this.pendingFrames.set(frameId, controller);
           
-          // Construct the message with a valid operation
-          const messageToWorker = {
-            operation: "encrypt", // Ensure operation is always set
-            frame: encodedFrame
-          };
-          // console.log(`[Sender Transform] Sending frame ${frameId} to worker for encryption.`); // Reduce noise
-          
           // Send to worker for encryption, transferring buffer ownership
-          this.worker.postMessage(messageToWorker, [encodedFrame.data]);
+          this.worker.postMessage({
+            operation: "encrypt",
+            frame: encodedFrame
+          }, [encodedFrame.data]);
         } catch (error) {
-          console.error("❌ [E2EE Manager] Error in sender transform stream:", error);
-          // Forward original frame on error
-          controller.enqueue(encodedFrame);
-          // Clean up pending frame if error occurs before worker response
-          const frameId = encodedFrame.id; // Get the ID we tried to set
-          if (frameId && this.pendingFrames.has(frameId)) {
-            this.pendingFrames.delete(frameId);
-          }
-        }
-          console.error("❌ [E2EE Manager] Error in sender transform stream:", error);
-          // Ensure frame is still enqueued if postMessage fails
-          if (encodedFrame.id && this.pendingFrames.has(encodedFrame.id)) {
+          console.error("❌ [E2EE Manager] Error in sender transform:", error);
+          // Ensure frame is still enqueued if postMessage fails or worker error occurs
+          if (this.pendingFrames.has(encodedFrame.id)) {
              this.pendingFrames.delete(encodedFrame.id);
           }
-          controller.enqueue(encodedFrame); // Pass through original frame on error
+          controller.enqueue(encodedFrame);
         }
       }
     });
@@ -500,14 +482,14 @@ class E2EEManager {
       .catch(error => {
         console.error("❌ [E2EE Manager] Error in sender transform pipeline:", error);
       });
-    console.log(`[E2EE Manager] Chrome sender transform pipeline setup for track ${sender?.track?.id}`);
   }
   
   /**
    * Set up receiver transform using Chrome's Insertable Streams API
    * @param {RTCRtpReceiver} receiver - The receiver to transform
+   * @private
    */
-  setupReceiverTransformChrome(receiver) {
+  _setupReceiverTransformChrome(receiver) {
     console.log(`[E2EE Manager] Setting up Chrome receiver transform for track ${receiver?.track?.id}`);
     const { readable, writable } = receiver.createEncodedStreams();
     
@@ -516,39 +498,32 @@ class E2EEManager {
          // --- CRITICAL GUARD --- 
         // Only attempt decryption if E2EE is fully enabled AND worker is initialized
         if (!this.isReady()) {
-          // console.log("[Receiver Transform] E2EE not ready, passing frame through unencrypted."); // Reduce noise
           controller.enqueue(encodedFrame);
           return;
         }
         // --- END GUARD --- 
-                try {
+        
+        try {
           // Add receiver ID to track the frame
           const frameId = `receiver-${Date.now()}-${Math.random()}`;
           encodedFrame.receiver = frameId; // Used by worker message handler
           encodedFrame.id = frameId; // Used for error handling
-
-          // Store controller for later use
+          
+          // Store controller for later use when worker responds
           this.pendingFrames.set(frameId, controller);
           
-           // Construct the message with a valid operation
-          const messageToWorker = {
-            operation: "decrypt", // Ensure operation is always set
-            frame: encodedFrame
-          };
-          // console.log(`[Receiver Transform] Sending frame ${frameId} to worker for decryption.`); // Reduce noise
-
           // Send to worker for decryption, transferring buffer ownership
-          this.worker.postMessage(messageToWorker, [encodedFrame.data]);
+          this.worker.postMessage({
+            operation: "decrypt",
+            frame: encodedFrame
+          }, [encodedFrame.data]);
         } catch (error) {
-          console.error("❌ [E2EE Manager] Error in receiver transform stream:", error);
-          // Forward original frame on error
-          controller.enqueue(encodedFrame);
-          // Clean up pending frame if error occurs before worker response
-          const frameId = encodedFrame.id; // Get the ID we tried to set
-          if (frameId && this.pendingFrames.has(frameId)) {
-            this.pendingFrames.delete(frameId);
+          console.error("❌ [E2EE Manager] Error in receiver transform:", error);
+          // Ensure frame is still enqueued if postMessage fails or worker error occurs
+          if (this.pendingFrames.has(encodedFrame.id)) {
+             this.pendingFrames.delete(encodedFrame.id);
           }
-        }  controller.enqueue(encodedFrame); // Pass through original frame on error
+          controller.enqueue(encodedFrame);
         }
       }
     });
@@ -560,32 +535,27 @@ class E2EEManager {
       .catch(error => {
         console.error("❌ [E2EE Manager] Error in receiver transform pipeline:", error);
       });
-     console.log(`[E2EE Manager] Chrome receiver transform pipeline setup for track ${receiver?.track?.id}`);
   }
   
   /**
    * Set up sender transform using standard RTCRtpScriptTransform API
-   * (Used by Firefox/Safari)
    * @param {RTCRtpSender} sender - The sender to transform
+   * @private
    */
-  setupSenderTransformStandard(sender) {
-    if (!this.worker) {
-        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
-        return;
-    }
+  _setupSenderTransformStandard(sender) {
+    console.log(`[E2EE Manager] Setting up standard sender transform for track ${sender?.track?.id}`);
+    
     try {
-      console.log(`[E2EE Manager] Setting up standard sender transform for track ${sender?.track?.id}`);
-      // Create a transform linked to our worker
-      // Pass options to worker - IMPORTANT: Worker needs to check this!
+      // Create a transform using the RTCRtpScriptTransform API
       const transform = new RTCRtpScriptTransform(this.worker, {
-        operation: "encrypt", 
-        kind: "sender",
-        managerEnabled: this.enabled // Pass current enabled state
+        operation: "encrypt",
+        kind: sender.track.kind
       });
       
-      // Apply transform to sender
+      // Apply the transform to the sender
       sender.transform = transform;
-      console.log("✅ [E2EE Manager] Standard sender transform applied.");
+      
+      console.log(`[E2EE Manager] Standard sender transform applied for track ${sender.track.id}`);
     } catch (error) {
       console.error("❌ [E2EE Manager] Error setting up standard sender transform:", error);
     }
@@ -593,104 +563,101 @@ class E2EEManager {
   
   /**
    * Set up receiver transform using standard RTCRtpScriptTransform API
-   * (Used by Firefox/Safari)
    * @param {RTCRtpReceiver} receiver - The receiver to transform
+   * @private
    */
-  setupReceiverTransformStandard(receiver) {
-     if (!this.worker) {
-        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
-        return;
-    }
+  _setupReceiverTransformStandard(receiver) {
+    console.log(`[E2EE Manager] Setting up standard receiver transform for track ${receiver?.track?.id}`);
+    
     try {
-      console.log(`[E2EE Manager] Setting up standard receiver transform for track ${receiver?.track?.id}`);
-      // Create a transform linked to our worker
+      // Create a transform using the RTCRtpScriptTransform API
       const transform = new RTCRtpScriptTransform(this.worker, {
         operation: "decrypt",
-        kind: "receiver",
-        managerEnabled: this.enabled // Pass current enabled state
+        kind: receiver.track.kind
       });
       
-      // Apply transform to receiver
+      // Apply the transform to the receiver
       receiver.transform = transform;
-      console.log("✅ [E2EE Manager] Standard receiver transform applied.");
+      
+      console.log(`[E2EE Manager] Standard receiver transform applied for track ${receiver.track.id}`);
     } catch (error) {
       console.error("❌ [E2EE Manager] Error setting up standard receiver transform:", error);
     }
   }
   
   /**
-   * Remove transform from an RTCRtpSender
+   * Remove transform from a sender
    * @param {RTCRtpSender} sender - The sender to remove transform from
+   * @private
    */
-  removeSenderTransform(sender) {
+  _removeSenderTransform(sender) {
+    if (!sender) return;
+    
     try {
-      if (sender && sender.transform) {
+      if (this.browserSupport.scriptTransform && sender.transform) {
         sender.transform = null;
-        console.log(`[E2EE Manager] Sender transform removed for track ${sender?.track?.id}`);
       }
-      if (sender) {
-        this.senders.delete(sender);
-      }
+      // For Chrome's Insertable Streams API, the transform is removed when the worker is terminated
+      
+      this.senders.delete(sender);
+      console.log(`[E2EE Manager] Sender transform removed for track ${sender.track?.id}`);
     } catch (error) {
       console.error("❌ [E2EE Manager] Error removing sender transform:", error);
     }
   }
   
   /**
-   * Remove transform from an RTCRtpReceiver
+   * Remove transform from a receiver
    * @param {RTCRtpReceiver} receiver - The receiver to remove transform from
+   * @private
    */
-  removeReceiverTransform(receiver) {
+  _removeReceiverTransform(receiver) {
+    if (!receiver) return;
+    
     try {
-      if (receiver && receiver.transform) {
+      if (this.browserSupport.scriptTransform && receiver.transform) {
         receiver.transform = null;
-        console.log(`[E2EE Manager] Receiver transform removed for track ${receiver?.track?.id}`);
       }
-      if (receiver) {
-        this.receivers.delete(receiver);
-      }
+      // For Chrome's Insertable Streams API, the transform is removed when the worker is terminated
+      
+      this.receivers.delete(receiver);
+      console.log(`[E2EE Manager] Receiver transform removed for track ${receiver.track?.id}`);
     } catch (error) {
       console.error("❌ [E2EE Manager] Error removing receiver transform:", error);
     }
   }
   
   /**
-   * Apply transforms to all relevant senders and receivers in a peer connection
-   * @param {RTCPeerConnection} peerConnection - The peer connection
+   * Apply E2EE transforms to all tracks in a peer connection
+   * @param {RTCPeerConnection} peerConnection - The peer connection to apply transforms to
    */
   setupPeerConnection(peerConnection) {
-    // Only proceed if E2EE is *intended* to be enabled
-    if (!this.enabled || !peerConnection) {
-      console.log(`[E2EE Manager] Skipping E2EE setup for PeerConnection (enabled: ${this.enabled}, peer valid: ${!!peerConnection})`);
+    if (!peerConnection || !this.isE2EEEnabled) {
       return;
     }
     
-    console.log(`🔒 [E2EE Manager] Setting up E2EE for PeerConnection (State: ${peerConnection.connectionState})`);
-    try {
-      // Set up existing senders
-      peerConnection.getSenders().forEach(sender => {
-        // Only apply transform to media tracks (audio/video)
-        if (sender.track && (sender.track.kind === "audio" || sender.track.kind === "video")) {
-           this.setupSenderTransform(sender);
-        }
-      });
+    console.log("[E2EE Manager] Setting up peer connection for E2EE");
+    
+    // Apply transforms to all senders
+    peerConnection.getSenders().forEach(sender => {
+      if (sender.track) {
+        this.setupSenderTransform(sender);
+      }
+    });
+    
+    // Apply transforms to all receivers
+    peerConnection.getReceivers().forEach(receiver => {
+      if (receiver.track) {
+        this.setupReceiverTransform(receiver);
+      }
+    });
+    
+    // Set up event listeners for new tracks
+    peerConnection.addEventListener("track", (event) => {
+      console.log("[E2EE Manager] New track added to peer connection");
       
-      // Set up existing receivers
-      peerConnection.getReceivers().forEach(receiver => {
-         // Only apply transform to media tracks (audio/video)
-        if (receiver.track && (receiver.track.kind === "audio" || receiver.track.kind === "video")) {
-           this.setupReceiverTransform(receiver);
-        }
-      });
-      
-      // Note: Handling dynamically added tracks (via 'track' event) 
-      // should also call setupReceiverTransform. This is often handled 
-      // in the main application logic (e.g., meeting.js or meeting-e2ee.js).
-      // Ensure that logic also checks if E2EE is enabled before calling setupReceiverTransform.
-
-    } catch (error) {
-      console.error("❌ [E2EE Manager] Error setting up peer connection transforms:", error);
-    }
+      // Apply transform to the receiver for the new track
+      event.receiver && this.setupReceiverTransform(event.receiver);
+    });
   }
 }
-
