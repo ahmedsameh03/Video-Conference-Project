@@ -1,4 +1,4 @@
-// الملف: js/e2ee-worker.js
+// js/e2ee-worker.js
 
 /**
  * E2EE Worker - Web Worker for offloading encryption/decryption operations
@@ -11,14 +11,24 @@ console.log("Worker: Script starting execution.");
 
 // Import required modules
 try {
-  console.log("Worker: Attempting to import e2ee-crypto.js...");  // Use a relative path assuming e2ee-crypto.js is in the same directory as the worker.
-  // If the deployment structure places worker/crypto scripts differently, adjust this path.
-  self.importScripts("e2ee-crypto.js");
-  console.log("Worker: Successfully imported e2ee-crypto.js.");  // Verify that the expected class/functions are now available
+  console.log("Worker: Attempting to import e2ee-crypto.js...");
+  // Use a dynamic path relative to the worker's location
+  const workerScriptPath = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
+  const cryptoScriptPath = workerScriptPath + "e2ee-crypto.js";
+  console.log(`Worker: Resolving crypto script path: ${cryptoScriptPath}`);
+  
+  self.importScripts(cryptoScriptPath);
+  console.log("Worker: Successfully imported e2ee-crypto.js.");
+
+  // Verify that the expected class/functions are now available
   if (typeof E2EECrypto === 'undefined') {
     throw new Error("E2EECrypto class not found after importScripts.");
   }
   console.log("Worker: E2EECrypto class confirmed available.");
+  
+  // Create the crypto module instance immediately
+  cryptoModule = new E2EECrypto();
+  console.log("Worker: E2EECrypto instance created (waiting for key).");
 
   // Signal readiness to the main thread AFTER successful import and verification
   self.postMessage({ type: "worker_ready" });
@@ -27,74 +37,81 @@ try {
 } catch (e) {
   console.error("❌ Worker: Error during importScripts or verification:", e.message, e.stack);
   // Send error back to main thread
-  self.postMessage({ type: "error", error: `Failed to import or verify crypto script: ${e.message}` });
-  // Optional: Close the worker if the import is critical
-  // self.close();
+  self.postMessage({ 
+    type: "error", 
+    error: `Failed to import or verify crypto script: ${e.message}`,
+    details: e.stack
+  });
 }
 
 // Handle messages from main thread
 self.onmessage = async function(event) {
   const { operation, frame, keyData } = event.data;
 
-  console.log(`Worker: Received message - Operation: ${operation}`);
-
   try {
     // Initialize or update crypto module and key
     if (operation === "init") {
-      console.log("Worker: Received 'init' operation.");
+      console.log("Worker: Received 'init' operation with key data.");
+      
       if (!cryptoModule) {
-        if (typeof E2EECrypto === 'undefined') {
-           console.error("❌ Worker: E2EECrypto class is not defined. Cannot initialize module.");
-           throw new Error("Crypto library not loaded correctly.");
-        }
         console.log("Worker: Creating new E2EECrypto instance.");
         cryptoModule = new E2EECrypto();
       }
+      
       if (keyData) {
         console.log("Worker: Setting encryption key.");
-        // Assuming keyData is already a CryptoKey or suitable format
         await cryptoModule.setKey(keyData);
         isCryptoReady = true; // Mark as ready only after key is set
         console.log("Worker: Key set successfully. Crypto module is ready.");
         // Send confirmation back to manager
         self.postMessage({ type: "initialized" });
       } else {
-         console.warn("Worker: 'init' operation received without keyData.");
-         isCryptoReady = false; // Ensure it's marked not ready if key is missing
+        console.warn("Worker: 'init' operation received without keyData.");
+        isCryptoReady = false;
+        self.postMessage({ 
+          type: "error", 
+          error: "No key data provided for initialization" 
+        });
       }
       return; // Initialization complete for this message
     }
 
     // Check if crypto module is ready for encrypt/decrypt operations
     if (!isCryptoReady || !cryptoModule) {
-      console.error(`❌ Worker: Crypto module not ready or key not set for operation '${operation}'.`);
-      throw new Error(`Crypto module not initialized or no key set for operation: ${operation}`);
+      self.postMessage({
+        type: "error",
+        error: `Crypto module not initialized or no key set for operation: ${operation}`,
+        operation: operation
+      });
+      return;
     }
 
     // Perform encryption/decryption
     let resultFrame;
     switch (operation) {
       case "encrypt":
-        console.log("Worker: Performing encryption...");
         resultFrame = await cryptoModule.encryptFrame(frame);
-        console.log("Worker: Encryption complete.");
         self.postMessage({
           type: "encrypted",
           frame: resultFrame
         }, [resultFrame.data]); // Transfer frame data
         break;
+        
       case "decrypt":
-        console.log("Worker: Performing decryption...");
         resultFrame = await cryptoModule.decryptFrame(frame);
-        console.log("Worker: Decryption complete.");
         self.postMessage({
           type: "decrypted",
           frame: resultFrame
         }, [resultFrame.data]); // Transfer frame data
         break;
+        
       default:
         console.warn(`Worker: Unknown operation received: ${operation}`);
-        throw new Error(`Unknown operation: ${operation}`);
+        self.postMessage({
+          type: "error",
+          error: `Unknown operation: ${operation}`,
+          operation: operation
+        });
     }
   } catch (error) {
     console.error(`❌ Worker: Error during operation ${operation}:`, error.message, error.stack);
@@ -105,10 +122,8 @@ self.onmessage = async function(event) {
       operation: operation,
       frameInfo: frame ? { type: frame.type, timestamp: frame.timestamp } : null
     });
-    // Optionally re-throw or handle differently
   }
 };
 
-// Log when the worker script finishes initial execution (excluding async operations)
+// Log when the worker script finishes initial execution
 console.log("Worker: Script initial execution finished.");
-
