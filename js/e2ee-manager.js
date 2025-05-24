@@ -416,5 +416,273 @@ class E2EEManager {
     }
     
     try {
-      console.log(`🔒 [E2EE Manager] Setting up receiver transform for track kind: ${receiver.track?
-(Content truncated due to size limit. Use line ranges to read in chunks)
+      console.log(`🔒 [E2EE Manager] Setting up receiver transform for track kind: ${receiver.track?.kind}`);
+      
+      if (this.browserSupport.insertableStreams && receiver.createEncodedStreams) {
+        // Chrome API
+        this.setupReceiverTransformChrome(receiver);
+      } else if (this.browserSupport.scriptTransform && typeof RTCRtpScriptTransform !== "undefined") {
+        // Firefox/Safari API
+        this.setupReceiverTransformStandard(receiver);
+      } else {
+        console.warn("⚠️ [E2EE Manager] No supported E2EE API available for receiver transform");
+        return;
+      }
+      
+      // Mark receiver as transformed
+      this.receivers.set(receiver, true);
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error setting up receiver transform:", error);
+    }
+  }
+  
+  /**
+   * Set up sender transform using Chrome's Insertable Streams API
+   * @param {RTCRtpSender} sender - The sender to transform
+   */
+  setupSenderTransformChrome(sender) {
+    console.log(`[E2EE Manager] Setting up Chrome sender transform for track ${sender?.track?.id}`);
+    const { readable, writable } = sender.createEncodedStreams();
+    
+    const transformStream = new TransformStream({
+      transform: async (encodedFrame, controller) => {
+        // --- CRITICAL GUARD --- 
+        // Only attempt encryption if E2EE is fully enabled AND worker is initialized
+        if (!this.isReady()) {
+          // console.log("[Sender Transform] E2EE not ready, passing frame through unencrypted."); // Reduce noise
+          controller.enqueue(encodedFrame);
+          return;
+        }
+        // --- END GUARD --- 
+        
+        try {
+          // Add sender ID to track the frame for response matching
+          const frameId = `sender-${Date.now()}-${Math.random()}`;
+          encodedFrame.sender = frameId; // Used by worker message handler
+          encodedFrame.id = frameId; // Used for error handling
+          
+          // Store controller for later use when worker responds
+          this.pendingFrames.set(frameId, controller);
+          
+          // Send to worker for encryption, transferring buffer ownership
+          this.worker.postMessage({
+            operation: "encrypt",
+            frame: encodedFrame
+          }, [encodedFrame.data]);
+        } catch (error) {
+          console.error("❌ [E2EE Manager] Error in sender transform:", error);
+          // Ensure frame is still enqueued if postMessage fails or worker error occurs
+          if (this.pendingFrames.has(encodedFrame.id)) {
+             this.pendingFrames.delete(encodedFrame.id);
+          }
+          controller.enqueue(encodedFrame);
+        }
+      }
+    });
+    
+    // Connect the streams
+    readable
+      .pipeThrough(transformStream)
+      .pipeTo(writable)
+      .catch(error => {
+        console.error("❌ [E2EE Manager] Error in sender transform pipeline:", error);
+      });
+  }
+  
+  /**
+   * Set up receiver transform using Chrome's Insertable Streams API
+   * @param {RTCRtpReceiver} receiver - The receiver to transform
+   */
+  setupReceiverTransformChrome(receiver) {
+    console.log(`[E2EE Manager] Setting up Chrome receiver transform for track ${receiver?.track?.id}`);
+    const { readable, writable } = receiver.createEncodedStreams();
+    
+    const transformStream = new TransformStream({
+      transform: async (encodedFrame, controller) => {
+         // --- CRITICAL GUARD --- 
+        // Only attempt decryption if E2EE is fully enabled AND worker is initialized
+        if (!this.isReady()) {
+          // console.log("[Receiver Transform] E2EE not ready, passing frame through undecrypted."); // Reduce noise
+          controller.enqueue(encodedFrame);
+          return;
+        }
+        // --- END GUARD --- 
+        
+        try {
+          // Add receiver ID to track the frame
+          const frameId = `receiver-${Date.now()}-${Math.random()}`;
+          encodedFrame.receiver = frameId; // Used by worker message handler
+          encodedFrame.id = frameId; // Used for error handling
+
+          // Store controller for later use
+          this.pendingFrames.set(frameId, controller);
+          
+          // Send to worker for decryption, transferring buffer ownership
+          this.worker.postMessage({
+            operation: "decrypt",
+            frame: encodedFrame
+          }, [encodedFrame.data]);
+        } catch (error) {
+          console.error("❌ [E2EE Manager] Error in receiver transform:", error);
+          // Ensure frame is still enqueued if postMessage fails or worker error occurs
+          if (this.pendingFrames.has(encodedFrame.id)) {
+             this.pendingFrames.delete(encodedFrame.id);
+          }
+          controller.enqueue(encodedFrame);
+        }
+      }
+    });
+    
+    // Connect the streams
+    readable
+      .pipeThrough(transformStream)
+      .pipeTo(writable)
+      .catch(error => {
+        console.error("❌ [E2EE Manager] Error in receiver transform pipeline:", error);
+      });
+  }
+  
+  /**
+   * Set up sender transform using standard RTCRtpScriptTransform API
+   * (Used by Firefox/Safari)
+   * @param {RTCRtpSender} sender - The sender to transform
+   */
+  setupSenderTransformStandard(sender) {
+    console.log(`[E2EE Manager] Setting up Standard sender transform for track ${sender?.track?.id}`);
+    if (!this.worker) {
+        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
+        return;
+    }
+    try {
+      // Create a transform linked to our worker
+      // Note: Standard API doesn't have the same fine-grained readiness check as Insertable Streams
+      // The worker itself needs to handle cases where it receives frames before being ready.
+      const transform = new RTCRtpScriptTransform(this.worker, {
+        operation: "encrypt", // Pass operation type
+        kind: "sender"
+      });
+      
+      // Apply transform to sender
+      sender.transform = transform;
+      console.log("✅ [E2EE Manager] Standard sender transform applied.");
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error setting up standard sender transform:", error);
+    }
+  }
+  
+  /**
+   * Set up receiver transform using standard RTCRtpScriptTransform API
+   * (Used by Firefox/Safari)
+   * @param {RTCRtpReceiver} receiver - The receiver to transform
+   */
+  setupReceiverTransformStandard(receiver) {
+     console.log(`[E2EE Manager] Setting up Standard receiver transform for track ${receiver?.track?.id}`);
+     if (!this.worker) {
+        console.error("❌ [E2EE Manager] Cannot setup standard transform, worker not available.");
+        return;
+    }
+    try {
+      // Create a transform linked to our worker
+      const transform = new RTCRtpScriptTransform(this.worker, {
+        operation: "decrypt", // Pass operation type
+        kind: "receiver"
+      });
+      
+      // Apply transform to receiver
+      receiver.transform = transform;
+      console.log("✅ [E2EE Manager] Standard receiver transform applied.");
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error setting up standard receiver transform:", error);
+    }
+  }
+  
+  /**
+   * Remove transform from a sender
+   * @param {RTCRtpSender} sender - The sender to remove transform from
+   */
+  removeSenderTransform(sender) {
+    if (!sender) return;
+    console.log(`[E2EE Manager] Removing sender transform for track ${sender?.track?.id}`);
+    try {
+      // For standard API, set transform to null
+      if (this.browserSupport.scriptTransform && sender.transform) {
+        sender.transform = null;
+        console.log("[E2EE Manager] Standard sender transform removed.");
+      }
+      // For Chrome API, the pipeline disconnects automatically when disabling/closing, 
+      // but explicitly removing helps ensure cleanup.
+      if (this.browserSupport.insertableStreams && sender.transport && sender.transport.rtpSender === sender) {
+         // No direct 'remove transform' API for Insertable Streams, relies on disable() cleanup
+      }
+      
+      // Remove from map
+      this.senders.delete(sender);
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error removing sender transform:", error);
+    }
+  }
+  
+  /**
+   * Remove transform from a receiver
+   * @param {RTCRtpReceiver} receiver - The receiver to remove transform from
+   */
+  removeReceiverTransform(receiver) {
+    if (!receiver) return;
+    console.log(`[E2EE Manager] Removing receiver transform for track ${receiver?.track?.id}`);
+    try {
+      // For standard API, set transform to null
+      if (this.browserSupport.scriptTransform && receiver.transform) {
+        receiver.transform = null;
+        console.log("[E2EE Manager] Standard receiver transform removed.");
+      }
+      // For Chrome API, relies on disable() cleanup
+      if (this.browserSupport.insertableStreams && receiver.transport && receiver.transport.rtpReceiver === receiver) {
+         // No direct 'remove transform' API
+      }
+
+      // Remove from map
+      this.receivers.delete(receiver);
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error removing receiver transform:", error);
+    }
+  }
+  
+  /**
+   * Apply transforms to all relevant senders and receivers in a peer connection
+   * @param {RTCPeerConnection} peerConnection - The peer connection
+   */
+  setupPeerConnection(peerConnection) {
+    // Only setup if E2EE is intended to be enabled
+    if (!this.enabled || !peerConnection) {
+       console.log(`[E2EE Manager] Skipping E2EE setup for PeerConnection (enabled: ${this.enabled}, peer valid: ${!!peerConnection})`);
+      return;
+    }
+    
+    console.log("🔒 [E2EE Manager] Setting up E2EE for PeerConnection");
+    try {
+      // Set up existing senders
+      peerConnection.getSenders().forEach(sender => {
+        // Only apply transform to media tracks (audio/video)
+        if (sender.track && (sender.track.kind === "audio" || sender.track.kind === "video")) {
+           this.setupSenderTransform(sender);
+        }
+      });
+      
+      // Set up existing receivers
+      peerConnection.getReceivers().forEach(receiver => {
+         // Only apply transform to media tracks (audio/video)
+        if (receiver.track && (receiver.track.kind === "audio" || receiver.track.kind === "video")) {
+           this.setupReceiverTransform(receiver);
+        }
+      });
+      
+      // Note: Handling dynamically added tracks (via 'track' event) 
+      // should also call setupReceiverTransform. This is typically handled 
+      // in the main application logic (e.g., meeting.js or meeting-e2ee.js).
+
+    } catch (error) {
+      console.error("❌ [E2EE Manager] Error setting up peer connection transforms:", error);
+    }
+  }
+}
+
