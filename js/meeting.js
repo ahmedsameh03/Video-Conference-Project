@@ -848,24 +848,33 @@ async function handleOffer(user, offer) {
     let peer = peers[user];
     if (!peer) {
       peer = await createPeer(user);
-      if (!peer) throw new Error(`Failed to create peer connection for ${user}.`);
+      if (!peer) {
+        throw new Error(`Failed to create peer connection for ${user}.`);
+      }
     }
 
     const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
-    const polite = true;
+    const polite = true; 
 
     if (offerCollision) {
       if (!polite) {
         console.warn(`[Meeting] Offer collision with ${user}, ignoring offer (not polite).`);
         return;
       }
-      console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
-      await peer.setLocalDescription({ type: "rollback" });
-      await waitForStableState(peer);
+
+      console.warn(`[Meeting] Offer collision with ${user}, rolling back...`);
+      try {
+        await peer.setLocalDescription({ type: "rollback" });
+        await waitForStableState(peer);
+      } catch (rollbackError) {
+        console.error(`❌ Failed rollback for ${user}:`, rollbackError);
+        return;
+      }
     }
 
+    // تأكيد الحالة النهائية
     if (peer.signalingState !== "stable") {
-      console.warn(`[Meeting] Skipping offer from ${user}, signaling state = ${peer.signalingState}`);
+      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is still ${peer.signalingState}`);
       return;
     }
 
@@ -882,21 +891,9 @@ async function handleOffer(user, offer) {
       user: name,
       targetUser: user
     }));
-   
-if (pendingCandidates[user]) {
-  for (const candidate of pendingCandidates[user]) {
-    try {
-      await peer.addIceCandidate(candidate);
-      console.log(`[ICE] Re-applied queued candidate for ${user}`);
-    } catch (error) {
-      console.error(`[ICE] Failed to apply queued candidate for ${user}:`, error);
-    }
-  }
-  delete pendingCandidates[user];
-}
-
 
     console.log(`[Meeting] Answer sent to ${user}.`);
+
   } catch (error) {
     console.error(`❌ [Meeting] Error handling offer from ${user}:`, error);
   }
