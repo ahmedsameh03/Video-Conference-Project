@@ -19,8 +19,22 @@ function updateE2EEStatusText(text) {
 window.updateE2EEStatusText = updateE2EEStatusText;
 
 // Dummy handlers (prevents ReferenceError even if not yet implemented)
-window.enableE2EE = typeof enableE2EE === "function" ? enableE2EE : () => {};
-window.disableE2EE = typeof disableE2EE === "function" ? disableE2EE : () => {};
+window.enableE2EE = typeof enableE2EE === "function" ? enableE2EE : function(){};
+window.disableE2EE = typeof disableE2EE === "function" ? disableE2EE : function(){};
+window.toggleMute = typeof toggleMute === "function" ? toggleMute : function(){};
+window.toggleVideo = typeof toggleVideo === "function" ? toggleVideo : function(){};
+window.toggleChat = typeof toggleChat === "function" ? toggleChat : function(){};
+window.shareScreen = typeof shareScreen === "function" ? shareScreen : function(){};
+window.leaveMeeting = typeof leaveMeeting === "function" ? leaveMeeting : function(){};
+
+// Toggle E2EE settings modal (needed for settings button in HTML)
+function toggleE2EESettings() {
+    const container = document.getElementById("e2ee-container");
+    if (container) {
+        container.style.display = (container.style.display === "block") ? "none" : "block";
+    }
+}
+window.toggleE2EESettings = toggleE2EESettings;
 
 // Dummy placeholder for enhanceWebSocketHandler
 function enhanceWebSocketHandler() {
@@ -113,7 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Button handlers...
   const settingsBtn = document.getElementById("e2ee-settings-btn");
-  if (settingsBtn) settingsBtn.addEventListener("click", () => typeof toggleE2EESettings === "function" && toggleE2EESettings());
+  if (settingsBtn) settingsBtn.addEventListener("click", () => window.toggleE2EESettings());
   const enableBtn = document.getElementById("e2ee-enable-btn");
   if (enableBtn) enableBtn.addEventListener("click", () => window.enableE2EE());
   const disableBtn = document.getElementById("e2ee-disable-btn");
