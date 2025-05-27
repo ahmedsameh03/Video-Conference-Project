@@ -774,6 +774,7 @@ async function handleAnswer(user, answer) {
       return;
     }
 
+   
     if (peer.signalingState === "have-local-offer") {
       await peer.setRemoteDescription(answer);
       console.log(`[Meeting] Set remote description for ${user}.`);
@@ -812,6 +813,25 @@ async function handleNewUser(user) {
     console.error(`❌ [Meeting] Error handling new user ${user}:`, error);
   }
 }
+function waitForStableState(peer) {
+  return new Promise(resolve => {
+    if (peer.signalingState === "stable") {
+      resolve();
+    } else {
+      const check = setInterval(() => {
+        if (peer.signalingState === "stable") {
+          clearInterval(check);
+          resolve();
+        }
+      }, 100);
+      // ⏳ safety timeout after 2s
+      setTimeout(() => {
+        clearInterval(check);
+        resolve();
+      }, 2000);
+    }
+  });
+}
 
 
 /**
@@ -821,9 +841,8 @@ async function handleNewUser(user) {
  */
 async function handleOffer(user, offer) {
   console.log(`[Meeting] Received offer from ${user}.`);
-  
+
   try {
-    // Get or create peer connection
     let peer = peers[user];
     if (!peer) {
       peer = await createPeer(user);
@@ -831,40 +850,34 @@ async function handleOffer(user, offer) {
         throw new Error(`Failed to create peer connection for ${user}.`);
       }
     }
-    
-    // Handle potential glare (both peers creating offers simultaneously)
-   const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
-isPolite = true;
 
-if (offerCollision) {
-  if (!isPolite) {
-    console.warn(`[Meeting] Offer collision detected with ${user}, ignoring (not polite).`);
-    return;
-  }
-  console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
-  await peer.setLocalDescription({ type: "rollback" });
-}
-if (peer.signalingState !== "stable") {
-  console.warn(`[Meeting] Skipping offer from ${user} because signalingState is not stable (${peer.signalingState}).`);
-  return;
-}
-await peer.setRemoteDescription(offer);
-console.log(`[Meeting] Set remote offer from ${user}.`);
+    const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
+    const polite = true; // ← يجب استخدام متغير محلي ثابت بدل isPolite العالمي
 
-const answer = await peer.createAnswer();
-await peer.setLocalDescription(answer);
+    if (offerCollision) {
+      if (!polite) {
+        console.warn(`[Meeting] Offer collision with ${user}, ignoring offer (not polite).`);
+        return;
+      }
+      console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
+      await peer.setLocalDescription({ type: "rollback" });
 
-ws.send(JSON.stringify({
-  type: "answer",
-  answer: peer.localDescription,
-  room,
-  user: name,
-  targetUser: user
-}));
+      // ❗ بعد rollback، انتظر حتى تصبح الحالة stable
+      await waitForStableState(peer);
+    }
 
-    
-  
-    
+    // تحقق مرة أخرى بعد الـ rollback
+    if (peer.signalingState !== "stable") {
+      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is ${peer.signalingState}`);
+      return;
+    }
+
+    await peer.setRemoteDescription(offer);
+    console.log(`[Meeting] Set remote offer from ${user}.`);
+
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+
     ws.send(JSON.stringify({
       type: "answer",
       answer: peer.localDescription,
@@ -872,35 +885,14 @@ ws.send(JSON.stringify({
       user: name,
       targetUser: user
     }));
-    
+
     console.log(`[Meeting] Answer sent to ${user}.`);
+
   } catch (error) {
     console.error(`❌ [Meeting] Error handling offer from ${user}:`, error);
   }
 }
 
-/**
- * Handles an answer from a remote user.
- * @param {string} user - The username of the remote user.
- * @param {RTCSessionDescriptionInit} answer - The received answer.
- */
-async function handleAnswer(user, answer) {
-  console.log(`[Meeting] Received answer from ${user}.`);
-  
-  try {
-    const peer = peers[user];
-    if (!peer) {
-      console.error(`[Meeting] No peer connection exists for ${user}.`);
-      return;
-    }
-    
-    // Set the remote description
-    await peer.setRemoteDescription(answer);
-    console.log(`[Meeting] Set remote description for ${user}.`);
-  } catch (error) {
-    console.error(`❌ [Meeting] Error handling answer from ${user}:`, error);
-  }
-}
 
 /**
  * Handles an ICE candidate from a remote user.
