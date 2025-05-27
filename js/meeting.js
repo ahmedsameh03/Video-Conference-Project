@@ -1,4 +1,6 @@
 // js/meeting.js
+/** تخزين مؤقت للـ ICE candidates */
+const pendingCandidates = {};
 
 /**
  * @fileoverview Core logic for the WebRTC meeting page.
@@ -880,6 +882,19 @@ async function handleOffer(user, offer) {
       user: name,
       targetUser: user
     }));
+   
+if (pendingCandidates[user]) {
+  for (const candidate of pendingCandidates[user]) {
+    try {
+      await peer.addIceCandidate(candidate);
+      console.log(`[ICE] Re-applied queued candidate for ${user}`);
+    } catch (error) {
+      console.error(`[ICE] Failed to apply queued candidate for ${user}:`, error);
+    }
+  }
+  delete pendingCandidates[user];
+}
+
 
     console.log(`[Meeting] Answer sent to ${user}.`);
   } catch (error) {
@@ -894,25 +909,25 @@ async function handleOffer(user, offer) {
  * @param {RTCIceCandidateInit} candidate - The received ICE candidate.
  */
 async function handleCandidate(user, candidate) {
-  // console.log(`[Meeting] Received ICE candidate from ${user}.`); // Verbose
-  
-  try {
-    const peer = peers[user];
-    if (!peer) {
-      console.error(`[Meeting] No peer connection exists for ${user}.`);
-      return;
-    }
-    
-    // Add the ICE candidate
-   try {
-  await peer.addIceCandidate(candidate);
-} catch (error) {
-  console.error(`❌ [ICE] Failed to add candidate from ${user}:`, error);
-}
+  const peer = peers[user];
+  if (!peer) {
+    console.error(`[ICE] No peer found for ${user}.`);
+    return;
+  }
 
-    // console.log(`[Meeting] Added ICE candidate for ${user}.`); // Verbose
-  } catch (error) {
-    console.error(`❌ [Meeting] Error handling ICE candidate from ${user}:`, error);
+  if (peer.remoteDescription && peer.remoteDescription.type) {
+    try {
+      await peer.addIceCandidate(candidate);
+      console.log(`[ICE] Candidate added for ${user}.`);
+    } catch (error) {
+      console.error(`[ICE] Failed to add candidate for ${user}:`, error);
+    }
+  } else {
+    console.warn(`[ICE] Remote description not set yet, queueing candidate for ${user}.`);
+    if (!pendingCandidates[user]) {
+      pendingCandidates[user] = [];
+    }
+    pendingCandidates[user].push(candidate);
   }
 }
 
