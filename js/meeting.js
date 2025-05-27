@@ -1,64 +1,37 @@
 // js/meeting.js
-/** تخزين مؤقت للـ ICE candidates */
+
+// ----------------- GLOBAL VARIABLES -----------------
 const pendingCandidates = {};
 
-/**
- * @fileoverview Core logic for the WebRTC meeting page.
- * Handles signaling, peer connections, media streams, and basic UI interactions.
- */
-
-// --- Constants and Global Variables ---
-
-/** Access to query parameters (room, name). */
 const queryParams = _getQueryParams();
-/** The meeting room ID. */
 const room = queryParams.room;
-/** The user's display name. */
 const name = queryParams.name;
 
-/** State flag for local audio mute status. */
 let isMuted = false;
-/** State flag for local video enabled status. */
 let isVideoOff = false;
 
-/** DOM element for the local user's video. */
 const localVideo = document.getElementById("large-video");
-/** DOM element for the grid displaying remote videos. */
 const videoGrid = document.getElementById("video-grid");
-/** DOM element for displaying chat messages. */
 const chatMessages = document.getElementById("chat-messages");
-/** DOM element for the chat input field. */
 const chatInputField = document.getElementById("chat-input-field");
-/** DOM element for the list of participants. */
 const participantsList = document.getElementById("participants-list");
 
-/** URL of the signaling server. */
 const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
   ? "ws://localhost:3001"
   : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production-65d5.up.railway.app`;
 
 console.log(`[Meeting] Connecting to signaling server at: ${SIGNALING_SERVER_URL}`);
-/** WebSocket connection to the signaling server. */
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 
-/** Stores RTCPeerConnection objects, keyed by remote user name. */
 const peers = {};
-/** Flag to prevent issues with concurrent offer creation (imperfect negotiation). */
 let isMakingOffer = false;
-/** Flag indicating if this peer should be polite during offer collisions. */
 let isPolite = false;
-/** The local user's media stream (audio/video). */
 let localStream = null;
-/** Flag to track if media access is in progress */
 let isMediaAccessInProgress = false;
-/** Flag to track if camera initialization has been attempted */
 let hasCameraInitBeenAttempted = false;
-
-/** Configuration for RTCPeerConnection, including ICE servers. */
 let peerConnectionConfig = null;
 
-// --- Initialization and Setup ---
-
+// --------------- UTILITIES & HELPERS -----------------
 function _getQueryParams() {
   const params = {};
   new URLSearchParams(window.location.search).forEach((value, key) => {
@@ -85,8 +58,100 @@ async function _fetchIceServers() {
   ];
 }
 
+// ----------------- UI EVENT LISTENERS -----------------
+function _setupUIEventListeners() {
+  // Add your actual event listeners here as in your original code.
+  // Example:
+  // document.getElementById("mute-btn").addEventListener("click", toggleMute);
+}
+
+// --------------- CORE MEETING FUNCTIONS ---------------
+
+function addParticipant(participantName) {
+  // Add logic to show participant in the list/grid
+}
+
+function handleNewUser(user) {
+  // Logic to handle when a new user joins
+}
+
+function handleOffer(user, offer) {
+  // Logic for handling SDP offer
+}
+
+function handleAnswer(user, answer) {
+  // Logic for handling SDP answer
+}
+
+function handleCandidate(user, candidate) {
+  // Logic for handling ICE candidate
+}
+
+function handleUserLeft(user) {
+  // Logic when a user leaves
+}
+
+function handleChatMessage(user, text) {
+  // Logic for displaying chat message
+}
+
+function toggleChat() {
+  // Your original chat toggle logic
+}
+
+function toggleParticipants() {
+  // Your original participants toggle logic
+}
+
+function sendMessage() {
+  // Your send message logic
+}
+
+function toggleMute() {
+  // Your mute logic
+}
+
+function toggleVideo() {
+  // Your video toggle logic
+}
+
+function shareScreen() {
+  // Your screen share logic
+}
+
+function leaveMeeting() {
+  // Logic for leaving the meeting
+}
+
+function _showMediaErrorMessage(msg) {
+  // Display error to user about camera/mic issues
+}
+
+async function startCameraAndMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    isMediaAccessInProgress = false;
+    return stream;
+  } catch (err) {
+    isMediaAccessInProgress = false;
+    _showMediaErrorMessage("Failed to access camera/microphone.");
+    return null;
+  }
+}
+
+async function displayLocalStream() {
+  if (localVideo && localStream) {
+    localVideo.srcObject = localStream;
+    await localVideo.play();
+    console.log("[Meeting] Local video playback started successfully.");
+  }
+}
+
+// ------------- MAIN INITIALIZATION SEQUENCE -------------
+
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[Meeting] DOM content loaded.");
+
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   }
@@ -94,7 +159,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("user-name-display").textContent = name;
   }
 
-  // Fetch ICE server configuration early
   try {
     peerConnectionConfig = { iceServers: await _fetchIceServers() };
     console.log("[Meeting] ICE server configuration loaded.");
@@ -107,7 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   _setupUIEventListeners();
 });
 
-// --- WebSocket Event Handlers ---
+// --------------- WEBSOCKET HANDLERS -------------------
 
 ws.onopen = async () => {
   console.log("✅ [Meeting] WebSocket connection established.");
@@ -115,7 +179,6 @@ ws.onopen = async () => {
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
 
-    // 1. Get local media stream (camera/mic)
     if (!hasCameraInitBeenAttempted) {
       hasCameraInitBeenAttempted = true;
       const stream = await startCameraAndMic();
@@ -124,15 +187,13 @@ ws.onopen = async () => {
         console.log("[Meeting] Local media stream acquired.", localStream.getTracks().map(t => ({ kind: t.kind, id: t.id, enabled: t.enabled })));
         await displayLocalStream();
 
-        // --- 🟢 E2EE Integration: Initialize AFTER localStream is ready
+        // 🟢 E2EE order fix: Initialize after localStream is ready
         if (typeof initializeE2EE === "function") {
           console.log("[Meeting] Initializing E2EE manager after localStream ready...");
           initializeE2EE();
         }
-        // --- 🟢 End E2EE Integration ---
 
       } else {
-        console.warn("[Meeting] No media tracks obtained, but continuing with chat-only mode");
         _showMediaErrorMessage("No camera or microphone available. You can still chat and see others.");
       }
     }
@@ -152,7 +213,7 @@ ws.onclose = (event) => {
   if (!event.wasClean) {
     alert("WebSocket connection closed unexpectedly. Please try refreshing the page.");
   }
-  _cleanupResources();
+  // Call your cleanup logic here.
 };
 
 ws.onmessage = async (message) => {
@@ -192,13 +253,7 @@ ws.onmessage = async (message) => {
   }
 };
 
-// --- Media Stream Handling ---
-// (ALL your existing functions like startCameraAndMic, displayLocalStream, etc. REMAIN UNCHANGED.)
-
-// --- Peer Connection Logic, Signaling Handlers, UI, etc. ---
-// (ALL your core functions remain unchanged)
-
-// --- At the end: Expose functions to the global scope ---
+// ----------- EXPORTS FOR HTML UI BUTTONS ---------------
 window.toggleChat = toggleChat;
 window.toggleParticipants = toggleParticipants;
 window.sendMessage = sendMessage;
@@ -207,3 +262,4 @@ window.toggleVideo = toggleVideo;
 window.shareScreen = shareScreen;
 window.leaveMeeting = leaveMeeting;
 
+// --------------- END OF FILE ---------------------------
