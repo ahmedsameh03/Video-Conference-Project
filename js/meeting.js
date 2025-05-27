@@ -817,7 +817,10 @@ if (offerCollision) {
   console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
   await peer.setLocalDescription({ type: "rollback" });
 }
-
+if (peer.signalingState !== "stable") {
+  console.warn(`[Meeting] Skipping offer from ${user} because signalingState is not stable (${peer.signalingState}).`);
+  return;
+}
 await peer.setRemoteDescription(offer);
 console.log(`[Meeting] Set remote offer from ${user}.`);
 
