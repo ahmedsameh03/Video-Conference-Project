@@ -760,8 +760,9 @@ async function createPeer(remoteUser) {
 // --- Signaling Message Handlers ---
 
 /**
- * Handles a new user joining the room.
- * @param {string} user - The username of the new user.
+ * Handles an answer from a remote user.
+ * @param {string} user - The username of the remote user.
+ * @param {RTCSessionDescriptionInit} answer - The received answer.
  */
 async function handleAnswer(user, answer) {
   console.log(`[Meeting] Received answer from ${user}.`);
@@ -773,17 +774,19 @@ async function handleAnswer(user, answer) {
       return;
     }
 
-    if (peer.signalingState !== "have-local-offer") {
-      console.warn(`[Meeting] Cannot set remote answer from ${user} — unexpected signalingState: ${peer.signalingState}`);
-      return;
+    // ✅ Avoid setting remote description if not in 'have-local-offer' state
+    if (peer.signalingState === "have-local-offer") {
+      await peer.setRemoteDescription(answer);
+      console.log(`[Meeting] Set remote description for ${user}.`);
+    } else {
+      console.warn(`[Meeting] Skipping answer from ${user} because signalingState is ${peer.signalingState}.`);
     }
 
-    await peer.setRemoteDescription(answer);
-    console.log(`[Meeting] Set remote description for ${user}.`);
   } catch (error) {
     console.error(`❌ [Meeting] Error handling answer from ${user}:`, error);
   }
 }
+
 
 /**
  * Handles an offer from a remote user.
