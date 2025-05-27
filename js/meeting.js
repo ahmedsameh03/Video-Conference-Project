@@ -845,6 +845,7 @@ async function handleOffer(user, offer) {
   console.log(`[Meeting] Received offer from ${user}.`);
 
   try {
+    // ⚙️ الحصول على الاتصال أو إنشاؤه
     let peer = peers[user];
     if (!peer) {
       peer = await createPeer(user);
@@ -853,8 +854,9 @@ async function handleOffer(user, offer) {
       }
     }
 
+    // 🎯 الكشف عن تعارض العروض (Offer Collision)
     const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
-    const polite = true; 
+    const polite = true; // كل peer يعتبر نفسه "polite" لتقليل التعقيد
 
     if (offerCollision) {
       if (!polite) {
@@ -862,25 +864,36 @@ async function handleOffer(user, offer) {
         return;
       }
 
-      console.warn(`[Meeting] Offer collision with ${user}, rolling back...`);
-      try {
-        await peer.setLocalDescription({ type: "rollback" });
-        await waitForStableState(peer);
-      } catch (rollbackError) {
-        console.error(`❌ Failed rollback for ${user}:`, rollbackError);
-        return;
-      }
+      console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
+      await peer.setLocalDescription({ type: "rollback" });
+
+      // ⏳ انتظر حتى تستقر الحالة
+      await new Promise(resolve => {
+        const interval = setInterval(() => {
+          if (peer.signalingState === "stable") {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(interval);
+          resolve(); // تجنب التعليق إلى الأبد
+        }, 2000);
+      });
     }
 
-    // تأكيد الحالة النهائية
+    // ✅ بعد حل التصادم، تحقق مرة أخيرة
     if (peer.signalingState !== "stable") {
-      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is still ${peer.signalingState}`);
+      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is ${peer.signalingState}`);
       return;
     }
 
+    // ⬇️ تعيين العرض الوارد
     await peer.setRemoteDescription(offer);
     console.log(`[Meeting] Set remote offer from ${user}.`);
 
+    // ⬆️ إنشاء وإرسال الإجابة
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
 
@@ -893,11 +906,11 @@ async function handleOffer(user, offer) {
     }));
 
     console.log(`[Meeting] Answer sent to ${user}.`);
-
   } catch (error) {
     console.error(`❌ [Meeting] Error handling offer from ${user}:`, error);
   }
 }
+
 
 
 /**
