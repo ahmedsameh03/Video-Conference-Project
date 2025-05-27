@@ -774,7 +774,6 @@ async function handleAnswer(user, answer) {
       return;
     }
 
-    // ✅ Avoid setting remote description if not in 'have-local-offer' state
     if (peer.signalingState === "have-local-offer") {
       await peer.setRemoteDescription(answer);
       console.log(`[Meeting] Set remote description for ${user}.`);
