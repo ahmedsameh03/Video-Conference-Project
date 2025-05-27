@@ -18,9 +18,15 @@ function updateE2EEStatusText(text) {
 }
 window.updateE2EEStatusText = updateE2EEStatusText;
 
-// Safe dummy handlers in case not present
+// Dummy handlers (prevents ReferenceError even if not yet implemented)
 window.enableE2EE = typeof enableE2EE === "function" ? enableE2EE : () => {};
 window.disableE2EE = typeof disableE2EE === "function" ? disableE2EE : () => {};
+
+// Dummy placeholder for enhanceWebSocketHandler
+function enhanceWebSocketHandler() {
+    // Placeholder for future E2EE WebSocket message wrapping
+    // No-op for now, but prevents crash!
+}
 
 // --- Global Variables ---
 
@@ -101,15 +107,13 @@ function initializeE2EE() {
   }
 }
 
-// --- (Other E2EE control, UI logic, WebSocket wrapping as in your original) ---
-
 // --- UI Button Handlers & Exports ---
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[E2EE Integration] Setting up E2EE UI event listeners...");
 
   // Button handlers...
   const settingsBtn = document.getElementById("e2ee-settings-btn");
-  if (settingsBtn) settingsBtn.addEventListener("click", () => toggleE2EESettings && toggleE2EESettings());
+  if (settingsBtn) settingsBtn.addEventListener("click", () => typeof toggleE2EESettings === "function" && toggleE2EESettings());
   const enableBtn = document.getElementById("e2ee-enable-btn");
   if (enableBtn) enableBtn.addEventListener("click", () => window.enableE2EE());
   const disableBtn = document.getElementById("e2ee-disable-btn");
