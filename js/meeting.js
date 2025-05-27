@@ -763,33 +763,25 @@ async function createPeer(remoteUser) {
  * Handles a new user joining the room.
  * @param {string} user - The username of the new user.
  */
-async function handleNewUser(user) {
-  console.log(`[Meeting] New user joined: ${user}`);
-  
-  // Add the user to the participants list
-  addParticipant(user);
-  
-  // Create a peer connection for the new user
+async function handleAnswer(user, answer) {
+  console.log(`[Meeting] Received answer from ${user}.`);
+
   try {
-    const peer = await createPeer(user);
+    const peer = peers[user];
     if (!peer) {
-      console.error(`[Meeting] Failed to create peer connection for ${user}.`);
+      console.error(`[Meeting] No peer connection exists for ${user}.`);
       return;
     }
-    if (peer.signalingState !== "have-local-offer") {
-  console.warn(`[Meeting] Skipping answer from ${user} because signalingState is ${peer.signalingState}.`);
-  return;
-}
 
-    
-    // Set polite flag (the joiner is polite)
-    isPolite = true;
-    
-    
-    // The existing user initiates the connection
-    // (negotiationneeded event will trigger offer creation)
+    if (peer.signalingState !== "have-local-offer") {
+      console.warn(`[Meeting] Cannot set remote answer from ${user} — unexpected signalingState: ${peer.signalingState}`);
+      return;
+    }
+
+    await peer.setRemoteDescription(answer);
+    console.log(`[Meeting] Set remote description for ${user}.`);
   } catch (error) {
-    console.error(`❌ [Meeting] Error handling new user ${user}:`, error);
+    console.error(`❌ [Meeting] Error handling answer from ${user}:`, error);
   }
 }
 
