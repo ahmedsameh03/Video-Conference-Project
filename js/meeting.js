@@ -833,9 +833,7 @@ ws.send(JSON.stringify({
 }));
 
     
-    // Create and send answer
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
+  
     
     ws.send(JSON.stringify({
       type: "answer",
