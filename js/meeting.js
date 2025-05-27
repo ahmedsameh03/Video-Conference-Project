@@ -911,58 +911,72 @@ async function handleOffer(user, offer) {
   }
 }
 
-
-
 /**
- * Handles an ICE candidate from a remote user.
+ * Handles an offer from a remote user.
  * @param {string} user - The username of the remote user.
- * @param {RTCIceCandidateInit} candidate - The received ICE candidate.
+ * @param {RTCSessionDescriptionInit} offer - The received offer.
  */
-async function handleCandidate(user, candidate) {
-  const peer = peers[user];
-  if (!peer) {
-    console.error(`[ICE] No peer found for ${user}.`);
-    return;
-  }
+async function handleOffer(user, offer) {
+  console.log(`[Meeting] Received offer from ${user}.`);
 
-  if (peer.remoteDescription && peer.remoteDescription.type) {
-    try {
-      await peer.addIceCandidate(candidate);
-      console.log(`[ICE] Candidate added for ${user}.`);
-    } catch (error) {
-      console.error(`[ICE] Failed to add candidate for ${user}:`, error);
+  try {
+    let peer = peers[user];
+    if (!peer) {
+      peer = await createPeer(user);
+      if (!peer) {
+        throw new Error(`Failed to create peer connection for ${user}.`);
+      }
     }
-  } else {
-    console.warn(`[ICE] Remote description not set yet, queueing candidate for ${user}.`);
-    if (!pendingCandidates[user]) {
-      pendingCandidates[user] = [];
-    }
-    pendingCandidates[user].push(candidate);
-  }
-}
 
-/**
- * Handles a user leaving the room.
- * @param {string} user - The username of the user who left.
- */
-function handleUserLeft(user) {
-  console.log(`[Meeting] User left: ${user}`);
-  
-  // Remove the user from the participants list
-  removeParticipant(user);
-  
-  // Close and remove the peer connection
-  if (peers[user]) {
-    peers[user].close();
-    delete peers[user];
-    console.log(`[Meeting] Closed peer connection with ${user}.`);
-  }
-  
-  // Remove the user's video element
-  const videoContainer = document.getElementById(`video-container-${user}`);
-  if (videoContainer) {
-    videoContainer.remove();
-    console.log(`[Meeting] Removed video element for ${user}.`);
+    const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
+    const polite = true;
+
+    if (offerCollision) {
+      if (!polite) {
+        console.warn(`[Meeting] Offer collision with ${user}, ignoring offer (not polite).`);
+        return;
+      }
+
+      console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
+      await peer.setLocalDescription({ type: "rollback" });
+
+      // 🟡 ننتظر لحين رجوع الحالة إلى "stable" قبل المتابعة
+      await new Promise(resolve => {
+        const check = setInterval(() => {
+          if (peer.signalingState === "stable") {
+            clearInterval(check);
+            resolve();
+          }
+        }, 100);
+        setTimeout(() => {
+          clearInterval(check);
+          resolve();
+        }, 2000); // safety timeout
+      });
+    }
+
+    if (peer.signalingState !== "stable") {
+      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is ${peer.signalingState}`);
+      return;
+    }
+
+    await peer.setRemoteDescription(offer);
+    console.log(`[Meeting] Set remote offer from ${user}.`);
+
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+
+    ws.send(JSON.stringify({
+      type: "answer",
+      answer: peer.localDescription,
+      room,
+      user: name,
+      targetUser: user
+    }));
+
+    console.log(`[Meeting] Answer sent to ${user}.`);
+  } catch (error) {
+    console.error(`❌ [Meeting] Error handling offer from ${user}:`, error);
   }
 }
 
