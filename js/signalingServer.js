@@ -28,7 +28,7 @@ server.on("connection", (ws, req) => {
     try {
       const data = JSON.parse(message);  // ✅ parse before using it
 
-      const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
+      const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave", "e2ee-status"];
       if (!allowedTypes.includes(data.type)) {
         console.warn(`❌ Rejected unknown message type: ${data.type}`);
         return;
@@ -93,6 +93,15 @@ server.on("connection", (ws, req) => {
             type: "chat",
             user: ws.user,
             text: data.text,
+            room: data.room,
+          });
+          break;
+
+        case "e2ee-status":
+          broadcast(ws, data.room, {
+            type: "e2ee-status",
+            enabled: data.enabled,
+            user: ws.user,
             room: data.room,
           });
           break;
