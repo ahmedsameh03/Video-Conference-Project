@@ -6,6 +6,22 @@
  * Handles E2EE setup, UI interactions, and message interception for key exchange.
  */
 
+// --- SAFE HELPER FUNCTIONS ---
+
+function updateE2EEStatusText(text) {
+    const elem = document.getElementById("e2ee-status-text");
+    if (elem) {
+        elem.innerText = text;
+    } else {
+        console.log("[E2EE] Status:", text);
+    }
+}
+window.updateE2EEStatusText = updateE2EEStatusText;
+
+// Safe dummy handlers in case not present
+window.enableE2EE = typeof enableE2EE === "function" ? enableE2EE : () => {};
+window.disableE2EE = typeof disableE2EE === "function" ? disableE2EE : () => {};
+
 // --- Global Variables ---
 
 /**
@@ -85,22 +101,20 @@ function initializeE2EE() {
   }
 }
 
-// (The rest of your E2EE control/UI/wrapping logic remains unchanged.)
+// --- (Other E2EE control, UI logic, WebSocket wrapping as in your original) ---
 
-// --- (No change to enableE2EE, disableE2EE, broadcastE2EEStatus, enhanceWebSocketHandler, etc) ---
-
-// --- Initial Setup Execution ---
+// --- UI Button Handlers & Exports ---
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[E2EE Integration] Setting up E2EE UI event listeners...");
 
   // Button handlers...
   const settingsBtn = document.getElementById("e2ee-settings-btn");
-  if (settingsBtn) settingsBtn.addEventListener("click", () => toggleE2EESettings());
+  if (settingsBtn) settingsBtn.addEventListener("click", () => toggleE2EESettings && toggleE2EESettings());
   const enableBtn = document.getElementById("e2ee-enable-btn");
-  if (enableBtn) enableBtn.addEventListener("click", enableE2EE);
+  if (enableBtn) enableBtn.addEventListener("click", () => window.enableE2EE());
   const disableBtn = document.getElementById("e2ee-disable-btn");
   if (disableBtn) {
-    disableBtn.addEventListener("click", disableE2EE);
+    disableBtn.addEventListener("click", () => window.disableE2EE());
     disableBtn.style.display = "none";
   }
 
