@@ -1,13 +1,5 @@
 // js/meeting-e2ee.js
 
-/**
- * @fileoverview Integrates End-to-End Encryption (E2EE) functionality
- * with the core meeting logic (meeting.js).
- * Handles E2EE setup, UI interactions, and message interception for key exchange.
- */
-
-// --- SAFE HELPER FUNCTIONS ---
-
 function updateE2EEStatusText(text) {
     const elem = document.getElementById("e2ee-status-text");
     if (elem) {
@@ -18,7 +10,6 @@ function updateE2EEStatusText(text) {
 }
 window.updateE2EEStatusText = updateE2EEStatusText;
 
-// Dummy handlers (prevents ReferenceError even if not yet implemented)
 window.enableE2EE = typeof enableE2EE === "function" ? enableE2EE : function(){};
 window.disableE2EE = typeof disableE2EE === "function" ? disableE2EE : function(){};
 window.toggleMute = typeof toggleMute === "function" ? toggleMute : function(){};
@@ -27,7 +18,7 @@ window.toggleChat = typeof toggleChat === "function" ? toggleChat : function(){}
 window.shareScreen = typeof shareScreen === "function" ? shareScreen : function(){};
 window.leaveMeeting = typeof leaveMeeting === "function" ? leaveMeeting : function(){};
 
-// Toggle E2EE settings modal (needed for settings button in HTML)
+// E2EE Settings modal handler
 function toggleE2EESettings() {
     const container = document.getElementById("e2ee-container");
     if (container) {
@@ -36,63 +27,37 @@ function toggleE2EESettings() {
 }
 window.toggleE2EESettings = toggleE2EESettings;
 
-// Dummy placeholder for enhanceWebSocketHandler
 function enhanceWebSocketHandler() {
-    // Placeholder for future E2EE WebSocket message wrapping
-    // No-op for now, but prevents crash!
+    // Placeholder for wrapping WebSocket with E2EE, no-op for now.
 }
 
-// --- Global Variables ---
-
-/**
- * Holds the single instance of the E2EEManager.
- * @type {E2EEManager | null}
- */
+// --- E2EE manager setup, as before ---
 let e2eeManager = null;
-
-/**
- * Stores the original WebSocket onmessage handler from meeting.js
- * so we can wrap it and add E2EE message handling.
- * @type {Function | null}
- */
 let originalWsOnMessage = null;
 
-// --- Initialization ---
-
-/**
- * Initializes the E2EE manager instance.
- * Should be called after localStream is ready, but before peer connections.
- */
 function initializeE2EE() {
-  // Prevent multiple initializations
   if (e2eeManager) {
     console.log("[E2EE Integration] E2EE Manager already initialized.");
     return true;
   }
 
-  // Use globals provided by meeting.js
   const roomId = (typeof room !== 'undefined') ? room : (window.room || "");
   const userName = (typeof name !== 'undefined') ? name : (window.name || "");
 
   console.log("[E2EE Integration] Initializing E2EE manager instance...");
-
-  // --- Worker Path Configuration ---
   const workerPath = new URL("js/e2ee-worker.js", window.location.href).href;
   console.log(`[E2EE Integration] Using worker path: ${workerPath}`);
 
   try {
-    // Create the E2EEManager instance
     e2eeManager = new E2EEManager({
       roomId: roomId,
-      ratchetInterval: 60000, // Key rotation interval (1 minute)
+      ratchetInterval: 60000,
       workerPath: workerPath,
     });
 
-    // Check and log browser support
     const supportInfo = e2eeManager.getSupportInfo();
     console.log(`[E2EE Integration] Browser E2EE Support: ${JSON.stringify(supportInfo)}`);
     
-    // Update UI based on support
     if (!supportInfo.supported) {
       updateE2EEStatusText("E2EE not supported by this browser.");
       const enableBtnElement = document.getElementById("e2ee-enable-btn");
@@ -121,11 +86,10 @@ function initializeE2EE() {
   }
 }
 
-// --- UI Button Handlers & Exports ---
+// --- UI Event Listeners Setup ---
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[E2EE Integration] Setting up E2EE UI event listeners...");
 
-  // Button handlers...
   const settingsBtn = document.getElementById("e2ee-settings-btn");
   if (settingsBtn) settingsBtn.addEventListener("click", () => window.toggleE2EESettings());
   const enableBtn = document.getElementById("e2ee-enable-btn");
@@ -136,7 +100,6 @@ document.addEventListener("DOMContentLoaded", () => {
     disableBtn.style.display = "none";
   }
 
-  // Enhance WebSocket after DOM loaded
   setTimeout(enhanceWebSocketHandler, 300);
   updateE2EEStatusText("E2EE Available (Disabled)");
   setTimeout(initializeE2EE, 500); // Delayed to allow meeting.js to set globals
