@@ -384,14 +384,21 @@ async function startCameraAndMic() {
       isMediaAccessInProgress = false;
       return null;
     }
-    localStream.getVideoTracks().forEach(track => {
-  track.enabled = true;
-  console.log(`[Fix] Ensured video track is enabled: ${track.label}`);
-});
-localStream.getAudioTracks().forEach(track => {
-  track.enabled = true;
-  console.log(`[Fix] Ensured audio track is enabled: ${track.label}`);
-});
+ if (stream) {
+  if (stream.getVideoTracks().length > 0) {
+    stream.getVideoTracks().forEach(track => {
+      track.enabled = true;
+      console.log(`[Fix] Ensured video track is enabled: ${track.label}`);
+    });
+  }
+  if (stream.getAudioTracks().length > 0) {
+    stream.getAudioTracks().forEach(track => {
+      track.enabled = true;
+      console.log(`[Fix] Ensured audio track is enabled: ${track.label}`);
+    });
+  }
+}
+
 
 
     isMediaAccessInProgress = false;
