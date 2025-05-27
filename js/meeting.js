@@ -68,27 +68,149 @@ function _setupUIEventListeners() {
 // --------------- CORE MEETING FUNCTIONS ---------------
 
 function addParticipant(participantName) {
-  // Add logic to show participant in the list/grid
+  // Add logic to show participant in the list/grid if needed
 }
 
-function handleNewUser(user) {
-  // Logic to handle when a new user joins
+function handleNewUser(remoteName) {
+  if (remoteName === name) return; // Don't connect to yourself
+
+  // Only create a new connection if not already present
+  if (peers[remoteName]) return;
+
+  const pc = new RTCPeerConnection(peerConnectionConfig);
+
+  // Add local stream tracks to the new peer connection
+  if (localStream) {
+    localStream.getTracks().forEach(track => {
+      pc.addTrack(track, localStream);
+    });
+  }
+
+  // Handle incoming remote tracks
+  pc.ontrack = (event) => {
+    let remoteVideo = document.getElementById(`remote-video-${remoteName}`);
+    if (!remoteVideo) {
+      remoteVideo = document.createElement('video');
+      remoteVideo.id = `remote-video-${remoteName}`;
+      remoteVideo.autoplay = true;
+      remoteVideo.playsInline = true;
+      remoteVideo.muted = false;
+      videoGrid.appendChild(remoteVideo);
+    }
+    remoteVideo.srcObject = event.streams[0];
+    remoteVideo.muted = false;
+  };
+
+  // Handle ICE candidates
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      ws.send(JSON.stringify({
+        type: "candidate",
+        user: remoteName,
+        candidate: event.candidate
+      }));
+    }
+  };
+
+  peers[remoteName] = pc;
+
+  // Send offer to the new user
+  pc.createOffer()
+    .then(offer => pc.setLocalDescription(offer))
+    .then(() => {
+      ws.send(JSON.stringify({
+        type: "offer",
+        user: remoteName,
+        offer: pc.localDescription
+      }));
+    });
+
+  // Handle remote answer/offer/candidate will be handled below
 }
 
 function handleOffer(user, offer) {
-  // Logic for handling SDP offer
+  if (user === name) return;
+
+  let pc = peers[user];
+  if (!pc) {
+    pc = new RTCPeerConnection(peerConnectionConfig);
+
+    // Add local stream tracks
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        pc.addTrack(track, localStream);
+      });
+    }
+
+    // Setup remote track
+    pc.ontrack = (event) => {
+      let remoteVideo = document.getElementById(`remote-video-${user}`);
+      if (!remoteVideo) {
+        remoteVideo = document.createElement('video');
+        remoteVideo.id = `remote-video-${user}`;
+        remoteVideo.autoplay = true;
+        remoteVideo.playsInline = true;
+        remoteVideo.muted = false;
+        videoGrid.appendChild(remoteVideo);
+      }
+      remoteVideo.srcObject = event.streams[0];
+      remoteVideo.muted = false;
+    };
+
+    // ICE candidate handler
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        ws.send(JSON.stringify({
+          type: "candidate",
+          user: user,
+          candidate: event.candidate
+        }));
+      }
+    };
+
+    peers[user] = pc;
+  }
+
+  pc.setRemoteDescription(new RTCSessionDescription(offer)).then(() => {
+    return pc.createAnswer();
+  }).then(answer => {
+    return pc.setLocalDescription(answer);
+  }).then(() => {
+    ws.send(JSON.stringify({
+      type: "answer",
+      user: user,
+      answer: pc.localDescription
+    }));
+  });
 }
 
 function handleAnswer(user, answer) {
-  // Logic for handling SDP answer
+  if (user === name) return;
+  const pc = peers[user];
+  if (pc) {
+    pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }
 }
 
 function handleCandidate(user, candidate) {
-  // Logic for handling ICE candidate
+  if (user === name) return;
+  const pc = peers[user];
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate));
+  }
 }
 
 function handleUserLeft(user) {
-  // Logic when a user leaves
+  if (user === name) return;
+  const pc = peers[user];
+  if (pc) {
+    pc.close();
+    delete peers[user];
+    const remoteVideo = document.getElementById(`remote-video-${user}`);
+    if (remoteVideo && remoteVideo.parentNode) {
+      remoteVideo.parentNode.removeChild(remoteVideo);
+    }
+  }
 }
 
 function handleChatMessage(user, text) {
@@ -142,6 +264,7 @@ async function startCameraAndMic() {
 async function displayLocalStream() {
   if (localVideo && localStream) {
     localVideo.srcObject = localStream;
+    localVideo.muted = true; // Prevent echo!
     await localVideo.play();
     console.log("[Meeting] Local video playback started successfully.");
   }
@@ -244,7 +367,6 @@ ws.onmessage = async (message) => {
       case "chat":
         handleChatMessage(data.user, data.text);
         break;
-      // E2EE-specific messages handled in meeting-e2ee.js
       default:
         console.warn(`[Meeting] Received unknown message type: ${data.type}`);
     }
