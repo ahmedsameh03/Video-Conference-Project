@@ -806,25 +806,32 @@ async function handleOffer(user, offer) {
     }
     
     // Handle potential glare (both peers creating offers simultaneously)
-    const offerCollision = isMakingOffer || peer.signalingState !== "stable";
-    
-    // If collision and we're not polite, ignore this offer
-    if (offerCollision && !isPolite) {
-      console.log(`[Meeting] Ignoring offer from ${user} due to collision (not polite).`);
-      return;
-    }
-    
-    // If we need to roll back, do it
-    if (offerCollision) {
-      console.log(`[Meeting] Handling offer collision with ${user} (polite).`);
-      await Promise.all([
-        peer.setLocalDescription({ type: "rollback" }),
-        peer.setRemoteDescription(offer)
-      ]);
-    } else {
-      // Normal case - just set the remote description
-      await peer.setRemoteDescription(offer);
-    }
+   const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
+isPolite = true;
+
+if (offerCollision) {
+  if (!isPolite) {
+    console.warn(`[Meeting] Offer collision detected with ${user}, ignoring (not polite).`);
+    return;
+  }
+  console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
+  await peer.setLocalDescription({ type: "rollback" });
+}
+
+await peer.setRemoteDescription(offer);
+console.log(`[Meeting] Set remote offer from ${user}.`);
+
+const answer = await peer.createAnswer();
+await peer.setLocalDescription(answer);
+
+ws.send(JSON.stringify({
+  type: "answer",
+  answer: peer.localDescription,
+  room,
+  user: name,
+  targetUser: user
+}));
+
     
     // Create and send answer
     const answer = await peer.createAnswer();
