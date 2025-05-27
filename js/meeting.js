@@ -776,9 +776,15 @@ async function handleNewUser(user) {
       console.error(`[Meeting] Failed to create peer connection for ${user}.`);
       return;
     }
+    if (peer.signalingState !== "have-local-offer") {
+  console.warn(`[Meeting] Skipping answer from ${user} because signalingState is ${peer.signalingState}.`);
+  return;
+}
+
     
     // Set polite flag (the joiner is polite)
     isPolite = true;
+    
     
     // The existing user initiates the connection
     // (negotiationneeded event will trigger offer creation)
