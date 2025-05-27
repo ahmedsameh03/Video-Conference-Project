@@ -30,6 +30,8 @@ let localStream = null;
 let isMediaAccessInProgress = false;
 let hasCameraInitBeenAttempted = false;
 let peerConnectionConfig = null;
+let isScreenSharing = false;
+let screenStream = null;
 
 // --------------- UTILITIES & HELPERS -----------------
 function _getQueryParams() {
@@ -60,9 +62,9 @@ async function _fetchIceServers() {
 
 // ----------------- UI EVENT LISTENERS -----------------
 function _setupUIEventListeners() {
-  // Add your actual event listeners here as in your original code.
-  // Example:
-  // document.getElementById("mute-btn").addEventListener("click", toggleMute);
+  document.getElementById("mute-btn")?.addEventListener("click", toggleMute);
+  document.getElementById("video-btn")?.addEventListener("click", toggleVideo);
+  // You can add more if you wish
 }
 
 // --------------- CORE MEETING FUNCTIONS ---------------
@@ -218,35 +220,104 @@ function handleChatMessage(user, text) {
 }
 
 function toggleChat() {
-  // Your original chat toggle logic
+  // Show/hide chat container
+  const chatContainer = document.getElementById('chat-container');
+  if (chatContainer) {
+    chatContainer.classList.toggle('visible');
+  }
 }
 
 function toggleParticipants() {
-  // Your original participants toggle logic
+  const participantsContainer = document.getElementById('participants-container');
+  if (participantsContainer) {
+    participantsContainer.classList.toggle('visible');
+  }
 }
 
 function sendMessage() {
-  // Your send message logic
+  // Example chat send (implement as needed)
+  const input = document.getElementById('chat-input-field');
+  if (input && input.value.trim() !== "") {
+    ws.send(JSON.stringify({ type: "chat", text: input.value, user: name }));
+    input.value = "";
+  }
 }
 
 function toggleMute() {
-  // Your mute logic
+  if (!localStream) return;
+  localStream.getAudioTracks().forEach(track => {
+    track.enabled = !track.enabled;
+    isMuted = !track.enabled;
+  });
+  // UI feedback (icon color) can be updated here if you want
 }
 
 function toggleVideo() {
-  // Your video toggle logic
+  if (!localStream) return;
+  localStream.getVideoTracks().forEach(track => {
+    track.enabled = !track.enabled;
+    isVideoOff = !track.enabled;
+  });
 }
 
-function shareScreen() {
-  // Your screen share logic
+async function shareScreen() {
+  if (isScreenSharing) {
+    // Stop screen share and restore camera
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      screenStream = null;
+    }
+    if (localStream) {
+      // Replace tracks in peer connections with original camera
+      Object.values(peers).forEach(pc => {
+        localStream.getTracks().forEach(track => {
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
+          if (sender) sender.replaceTrack(track);
+        });
+      });
+      await displayLocalStream();
+    }
+    isScreenSharing = false;
+    return;
+  }
+
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const screenTrack = screenStream.getVideoTracks()[0];
+
+    Object.values(peers).forEach(pc => {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+      if (sender) sender.replaceTrack(screenTrack);
+    });
+
+    localVideo.srcObject = screenStream;
+
+    screenTrack.onended = () => {
+      // Restore camera on stop
+      if (localStream) {
+        Object.values(peers).forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+          if (sender) sender.replaceTrack(localStream.getVideoTracks()[0]);
+        });
+        displayLocalStream();
+      }
+      isScreenSharing = false;
+    };
+    isScreenSharing = true;
+  } catch (err) {
+    console.error("Screen share failed:", err);
+  }
 }
 
 function leaveMeeting() {
-  // Logic for leaving the meeting
+  // Close all peer connections and redirect (example)
+  Object.values(peers).forEach(pc => pc.close());
+  ws.close();
+  window.location.href = "index.html";
 }
 
 function _showMediaErrorMessage(msg) {
-  // Display error to user about camera/mic issues
+  alert(msg);
 }
 
 async function startCameraAndMic() {
