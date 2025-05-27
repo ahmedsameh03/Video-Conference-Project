@@ -12,6 +12,9 @@
  * Holds the single instance of the E2EEManager.
  * @type {E2EEManager | null}
  */
+const room = window.room;
+const name = window.name;
+
 let e2eeManager = null;
 
 /**
@@ -356,7 +359,16 @@ function enhanceWebSocketHandler() {
   } else {
     // If ws is not ready yet, retry shortly
     console.warn("[E2EE Integration] WebSocket (ws) not defined when trying to enhance handler. Retrying in 500ms...");
-    setTimeout(enhanceWebSocketHandler, 500);
+   const tryEnhance = () => {
+  if (typeof ws !== "undefined" && ws.readyState === WebSocket.OPEN) {
+    enhanceWebSocketHandler();
+  } else {
+    console.warn("[E2EE Integration] Waiting for ws to be ready...");
+    setTimeout(tryEnhance, 500);
+  }
+};
+tryEnhance();
+
   }
 }
 
