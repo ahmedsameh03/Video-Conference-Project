@@ -654,7 +654,8 @@ async function createPeer(remoteUser) {
   /** Handles remote tracks being added. */
   peer.ontrack = (event) => {
     console.log(`[Meeting] Received ${event.track.kind} track from ${remoteUser}.`);
-    
+    console.log(`[Track Debug] Track type: ${event.track.kind}, ID: ${event.track.id}, Enabled: ${event.track.enabled}`);
+
     // Create or get the video element for this user
     let videoElement = document.getElementById(`video-${remoteUser}`);
     if (!videoElement) {
