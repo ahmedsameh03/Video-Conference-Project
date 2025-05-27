@@ -846,13 +846,11 @@ async function handleOffer(user, offer) {
     let peer = peers[user];
     if (!peer) {
       peer = await createPeer(user);
-      if (!peer) {
-        throw new Error(`Failed to create peer connection for ${user}.`);
-      }
+      if (!peer) throw new Error(`Failed to create peer connection for ${user}.`);
     }
 
     const offerCollision = (peer.signalingState !== "stable" || isMakingOffer);
-    const polite = true; // ← يجب استخدام متغير محلي ثابت بدل isPolite العالمي
+    const polite = true;
 
     if (offerCollision) {
       if (!polite) {
@@ -861,14 +859,11 @@ async function handleOffer(user, offer) {
       }
       console.warn(`[Meeting] Offer collision with ${user}, rolling back.`);
       await peer.setLocalDescription({ type: "rollback" });
-
-      // ❗ بعد rollback، انتظر حتى تصبح الحالة stable
       await waitForStableState(peer);
     }
 
-    // تحقق مرة أخرى بعد الـ rollback
     if (peer.signalingState !== "stable") {
-      console.warn(`[Meeting] Cannot set remote offer from ${user} — signalingState is ${peer.signalingState}`);
+      console.warn(`[Meeting] Skipping offer from ${user}, signaling state = ${peer.signalingState}`);
       return;
     }
 
@@ -887,7 +882,6 @@ async function handleOffer(user, offer) {
     }));
 
     console.log(`[Meeting] Answer sent to ${user}.`);
-
   } catch (error) {
     console.error(`❌ [Meeting] Error handling offer from ${user}:`, error);
   }
