@@ -787,6 +787,33 @@ async function handleAnswer(user, answer) {
   }
 }
 
+/**
+ * Handles a new user joining the room.
+ * @param {string} user - The username of the new user.
+ */
+async function handleNewUser(user) {
+  console.log(`[Meeting] New user joined: ${user}`);
+  
+  // Add the user to the participants list
+  addParticipant(user);
+  
+  // Create a peer connection for the new user
+  try {
+    const peer = await createPeer(user);
+    if (!peer) {
+      console.error(`[Meeting] Failed to create peer connection for ${user}.`);
+      return;
+    }
+
+    // Set polite mode to true for joining peer
+    isPolite = true;
+
+    // Offer will be triggered by negotiationneeded
+  } catch (error) {
+    console.error(`❌ [Meeting] Error handling new user ${user}:`, error);
+  }
+}
+
 
 /**
  * Handles an offer from a remote user.
