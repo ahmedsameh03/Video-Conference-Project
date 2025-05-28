@@ -144,6 +144,19 @@ async function flushBufferedCandidates(peer, user) {
 
 async function createPeer(user) {
   const peer = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+  peer.ontrack = (event) => {
+    const [stream] = event.streams;
+    if (!stream || stream.getVideoTracks().length === 0) return;
+
+    // ✅ منع التكرار
+    if (document.querySelector(`video[data-user="${user}"]`)) {
+      console.warn(`⚠️ Video for ${user} already exists`);
+      return;
+    }
+
+    console.log(`🎥 Received video track from ${user}`);
+    addVideoStream(stream, user);
+  };
 
   peer.onicecandidate = (event) => {
     if (event.candidate) {
@@ -151,13 +164,7 @@ async function createPeer(user) {
     }
   };
 
-  peer.ontrack = (event) => {
-    const [stream] = event.streams;
-    if (document.querySelector(`video[data-user="${user}"]`)) return;
-    if (stream && stream.getVideoTracks().length > 0) {
-      addVideoStream(stream, user);
-    }
-  };
+
 
   peer.onconnectionstatechange = () => {
     if (peer.connectionState === "connected") {
@@ -175,10 +182,27 @@ async function createPeer(user) {
 
 async function createOffer(user) {
   const peer = peers[user];
-  const offer = await peer.createOffer();
+  const offer = await peer.createOffer({ offerToReceiveVideo: true });
   await peer.setLocalDescription(offer);
-  ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
+
+  
+  await waitForDescription(peer);
+
+  ws.send(JSON.stringify({ type: "offer", offer: peer.localDescription, room, user: name }));
 }
+
+function waitForDescription(peer) {
+  return new Promise(resolve => {
+    if (peer.localDescription) return resolve();
+    const interval = setInterval(() => {
+      if (peer.localDescription) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 100);
+  });
+}
+
 
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
