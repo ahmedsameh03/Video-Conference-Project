@@ -156,13 +156,13 @@ ws.onmessage = async (message) => {
 case "new-user":
   console.log(`✨ New user joined: ${data.user}`);
 
-  // Don't connect to yourself
-  if (data.user === name) return;
+  if (data.user === name) {
+    console.log("🔁 Ignored self in new-user event");
+    return; // ✅ كده مش هيضيف نفسه مرتين
+  }
 
-  // Add to participant list
   addParticipant(data.user);
 
-  // If not already connected, create a peer and send an offer
   if (!peers[data.user]) {
     await createPeer(data.user);
     await createOffer(data.user);
