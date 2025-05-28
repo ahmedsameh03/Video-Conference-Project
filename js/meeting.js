@@ -82,7 +82,10 @@ ws.onmessage = async (message) => {
 
   switch (data.type) {
     case "new-user":
-      if (data.user === name) return;
+      if (data.user === name) {
+        console.log("🔁 Ignored self in new-user event");
+        return;
+      }
       addParticipant(data.user);
       if (!peers[data.user]) {
         await createPeer(data.user);
@@ -279,3 +282,16 @@ async function fetchIceServers() {
     }
   ];
 }
+
+// ✅ Leave meeting
+function leaveMeeting() {
+  if (!confirm("هل تريد مغادرة الاجتماع؟")) return;
+  localStream?.getTracks().forEach(track => track.stop());
+  Object.values(peers).forEach(peer => peer.close());
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "user-left", room, user: name }));
+    ws.close();
+  }
+  window.location.href = "dashboard.html";
+}
+window.leaveMeeting = leaveMeeting;
