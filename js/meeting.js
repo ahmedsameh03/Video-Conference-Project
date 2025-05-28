@@ -44,8 +44,10 @@ ws.onopen = async () => {
     await startCamera();
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
-    if (localStream && localStream.getVideoTracks().length > 0) {
-      addVideoStream(localStream, name);
+    if (localStream && localStream.getVideoTracks().length > 0 && !document.querySelector(`video[data-user="${name}"]`)) {
+  addVideoStream(localStream, name);
+}
+
     }
   } catch (error) {
     alert("Camera or microphone access failed.");
@@ -172,14 +174,22 @@ async function createPeer(user) {
   };
 
   peer.ontrack = (event) => {
-    const [stream] = event.streams;
-    if (stream && stream.getVideoTracks().length > 0) {
-      console.log(`🎥 Received video track from ${user}`);
-      addVideoStream(stream, user);
-    } else {
-      console.warn(`⚠️ No video track from ${user}`);
-    }
-  };
+  const [stream] = event.streams;
+
+  // ✅ منع التكرار لو الفيديو معروض بالفعل
+  if (document.querySelector(`video[data-user="${user}"]`)) {
+    console.warn(`⚠️ Video for ${user} already exists`);
+    return;
+  }
+
+  if (stream && stream.getVideoTracks().length > 0) {
+    console.log(`🎥 Received video track from ${user}`);
+    addVideoStream(stream, user);
+  } else {
+    console.warn(`⚠️ No video track from ${user}`);
+  }
+};
+
 
   peer.onconnectionstatechange = () => {
     if (peer.connectionState === "connected") {
@@ -325,3 +335,14 @@ function leaveMeeting() {
   window.location.href = "dashboard.html";
 }
 window.leaveMeeting = leaveMeeting;
+function toggleChat() {
+  const container = document.getElementById("chat-container");
+  container?.classList.toggle("visible");
+}
+window.toggleChat = toggleChat;
+
+function toggleParticipants() {
+  const container = document.getElementById("participants-container");
+  container?.classList.toggle("visible");
+}
+window.toggleParticipants = toggleParticipants;
