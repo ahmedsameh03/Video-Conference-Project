@@ -102,15 +102,25 @@ async function createPeer(user, isOfferer) {
     }
   };
 
-  peer.ontrack = ({ streams }) => {
-    const stream = streams[0];
-    if (!stream || document.querySelector(`video[data-user="${user}"]`)) {
-      console.warn(`⚠️ Duplicate track ignored for ${user}`);
-      return;
-    }
+  peer.ontrack = (event) => {
+  const [stream] = event.streams;
+
+  if (!stream) return;
+
+
+  const existingVideo = document.querySelector(`video[data-user="${user}"]`);
+  if (existingVideo) {
+    console.warn(`⚠️ Duplicate track ignored for ${user}`);
+    return;
+  }
+
+  if (stream.getVideoTracks().length > 0) {
     console.log(`🎥 Received video track from ${user}`);
     addVideoStream(stream, user);
-  };
+  } else {
+    console.warn(`⚠️ No video track from ${user}`);
+  }
+};
 
   peer.onnegotiationneeded = async () => {
     try {
