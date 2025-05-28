@@ -135,11 +135,16 @@ async function startCamera() {
   if (!localStream.getTracks().length) {
     throw new Error("No tracks (video or audio) available.");
   }
+
   console.log("✅ Final Stream Tracks:", localStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
   localVideo.srcObject = localStream;
   localVideo.muted = true;
   await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
+
+  // ✅ أضف هذا السطر
+  addVideoStream(localStream, name);
 }
+
 
 ws.onmessage = async (message) => {
   try {
