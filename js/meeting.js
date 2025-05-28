@@ -46,9 +46,9 @@ async function testLocalStream() {
 ws.onopen = async () => {
   try {
     await startCamera();
+    addVideoStream(localStream, name); // لازم قبل إرسال join
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
-    addVideoStream(localStream, name);
   } catch (error) {
     alert("Camera or microphone access failed.");
   }
@@ -102,25 +102,20 @@ async function createPeer(user, isOfferer) {
     }
   };
 
-  peer.ontrack = (event) => {
+ peer.ontrack = (event) => {
   const [stream] = event.streams;
+  if (!stream || stream.getVideoTracks().length === 0) return;
 
-  if (!stream) return;
-
-
-  const existingVideo = document.querySelector(`video[data-user="${user}"]`);
-  if (existingVideo) {
-    console.warn(`⚠️ Duplicate track ignored for ${user}`);
+  // ✅ منع التكرار
+  if (document.querySelector(`video[data-user="${user}"]`)) {
+    console.warn(`⚠️ Video for ${user} already exists`);
     return;
   }
 
-  if (stream.getVideoTracks().length > 0) {
-    console.log(`🎥 Received video track from ${user}`);
-    addVideoStream(stream, user);
-  } else {
-    console.warn(`⚠️ No video track from ${user}`);
-  }
+  console.log(`🎥 Received video track from ${user}`);
+  addVideoStream(stream, user);
 };
+
 
   peer.onnegotiationneeded = async () => {
     try {
@@ -150,27 +145,30 @@ async function createPeer(user, isOfferer) {
 }
 
 async function handleOffer(data) {
+  const polite = peerMeta[data.user]?.polite ?? true;
   const peer = peers[data.user] || await createPeer(data.user, false);
   const desc = new RTCSessionDescription(data.offer);
-  const polite = peerMeta[data.user].polite;
+
   const readyForOffer =
-    !peer.signalingState || peer.signalingState === "stable" ||
-    peer.signalingState === "have-remote-offer";
+    !peer.currentRemoteDescription &&
+    (peer.signalingState === "stable" || peer.signalingState === "have-local-offer");
 
-  const isCollision =
-    !readyForOffer || peerMeta[data.user].makingOffer;
+  const offerCollision = !readyForOffer;
 
-  if (isCollision) {
-    if (polite) {
-      console.warn(`🤝 Polite peer: rolling back and accepting offer from ${data.user}`);
-      await peer.setLocalDescription({ type: "rollback" });
-    } else {
-      console.warn(`🙅 Impolite peer: Ignored offer from ${data.user}`);
-      return;
-    }
+  if (offerCollision && !polite) {
+    console.warn(`🤚 Impolite peer: Ignored offer from ${data.user}`);
+    return;
   }
 
   try {
+    if (offerCollision && polite) {
+      console.warn(`💥 Polite peer: restarting due to conflict with ${data.user}`);
+      peer.close();
+      delete peers[data.user];
+      delete peerMeta[data.user];
+      await createPeer(data.user, false);
+    }
+
     await peer.setRemoteDescription(desc);
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
@@ -179,7 +177,6 @@ async function handleOffer(data) {
     console.error("Offer handling error:", e);
   }
 }
-
 
 async function handleAnswer(data) {
   const peer = peers[data.user];
@@ -205,7 +202,10 @@ async function handleCandidate(data) {
 }
 
 function addVideoStream(stream, user) {
-  if (!stream || document.querySelector(`video[data-user="${user}"]`)) return;
+  if (!stream || document.querySelector(`video[data-user="${user}"]`)) {
+    console.warn(`⚠️ Duplicate stream for ${user}, skipped.`);
+    return;
+  }
 
   const container = document.createElement("div");
   container.className = "video-container";
@@ -224,6 +224,7 @@ function addVideoStream(stream, user) {
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
 }
+
 
 function removeVideoStream(user) {
   const container = document.querySelector(`div[data-user-container="${user}"]`);
