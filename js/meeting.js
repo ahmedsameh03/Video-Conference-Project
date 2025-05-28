@@ -151,7 +151,16 @@ async function flushBufferedCandidates(peer, user) {
     }
     peer._bufferedCandidates = [];
   }
+
+  
+  const sender = peer.getSenders().find(s => s.track?.kind === "video");
+  if (sender && localStream?.getVideoTracks()?.length) {
+    sender.replaceTrack(localStream.getVideoTracks()[0]);
+    console.log(`🔁 Re-shared video track after ICE with ${user}`);
+  }
 }
+
+
 
 async function createPeer(user) {
   const peer = new RTCPeerConnection({ iceServers: await fetchIceServers() });
@@ -163,15 +172,36 @@ async function createPeer(user) {
   };
 
   peer.ontrack = (event) => {
-    if (event.streams && event.streams[0] && event.streams[0].getVideoTracks().length > 0) {
-      addVideoStream(event.streams[0], user);
+    const [stream] = event.streams;
+    if (stream && stream.getVideoTracks().length > 0) {
+      console.log(`🎥 Received video track from ${user}`);
+      addVideoStream(stream, user);
+    } else {
+      console.warn(`⚠️ No video track from ${user}`);
+    }
+  };
+
+  peer.onconnectionstatechange = () => {
+    if (peer.connectionState === "connected") {
+      console.log(`🔗 Peer connection established with ${user}`);
+
+      // إعادة إرسال الفيديو لضمان ظهوره
+      const sender = peer.getSenders().find(s => s.track?.kind === "video");
+      if (sender && localStream?.getVideoTracks()?.length) {
+        sender.replaceTrack(localStream.getVideoTracks()[0]);
+        console.log(`🔁 Re-shared video track with ${user}`);
+      }
     }
   };
 
   if (localStream) {
-    localStream.getTracks().forEach(track => {
+    const tracks = localStream.getTracks();
+    console.log(`📤 Sending local tracks to ${user}:`, tracks.map(t => t.kind));
+    tracks.forEach(track => {
       peer.addTrack(track, localStream);
     });
+  } else {
+    console.warn("❗ localStream not available for createPeer");
   }
 
   peers[user] = peer;
