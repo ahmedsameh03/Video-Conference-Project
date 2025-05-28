@@ -1,4 +1,4 @@
-// meeting.js - نسخة نهائية مع كل التعديلات
+// ✅ meeting.js — نسخة نهائية 100%
 
 const queryParams = getQueryParams();
 const room = queryParams.room;
@@ -20,11 +20,14 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let localStream = null;
 
+// Start test on page load
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display"))
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   if (document.getElementById("user-name-display"))
     document.getElementById("user-name-display").textContent = name;
+
   await testLocalStream();
 });
 
@@ -80,6 +83,7 @@ async function startCamera() {
 ws.onmessage = async (message) => {
   const data = JSON.parse(message.data);
   if (!data.type) return;
+
   switch (data.type) {
     case "new-user":
       if (data.user === name) return;
@@ -89,7 +93,8 @@ ws.onmessage = async (message) => {
         await createOffer(data.user);
       }
       break;
-    case "offer":
+
+    case "offer": {
       const peerOffer = peers[data.user] || await createPeer(data.user);
       await peerOffer.setRemoteDescription(new RTCSessionDescription(data.offer));
       await flushBufferedCandidates(peerOffer, data.user);
@@ -97,32 +102,40 @@ ws.onmessage = async (message) => {
       await peerOffer.setLocalDescription(answer);
       ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
       break;
-    case "answer":
+    }
+
+    case "answer": {
       const peer = peers[data.user];
-      if (peer) {
-        if (peer.signalingState !== "stable") {
-          await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-          await flushBufferedCandidates(peer, data.user);
-        } else {
-          console.warn(`⚠️ Ignored redundant answer for ${data.user}`);
-        }
+      if (peer && peer.signalingState !== "stable") {
+        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+        await flushBufferedCandidates(peer, data.user);
+        console.log(`✅ Remote answer set for ${data.user}`);
+      } else {
+        console.warn(`⚠️ Ignored redundant answer for ${data.user}`);
       }
       break;
-    case "candidate":
+    }
+
+    case "candidate": {
       const pc = peers[data.user];
       if (pc) {
         if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.warn(e.message));
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => {
+            console.warn("❌ Error adding ICE:", e.message);
+          });
         } else {
           pc._bufferedCandidates = pc._bufferedCandidates || [];
           pc._bufferedCandidates.push(data.candidate);
         }
       }
       break;
+    }
+
     case "user-left":
       removeVideoStream(data.user);
       removeParticipant(data.user);
       break;
+
     case "chat":
       displayMessage({ user: data.user, text: data.text, own: data.user === name });
       break;
@@ -132,36 +145,18 @@ ws.onmessage = async (message) => {
 async function flushBufferedCandidates(peer, user) {
   if (peer._bufferedCandidates?.length) {
     for (const candidate of peer._bufferedCandidates) {
-      await peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+      try {
+        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.error(`❌ Error adding ICE for ${user}:`, e.message);
+      }
     }
     peer._bufferedCandidates = [];
-  }
-  const sender = peer.getSenders().find(s => s.track?.kind === "video");
-  if (sender && localStream?.getVideoTracks()?.length) {
-    sender.replaceTrack(localStream.getVideoTracks()[0]);
   }
 }
 
 async function createPeer(user) {
   const peer = new RTCPeerConnection({ iceServers: await fetchIceServers() });
- peer.ontrack = (event) => {
-  const [stream] = event.streams;
-
-  if (!stream || stream.getVideoTracks().length === 0) return;
-
-  // ✅ نمنع إضافة نفس الفيديو مرة تانية حتى لو ontrack اشتغل أكتر من مرة
-  const existingVideo = document.querySelector(`video[data-user="${user}"]`);
-  if (existingVideo) {
-    const existingStream = existingVideo.srcObject;
-    if (existingStream && existingStream.id === stream.id) {
-      console.warn(`⚠️ Duplicate track ignored for ${user}`);
-      return;
-    }
-  }
-
-  console.log(`🎥 Received video track from ${user}`);
-  addVideoStream(stream, user);
-};
 
   peer.onicecandidate = (event) => {
     if (event.candidate) {
@@ -169,59 +164,60 @@ async function createPeer(user) {
     }
   };
 
+  peer.ontrack = (event) => {
+    const [stream] = event.streams;
+    if (!stream || stream.getVideoTracks().length === 0) return;
 
+    if (document.querySelector(`video[data-user="${user}"]`)) {
+      console.warn(`⚠️ Duplicate track ignored for ${user}`);
+      return;
+    }
+
+    console.log(`🎥 Received video track from ${user}`);
+    addVideoStream(stream, user);
+  };
 
   peer.onconnectionstatechange = () => {
     if (peer.connectionState === "connected") {
-      const sender = peer.getSenders().find(s => s.track?.kind === "video");
-      if (sender && localStream?.getVideoTracks()?.length) {
-        sender.replaceTrack(localStream.getVideoTracks()[0]);
-      }
+      console.log(`🔗 Peer connection established with ${user}`);
     }
   };
 
-  localStream?.getTracks().forEach(track => peer.addTrack(track, localStream));
+  if (localStream) {
+    const tracks = localStream.getTracks();
+    tracks.forEach(track => {
+      peer.addTrack(track, localStream);
+    });
+  }
+
   peers[user] = peer;
   return peer;
 }
 
 async function createOffer(user) {
   const peer = peers[user];
-  const offer = await peer.createOffer({ offerToReceiveVideo: true });
+  const offer = await peer.createOffer();
   await peer.setLocalDescription(offer);
-
-  
-  await waitForDescription(peer);
-
-  ws.send(JSON.stringify({ type: "offer", offer: peer.localDescription, room, user: name }));
+  ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
 }
-
-function waitForDescription(peer) {
-  return new Promise(resolve => {
-    if (peer.localDescription) return resolve();
-    const interval = setInterval(() => {
-      if (peer.localDescription) {
-        clearInterval(interval);
-        resolve();
-      }
-    }, 100);
-  });
-}
-
 
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
   if (stream.getVideoTracks().length === 0) return;
+
   const container = document.createElement("div");
   container.className = "video-container";
   container.setAttribute("data-user-container", user);
+
   const videoEl = document.createElement("video");
   videoEl.srcObject = stream;
   videoEl.autoplay = true;
   videoEl.playsInline = true;
   videoEl.setAttribute("data-user", user);
+
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
+
   container.appendChild(videoEl);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
