@@ -144,19 +144,24 @@ async function flushBufferedCandidates(peer, user) {
 
 async function createPeer(user) {
   const peer = new RTCPeerConnection({ iceServers: await fetchIceServers() });
-  peer.ontrack = (event) => {
-    const [stream] = event.streams;
-    if (!stream || stream.getVideoTracks().length === 0) return;
+ peer.ontrack = (event) => {
+  const [stream] = event.streams;
 
-    // ✅ منع التكرار
-    if (document.querySelector(`video[data-user="${user}"]`)) {
-      console.warn(`⚠️ Video for ${user} already exists`);
+  if (!stream || stream.getVideoTracks().length === 0) return;
+
+  // ✅ نمنع إضافة نفس الفيديو مرة تانية حتى لو ontrack اشتغل أكتر من مرة
+  const existingVideo = document.querySelector(`video[data-user="${user}"]`);
+  if (existingVideo) {
+    const existingStream = existingVideo.srcObject;
+    if (existingStream && existingStream.id === stream.id) {
+      console.warn(`⚠️ Duplicate track ignored for ${user}`);
       return;
     }
+  }
 
-    console.log(`🎥 Received video track from ${user}`);
-    addVideoStream(stream, user);
-  };
+  console.log(`🎥 Received video track from ${user}`);
+  addVideoStream(stream, user);
+};
 
   peer.onicecandidate = (event) => {
     if (event.candidate) {
