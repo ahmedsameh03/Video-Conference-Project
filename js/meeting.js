@@ -1,3 +1,5 @@
+// meeting.js - نسخة نهائية مع كل التعديلات
+
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -23,7 +25,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   if (document.getElementById("user-name-display"))
     document.getElementById("user-name-display").textContent = name;
-
   await testLocalStream();
 });
 
@@ -44,20 +45,13 @@ ws.onopen = async () => {
     await startCamera();
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
-
-    if (
-      localStream &&
-      localStream.getVideoTracks().length > 0 &&
-      !document.querySelector(`video[data-user="${name}"]`)
-    ) {
+    if (localStream && localStream.getVideoTracks().length > 0 && !document.querySelector(`video[data-user="${name}"]`)) {
       addVideoStream(localStream, name);
     }
-
   } catch (error) {
     alert("Camera or microphone access failed.");
   }
 };
-
 
 function getQueryParams() {
   const params = {};
@@ -86,20 +80,15 @@ async function startCamera() {
 ws.onmessage = async (message) => {
   const data = JSON.parse(message.data);
   if (!data.type) return;
-
   switch (data.type) {
     case "new-user":
-      if (data.user === name) {
-        console.log("🔁 Ignored self in new-user event");
-        return;
-      }
+      if (data.user === name) return;
       addParticipant(data.user);
       if (!peers[data.user]) {
         await createPeer(data.user);
         await createOffer(data.user);
       }
       break;
-
     case "offer":
       const peerOffer = peers[data.user] || await createPeer(data.user);
       await peerOffer.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -108,39 +97,32 @@ ws.onmessage = async (message) => {
       await peerOffer.setLocalDescription(answer);
       ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
       break;
-
     case "answer":
       const peer = peers[data.user];
       if (peer) {
         if (peer.signalingState !== "stable") {
           await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
           await flushBufferedCandidates(peer, data.user);
-          console.log(`✅ Remote answer set for ${data.user}`);
         } else {
-          console.warn(`⚠️ Ignored redundant answer for ${data.user} (state already stable)`);
+          console.warn(`⚠️ Ignored redundant answer for ${data.user}`);
         }
       }
       break;
-
     case "candidate":
       const pc = peers[data.user];
       if (pc) {
         if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => {
-            console.warn("❌ Error adding ICE:", e.message);
-          });
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.warn(e.message));
         } else {
           pc._bufferedCandidates = pc._bufferedCandidates || [];
           pc._bufferedCandidates.push(data.candidate);
         }
       }
       break;
-
     case "user-left":
       removeVideoStream(data.user);
       removeParticipant(data.user);
       break;
-
     case "chat":
       displayMessage({ user: data.user, text: data.text, own: data.user === name });
       break;
@@ -150,24 +132,15 @@ ws.onmessage = async (message) => {
 async function flushBufferedCandidates(peer, user) {
   if (peer._bufferedCandidates?.length) {
     for (const candidate of peer._bufferedCandidates) {
-      try {
-        await peer.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (e) {
-        console.error(`❌ Error adding ICE for ${user}:`, e.message);
-      }
+      await peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
     }
     peer._bufferedCandidates = [];
   }
-
-  
   const sender = peer.getSenders().find(s => s.track?.kind === "video");
   if (sender && localStream?.getVideoTracks()?.length) {
     sender.replaceTrack(localStream.getVideoTracks()[0]);
-    console.log(`🔁 Re-shared video track after ICE with ${user}`);
   }
 }
-
-
 
 async function createPeer(user) {
   const peer = new RTCPeerConnection({ iceServers: await fetchIceServers() });
@@ -179,46 +152,23 @@ async function createPeer(user) {
   };
 
   peer.ontrack = (event) => {
-  const [stream] = event.streams;
-
-  // ✅ منع التكرار لو الفيديو معروض بالفعل
-  if (document.querySelector(`video[data-user="${user}"]`)) {
-    console.warn(`⚠️ Video for ${user} already exists`);
-    return;
-  }
-
-  if (stream && stream.getVideoTracks().length > 0) {
-    console.log(`🎥 Received video track from ${user}`);
-    addVideoStream(stream, user);
-  } else {
-    console.warn(`⚠️ No video track from ${user}`);
-  }
-};
-
+    const [stream] = event.streams;
+    if (document.querySelector(`video[data-user="${user}"]`)) return;
+    if (stream && stream.getVideoTracks().length > 0) {
+      addVideoStream(stream, user);
+    }
+  };
 
   peer.onconnectionstatechange = () => {
     if (peer.connectionState === "connected") {
-      console.log(`🔗 Peer connection established with ${user}`);
-
-      // إعادة إرسال الفيديو لضمان ظهوره
       const sender = peer.getSenders().find(s => s.track?.kind === "video");
       if (sender && localStream?.getVideoTracks()?.length) {
         sender.replaceTrack(localStream.getVideoTracks()[0]);
-        console.log(`🔁 Re-shared video track with ${user}`);
       }
     }
   };
 
-  if (localStream) {
-    const tracks = localStream.getTracks();
-    console.log(`📤 Sending local tracks to ${user}:`, tracks.map(t => t.kind));
-    tracks.forEach(track => {
-      peer.addTrack(track, localStream);
-    });
-  } else {
-    console.warn("❗ localStream not available for createPeer");
-  }
-
+  localStream?.getTracks().forEach(track => peer.addTrack(track, localStream));
   peers[user] = peer;
   return peer;
 }
@@ -233,20 +183,16 @@ async function createOffer(user) {
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
   if (stream.getVideoTracks().length === 0) return;
-
   const container = document.createElement("div");
   container.className = "video-container";
   container.setAttribute("data-user-container", user);
-
   const videoEl = document.createElement("video");
   videoEl.srcObject = stream;
   videoEl.autoplay = true;
   videoEl.playsInline = true;
   videoEl.setAttribute("data-user", user);
-
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
-
   container.appendChild(videoEl);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
@@ -328,7 +274,6 @@ async function fetchIceServers() {
   ];
 }
 
-// ✅ Leave meeting
 function leaveMeeting() {
   if (!confirm("Do you want to leave the meeting?")) return;
   localStream?.getTracks().forEach(track => track.stop());
@@ -340,6 +285,7 @@ function leaveMeeting() {
   window.location.href = "dashboard.html";
 }
 window.leaveMeeting = leaveMeeting;
+
 function toggleChat() {
   const container = document.getElementById("chat-container");
   container?.classList.toggle("visible");
