@@ -1,5 +1,3 @@
-// meeting.js
-
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -18,7 +16,7 @@ const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
 
 const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
-let localStream;
+let localStream = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display"))
@@ -46,8 +44,8 @@ ws.onopen = async () => {
     await startCamera();
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
-    if (localStream.getVideoTracks().length > 0) {
-      addVideoStream(localStream, name); // 👈 Add self to video grid only if has video
+    if (localStream && localStream.getVideoTracks().length > 0) {
+      addVideoStream(localStream, name);
     }
   } catch (error) {
     alert("Camera or microphone access failed.");
@@ -65,14 +63,14 @@ function getQueryParams() {
 async function startCamera() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  } catch (e1) {
+  } catch {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    } catch (e2) {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch {
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      } catch (e3) {
-        throw new Error("No camera or mic available.");
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        throw new Error("Camera and microphone access denied.");
       }
     }
   }
@@ -102,9 +100,15 @@ ws.onmessage = async (message) => {
       break;
 
     case "answer":
-      if (peers[data.user]) {
-        await peers[data.user].setRemoteDescription(new RTCSessionDescription(data.answer));
-        await flushBufferedCandidates(peers[data.user], data.user);
+      const peer = peers[data.user];
+      if (peer) {
+        if (peer.signalingState !== "stable") {
+          await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+          await flushBufferedCandidates(peer, data.user);
+          console.log(`✅ Remote answer set for ${data.user}`);
+        } else {
+          console.warn(`⚠️ Ignored redundant answer for ${data.user} (state already stable)`);
+        }
       }
       break;
 
@@ -156,9 +160,8 @@ async function createPeer(user) {
   };
 
   peer.ontrack = (event) => {
-    if (event.streams && event.streams[0]) {
-      if (event.streams[0].getVideoTracks().length > 0)
-        addVideoStream(event.streams[0], user);
+    if (event.streams && event.streams[0] && event.streams[0].getVideoTracks().length > 0) {
+      addVideoStream(event.streams[0], user);
     }
   };
 
@@ -181,7 +184,7 @@ async function createOffer(user) {
 
 function addVideoStream(stream, user) {
   if (document.querySelector(`video[data-user="${user}"]`)) return;
-  if (stream.getVideoTracks().length === 0) return; // Don't show black box
+  if (stream.getVideoTracks().length === 0) return;
 
   const container = document.createElement("div");
   container.className = "video-container";
