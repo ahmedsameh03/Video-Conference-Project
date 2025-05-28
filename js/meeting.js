@@ -152,13 +152,22 @@ async function createPeer(user, isOfferer) {
 async function handleOffer(data) {
   const peer = peers[data.user] || await createPeer(data.user, false);
   const desc = new RTCSessionDescription(data.offer);
-
-  const ready = peer.signalingState === "stable" || peer.signalingState === "have-local-offer";
   const polite = peerMeta[data.user].polite;
+  const readyForOffer =
+    !peer.signalingState || peer.signalingState === "stable" ||
+    peer.signalingState === "have-remote-offer";
 
-  if (!ready && !polite) {
-    console.warn(`🙅 Ignored offer from ${data.user}`);
-    return;
+  const isCollision =
+    !readyForOffer || peerMeta[data.user].makingOffer;
+
+  if (isCollision) {
+    if (polite) {
+      console.warn(`🤝 Polite peer: rolling back and accepting offer from ${data.user}`);
+      await peer.setLocalDescription({ type: "rollback" });
+    } else {
+      console.warn(`🙅 Impolite peer: Ignored offer from ${data.user}`);
+      return;
+    }
   }
 
   try {
@@ -170,6 +179,7 @@ async function handleOffer(data) {
     console.error("Offer handling error:", e);
   }
 }
+
 
 async function handleAnswer(data) {
   const peer = peers[data.user];
