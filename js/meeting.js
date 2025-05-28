@@ -44,15 +44,20 @@ ws.onopen = async () => {
     await startCamera();
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name);
-    if (localStream && localStream.getVideoTracks().length > 0 && !document.querySelector(`video[data-user="${name}"]`)) {
-  addVideoStream(localStream, name);
-}
 
+    if (
+      localStream &&
+      localStream.getVideoTracks().length > 0 &&
+      !document.querySelector(`video[data-user="${name}"]`)
+    ) {
+      addVideoStream(localStream, name);
     }
+
   } catch (error) {
     alert("Camera or microphone access failed.");
   }
 };
+
 
 function getQueryParams() {
   const params = {};
