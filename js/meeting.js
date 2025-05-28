@@ -285,7 +285,7 @@ async function fetchIceServers() {
 
 // ✅ Leave meeting
 function leaveMeeting() {
-  if (!confirm("هل تريد مغادرة الاجتماع؟")) return;
+  if (!confirm("Do you want to leave the meeting?")) return;
   localStream?.getTracks().forEach(track => track.stop());
   Object.values(peers).forEach(peer => peer.close());
   if (ws.readyState === WebSocket.OPEN) {
