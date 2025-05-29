@@ -1,4 +1,3 @@
-الشغال
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
