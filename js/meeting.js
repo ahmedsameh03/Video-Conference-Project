@@ -1,3 +1,4 @@
+
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -20,9 +21,11 @@ const ws = new WebSocket(SIGNALING_SERVER_URL);
 const peers = {};
 let isMakingOffer = false;
 let isPolite = false;
+let isSettingRemoteAnswerPending = false;
 let localStream;
 
-// Test local camera and microphone
+
+// اختبار بسيط للـ Local Stream
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
   try {
@@ -35,17 +38,12 @@ async function testLocalStream() {
     console.log("🧪 Test completed. Local camera and microphone are working.");
   } catch (error) {
     console.error("❌ Test Stream failed:", error.name, error.message, error.stack);
-    alert(`Failed to test camera/microphone: ${error.message}. Please check camera and microphone permissions in the browser.`);
+    alert(`Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`);
   }
 }
 
-// Run the test when the page loads
+// تشغيل الاختبار البسيط عند تحميل الصفحة
 document.addEventListener("DOMContentLoaded", async () => {
-  if (!localVideo || !videoGrid) {
-    console.error("❌ Critical HTML elements (large-video or video-grid) not found!");
-    alert("HTML elements missing. Please check your page structure.");
-    return;
-  }
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   }
@@ -57,26 +55,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function fetchIceServers() {
   return [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
     {
+      urls: ["stun:fr-turn7.xirsys.com"]
+    },
+    {
+      username: "L2a-fvFXKem5bHUHPf_WEX4oi-Ixl0BHHXuz4z_7KSgyjpfxuzhcVM2Tu_DfwOTUAAAAAGgpFR1haG1lZHNhbWVoMDM=",
+      credential: "c3c10bb4-3372-11f0-a269-fadfa0afc433",
       urls: [
-        "stun:fr-turn7.xirsys.com",
         "turn:fr-turn7.xirsys.com:80?transport=udp",
         "turn:fr-turn7.xirsys.com:3478?transport=udp",
         "turn:fr-turn7.xirsys.com:80?transport=tcp",
         "turn:fr-turn7.xirsys.com:3478?transport=tcp",
         "turns:fr-turn7.xirsys.com:443?transport=tcp",
         "turns:fr-turn7.xirsys.com:5349?transport=tcp"
-      ],
-      username: "zyadmohamed27",
-      credential: "f31d5c32-3c37-11f0-8ccd-0242ac130006"
+      ]
     }
   ];
 }
 
+
+
 ws.onopen = async () => {
-  console.log("✅ WebSocket connected successfully!");
+  console.log("✅ WebSocket connected!");
   try {
     await startCamera();
     if (!localStream || !localStream.getTracks().length) {
@@ -93,7 +93,7 @@ ws.onopen = async () => {
 
 ws.onerror = (error) => {
   console.error("❌ WebSocket Error:", error);
-  alert("WebSocket connection error. Please refresh the page or check your internet connection.");
+  alert("WebSocket connection error. Please check the server and your connection.");
 };
 
 ws.onclose = (event) => {
@@ -118,19 +118,16 @@ async function startCamera() {
     console.log("✅ Attempt 1: Both camera and microphone accessed successfully.");
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
-    alert(`Failed to access camera and microphone: ${error.message}. Please check camera and microphone permissions.`);
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       console.log("✅ Attempt 2: Camera only accessed successfully.");
     } catch (error2) {
       console.warn("⚠️ Attempt 2 failed:", error2.name, error2.message);
-      alert(`Failed to access camera: ${error2.message}. Try enabling camera only.`);
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         console.log("✅ Attempt 3: Microphone only accessed successfully.");
       } catch (error3) {
         console.error("❌ All attempts failed:", error3.name, error3.message, error3.stack);
-        alert(`Failed to access camera or microphone: ${error3.message}. Please check settings and try again.`);
         throw new Error("Failed to access camera or microphone after all attempts.");
       }
     }
@@ -152,109 +149,102 @@ ws.onmessage = async (message) => {
     if (!data.type) return;
 
     switch (data.type) {
-      case "new-user":
-        console.log(`✨ New user joined: ${data.user}`);
-        if (data.user === name) return;
-        addParticipant(data.user);
-        if (!peers[data.user]) {
-          await createPeer(data.user);
-          await createOffer(data.user);
-        }
-        break;
+case "new-user":
+  console.log(`✨ New user joined: ${data.user}`);
 
-      case "offer":
-        console.log(`📨 Offer received from ${data.user}`);
-        let peer = peers[data.user];
-        if (!peer) {
-          peer = await createPeer(data.user);
-        }
-        const offerCollision = isMakingOffer || peer.signalingState !== "stable";
+  // Don't connect to yourself
+  if (data.user === name) return;
 
-        isPolite = name.localeCompare(data.user) > 0;
-        console.log(`🔍 isPolite for ${data.user}: ${isPolite}, offerCollision: ${offerCollision}, signalingState: ${peer.signalingState}`);
+  // Add to participant list
+  addParticipant(data.user);
 
-        if (offerCollision && !isPolite) {
-          console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
-          return;
-        }
+  // If not already connected, create a peer and send an offer
+  if (!peers[data.user]) {
+    await createPeer(data.user);
+    await createOffer(data.user);
+  }
+  break;
 
-        try {
-          if (peer.signalingState !== "stable") {
-            console.warn(`⚠️ Rolling back signaling state for ${data.user} due to unexpected state: ${peer.signalingState}`);
-            await peer.setLocalDescription({ type: "rollback" });
-          }
-          await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-          if (peer._bufferedCandidates?.length) {
-            for (const candidate of peer._bufferedCandidates) {
-              try {
-                await peer.addIceCandidate(new RTCIceCandidate(candidate));
-                console.log(`✅ Buffered ICE candidate added for ${data.user}`);
-              } catch (e) {
-                console.error(`❌ Error adding buffered ICE candidate:`, e);
-              }
-            }
-            peer._bufferedCandidates = [];
-          }
-          console.log(`✅ Remote offer set for ${data.user}`);
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
-          console.log(`✅ Answer created and set for ${data.user}`);
-          ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-        } catch (e) {
-          console.error("❌ Failed to handle offer:", e);
-        }
-        break;
 
-      case "answer":
-        console.log(`📬 Answer received from ${data.user}`);
-        const peer = peers[data.user];
-        if (peer) {
-          if (peer.signalingState !== "have-local-offer") {
-            console.warn(`⚠️ Unexpected answer in signaling state: ${peer.signalingState}. Attempting to recover...`);
-            if (peer.signalingState === "stable") {
-              console.log(`🔄 Recreating offer for ${data.user} to fix state mismatch`);
-              await createOffer(data.user);
-              return;
-            }
-            console.warn(`⚠️ Cannot recover. Ignoring answer.`);
-            return;
-          }
 
-          try {
-            await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-            if (peer._bufferedCandidates?.length) {
-              for (const candidate of peer._bufferedCandidates) {
-                try {
-                  await peer.addIceCandidate(new RTCIceCandidate(candidate));
-                  console.log(`✅ Buffered ICE candidate added for ${data.user}`);
-                } catch (e) {
-                  console.error(`❌ Error adding buffered ICE candidate:`, e);
-                }
-              }
-              peer._bufferedCandidates = [];
-            }
-            console.log(`✅ Remote description (answer) set successfully for ${data.user}`);
-          } catch (e) {
-            console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
-          }
-        } else {
-          console.warn(`⚠️ No peer connection found for ${data.user}`);
-        }
-        break;
+        case "offer":
+    console.log(`📨 Offer received from ${data.user}`);
+    const peer = peers[data.user] || await createPeer(data.user);
+    const offerCollision = isMakingOffer || peer.signalingState !== "stable";
 
-      case "candidate":
-        const peerConn = peers[data.user];
-        if (peerConn) {
-          if (peerConn.remoteDescription?.type) {
-            await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
-            console.log(`✅ ICE candidate added for ${data.user}`);
-          } else {
-            peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
-            peerConn._bufferedCandidates.push(data.candidate);
-            console.log(`🧊 Buffered ICE candidate for ${data.user}`);
-          }
-        }
-        break;
+    isPolite = name.localeCompare(data.user) > 0;
+    if (offerCollision && !isPolite) {
+      console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
+      return;
+    }
+
+    try {
+      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      if (peer._bufferedCandidates?.length) {
+  for (const candidate of peer._bufferedCandidates) {
+    try {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
+    } catch (e) {
+      console.error(`❌ Error adding buffered ICE candidate:`, e);
+    }
+  }
+  peer._bufferedCandidates = [];
+}
+
+      console.log(`✅ Remote offer set for ${data.user}`);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      console.log(`✅ Answer created and set for ${data.user}`);
+      ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+    } catch (e) {
+      console.error("❌ Failed to handle offer:", e);
+    }
+    break;
+
+
+
+
+        case "answer":
+    console.log(`📬 Answer received from ${data.user}`);
+    if (peers[data.user]) {
+      const peer = peers[data.user];
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+        if (peer._bufferedCandidates?.length) {
+  for (const candidate of peer._bufferedCandidates) {
+    try {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log(`✅ Buffered ICE candidate added for ${data.user}`);
+    } catch (e) {
+      console.error(`❌ Error adding buffered ICE candidate:`, e);
+    }
+  }
+  peer._bufferedCandidates = [];
+}
+
+        console.log(`✅ Remote description (answer) set for ${data.user}`);
+      } catch (e) {
+        console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
+      }
+    } else {
+      console.warn(`⚠️ No peer connection found for ${data.user}`);
+    }
+    break;
+
+case "candidate":
+  const peerConn = peers[data.user];
+  if (peerConn) {
+    if (peerConn.remoteDescription?.type) {
+      await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
+    } else {
+      peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
+      peerConn._bufferedCandidates.push(data.candidate);
+    }
+  }
+  break;
+
+
 
       case "user-left":
         console.log(`🚪 User left: ${data.user}`);
@@ -279,23 +269,22 @@ async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
-  const peer = new RTCPeerConnection({ iceServers });
+  const peer = new RTCPeerConnection({
+    iceServers: iceServers
+  });
 
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (["failed", "disconnected", "closed"].includes(peer.iceConnectionState)) {
       console.error(`❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`);
-      setTimeout(() => createPeer(user).then(() => createOffer(user)), 2000);
     }
   };
-
   peer.onconnectionstatechange = () => {
     console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
     if (peer.connectionState === "connected") {
       console.log(`✅ Peer connection established with ${user}`);
     } else if (peer.connectionState === "failed") {
-      console.error(`❌ Peer connection failed with ${user}. Retrying...`);
-      setTimeout(() => createPeer(user).then(() => createOffer(user)), 2000);
+      console.error(`❌ Peer connection failed with ${user}`);
     }
   };
 
@@ -324,36 +313,33 @@ async function createPeer(user) {
 
   if (localStream) {
     localStream.getTracks().forEach(track => {
-      if (!track.enabled) {
-        console.warn(`⚠️ Track ${track.kind} is disabled. Enabling it...`);
-        track.enabled = true;
-      }
       console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
-      const sender = peer.addTrack(track, localStream);
-      console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      if (track.enabled) {
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      } else {
+        console.warn(`⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`);
+        track.enabled = true;
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Forced enabled and added ${track.kind} track with sender:`, sender);
+      }
     });
   } else {
     console.error("❌ No localStream available for peer:", user);
   }
 
   peers[user] = peer;
-  return peer;
+  return peer; 
 }
 
 async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
-  if (!peers[user]) {
-    await createPeer(user);
-  }
-  const peer = peers[user];
+  if (!peers[user]) await createPeer(user);
   try {
-    if (peer.signalingState !== "stable") {
-      console.warn(`⚠️ Cannot create offer for ${user}, signaling state is ${peer.signalingState}. Waiting...`);
-      return;
-    }
-    isMakingOffer = true;
-    peer._flags = peer._flags || {};
-    peer._flags.makingOffer = true;
+    peers[user]._flags = peers[user]._flags || {};
+    peers[user]._flags.makingOffer = true;
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before creating offer for ${user}:`, peer.signalingState);
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     console.log(`✅ Offer created and set for ${user}. New signaling state:`, peer.signalingState);
@@ -361,16 +347,28 @@ async function createOffer(user) {
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
   } finally {
-    isMakingOffer = false;
-    peer._flags.makingOffer = false;
+    peers[user]._flags.makingOffer = false;
+  }
+}
+
+async function createAnswer(offer, user) {
+  console.log(`📬 Creating answer for ${user}`);
+  if (!peers[user]) await createPeer(user);
+  try {
+    const peer = peers[user];
+    console.log(`🔍 Signaling state before setting offer for ${user}:`, peer.signalingState);
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log(`✅ Remote offer set for ${user}. New signaling state:`, peer.signalingState);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    console.log(`✅ Answer created and set for ${user}. New signaling state:`, peer.signalingState);
+    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+  } catch (e) {
+    console.error("❌ Error creating answer:", e.message, e.stack);
   }
 }
 
 function addVideoStream(stream, user) {
-  if (!stream || !stream.active) {
-    console.error(`❌ Stream for ${user} is null or inactive. Check peer connection.`);
-    return;
-  }
   if (document.querySelector(`video[data-user="${user}"]`)) return;
   console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
   const container = document.createElement("div");
@@ -389,7 +387,6 @@ function addVideoStream(stream, user) {
   container.appendChild(videoEl);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
-  console.log(`✅ Video stream added for ${user}. Video element readyState: ${videoEl.readyState}`);
 }
 
 function removeVideoStream(user) {
@@ -399,7 +396,6 @@ function removeVideoStream(user) {
   if (peers[user]) {
     peers[user].close();
     delete peers[user];
-    console.log(`🗑️ Peer connection for ${user} closed and removed.`);
   }
 }
 
@@ -444,12 +440,14 @@ async function shareScreen() {
   console.log("🖥️ Attempting to share screen...");
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+
     screenVideoElement = document.createElement("video");
     screenVideoElement.srcObject = screenStream;
     screenVideoElement.autoplay = true;
     screenVideoElement.id = "screen-share";
     videoGrid.appendChild(screenVideoElement);
 
+    // ✅ Make sure each peer is a valid RTCPeerConnection
     Object.entries(peers).forEach(([user, peer]) => {
       if (peer instanceof RTCPeerConnection) {
         const sender = peer.getSenders().find(s => s.track?.kind === "video");
@@ -470,24 +468,31 @@ async function shareScreen() {
     };
   } catch (error) {
     console.error("❌ Error sharing screen:", error);
-    alert(`Error sharing screen: ${error.message}`);
+    alert(`Error sharing screen: ${error.name} - ${error.message}`);
   }
 }
 
+
 function stopScreenShare() {
   console.log("🛑 Stopping screen share...");
+
+  // Stop all tracks from screen stream
   screenStream?.getTracks().forEach(t => t.stop());
+
+  // Remove screen share video element and its container if present
   if (screenVideoElement) {
     const container = screenVideoElement.closest(".video-container");
     if (container) {
-      container.remove();
+      container.remove(); // ✅ removes the black box
     } else {
-      screenVideoElement.remove();
+      screenVideoElement.remove(); // fallback in case no container
     }
   }
+
   screenStream = null;
   screenVideoElement = null;
 
+  // Revert to local camera
   const cameraTrack = localStream.getVideoTracks()[0];
   Object.values(peers).forEach(peer => {
     if (peer instanceof RTCPeerConnection) {
@@ -498,6 +503,7 @@ function stopScreenShare() {
     }
   });
 }
+
 
 function sendMessage() {
   const msg = chatInputField.value.trim();
