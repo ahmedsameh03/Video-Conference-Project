@@ -1,4 +1,3 @@
-
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -149,23 +148,20 @@ ws.onmessage = async (message) => {
     if (!data.type) return;
 
     switch (data.type) {
-case "new-user":
-  console.log(`✨ New user joined: ${data.user}`);
-
-  // Don't connect to yourself
-  if (data.user === name) return;
-
-  // Add to participant list
-  addParticipant(data.user);
-
-  // If not already connected, create a peer and send an offer
-  if (!peers[data.user]) {
-    await createPeer(data.user);
-    await createOffer(data.user);
-  }
-  break;
-
-
+        case "new-user":
+    console.log(`✨ New user joined: ${data.user}`);
+    if (data.user !== name) {
+      addParticipant(data.user);
+      if (localStream) {
+        if (!peers[data.user]) {
+          await createPeer(data.user);
+        }
+        await createOffer(data.user);
+      } else {
+        console.warn("⚠️ Local stream not ready when new user joined.");
+      }
+    }
+    break;
 
         case "offer":
     console.log(`📨 Offer received from ${data.user}`);
@@ -232,18 +228,24 @@ case "new-user":
     }
     break;
 
-case "candidate":
-  const peerConn = peers[data.user];
-  if (peerConn) {
-    if (peerConn.remoteDescription?.type) {
-      await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } else {
-      peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
-      peerConn._bufferedCandidates.push(data.candidate);
+        case "candidate":
+    console.log(`🧊 ICE candidate received from ${data.user}`);
+    const peerConn = peers[data.user];
+    if (peerConn) {
+      if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
+        try {
+          await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
+          console.log(`✅ ICE candidate added for ${data.user}`);
+        } catch (e) {
+          console.error(`❌ Error adding ICE candidate for ${data.user}:`, e);
+        }
+      } else {
+        console.log(`📥 Buffering ICE candidate for ${data.user} until remote description is set`);
+        peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
+        peerConn._bufferedCandidates.push(data.candidate);
+      }
     }
-  }
-  break;
-
+    break;
 
 
       case "user-left":
@@ -440,26 +442,15 @@ async function shareScreen() {
   console.log("🖥️ Attempting to share screen...");
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-
     screenVideoElement = document.createElement("video");
     screenVideoElement.srcObject = screenStream;
     screenVideoElement.autoplay = true;
     screenVideoElement.id = "screen-share";
     videoGrid.appendChild(screenVideoElement);
 
-    // ✅ Make sure each peer is a valid RTCPeerConnection
-    Object.entries(peers).forEach(([user, peer]) => {
-      if (peer instanceof RTCPeerConnection) {
-        const sender = peer.getSenders().find(s => s.track?.kind === "video");
-        if (sender) {
-          sender.replaceTrack(screenStream.getVideoTracks()[0]);
-          console.log(`🔁 Replaced video track for ${user}`);
-        } else {
-          console.warn(`⚠️ No video sender found for ${user}`);
-        }
-      } else {
-        console.warn(`❌ Peer object for ${user} is invalid:`, peer);
-      }
+    Object.values(peers).forEach(peer => {
+      const sender = peer.getSenders().find(s => s.track?.kind === "video");
+      sender?.replaceTrack(screenStream.getVideoTracks()[0]);
     });
 
     screenStream.getVideoTracks()[0].onended = () => {
@@ -472,38 +463,18 @@ async function shareScreen() {
   }
 }
 
-
 function stopScreenShare() {
   console.log("🛑 Stopping screen share...");
-
-  // Stop all tracks from screen stream
   screenStream?.getTracks().forEach(t => t.stop());
-
-  // Remove screen share video element and its container if present
-  if (screenVideoElement) {
-    const container = screenVideoElement.closest(".video-container");
-    if (container) {
-      container.remove(); // ✅ removes the black box
-    } else {
-      screenVideoElement.remove(); // fallback in case no container
-    }
-  }
-
+  screenVideoElement?.remove();
   screenStream = null;
-  screenVideoElement = null;
 
-  // Revert to local camera
   const cameraTrack = localStream.getVideoTracks()[0];
   Object.values(peers).forEach(peer => {
-    if (peer instanceof RTCPeerConnection) {
-      const sender = peer.getSenders().find(s => s.track?.kind === "video");
-      if (sender) {
-        sender.replaceTrack(cameraTrack);
-      }
-    }
+    const sender = peer.getSenders().find(s => s.track?.kind === "video");
+    sender?.replaceTrack(cameraTrack);
   });
 }
-
 
 function sendMessage() {
   const msg = chatInputField.value.trim();
