@@ -4,38 +4,41 @@ const PORT = process.env.PORT || 3001;
 const server = new WebSocket.Server({ port: PORT });
 const rooms = {};
 
+console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
+
+// WebSocket connection handler
 server.on("connection", (ws, req) => {
   const origin = req.headers.origin || "";
   const allowedOrigins = [
-    "https://seenmeet.vercel.app",
-    "http://localhost:5500",
+    "https://seenmeet.vercel.app",  // Vercel frontend
+    "http://localhost:5500",        // Local dev
     "http://127.0.0.1:5500"
   ];
 
   if (!allowedOrigins.includes(origin)) {
     ws.close(1008, "Unauthorized origin");
-    console.warn(`Connection rejected from unauthorized origin: ${origin}`);
+    console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
     return;
   }
 
-  ws.isAlive = true;
-  ws.on("pong", () => { ws.isAlive = true; });
+  console.log("🔗 New WebSocket connection established from", origin);
 
+  // Handle incoming WebSocket messages
   ws.on("message", (message) => {
     try {
-      const data = JSON.parse(message.toString());
+      const data = JSON.parse(message);
+
       const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
       if (!allowedTypes.includes(data.type)) {
-        console.warn(`Rejected unknown message type: ${data.type}`);
+        console.warn(`❌ Rejected unknown message type: ${data.type}`);
         return;
       }
 
-      if (!data.type || !data.room) {
-        console.warn(`Invalid message: missing type or room`);
-        return;
-      }
+      if (!data.type || !data.room) return;
 
       if (!rooms[data.room]) rooms[data.room] = [];
+
+      console.log(`📩 Received message of type "${data.type}" in room "${data.room}" from ${ws.user || 'unknown'}`);
 
       switch (data.type) {
         case "join":
@@ -44,18 +47,17 @@ server.on("connection", (ws, req) => {
           }
           ws.room = data.room;
           ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
+          console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
 
+          // Send existing users to new user
           const existingUsers = rooms[data.room]
             .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
             .map(client => client.user);
           existingUsers.forEach(user => {
-            try {
-              ws.send(JSON.stringify({ type: "new-user", user }));
-            } catch (e) {
-              console.error(`Failed to send new-user to ${ws.user}:`, e);
-            }
+            ws.send(JSON.stringify({ type: "new-user", user }));
           });
 
+          // Notify others about the new user
           broadcast(ws, data.room, { type: "new-user", user: ws.user });
           break;
 
@@ -100,7 +102,7 @@ server.on("connection", (ws, req) => {
           break;
       }
     } catch (error) {
-      console.error("Error processing message:", error);
+      console.error("❌ Error processing message:", error);
     }
   });
 
@@ -109,53 +111,38 @@ server.on("connection", (ws, req) => {
   });
 
   ws.on("error", (error) => {
-    console.error("WebSocket error:", error);
-    removeUserFromRoom(ws);
+    console.error("⚠️ WebSocket error:", error);
   });
-});
 
-function broadcast(sender, room, data) {
-  const clients = rooms[room] || [];
-  clients.forEach(client => {
-    if (client !== sender && client.readyState === WebSocket.OPEN) {
-      try {
+  function broadcast(sender, room, data) {
+    const clients = rooms[room] || [];
+    console.log(`📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`);
+    clients.forEach(client => {
+      if (client !== sender && client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(data));
-      } catch (error) {
-        console.error(`Failed to send ${data.type} to ${client.user || 'unknown'}:`, error);
-        client.close(1001, "Failed to send message");
       }
-    }
-  });
-}
-
-function removeUserFromRoom(ws) {
-  if (!ws.room || !rooms[ws.room]) return;
-  rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
-  broadcast(ws, ws.room, { type: "user-left", user: ws.user });
-  if (rooms[ws.room].length === 0) {
-    delete rooms[ws.room];
+    });
   }
-}
 
-const interval = setInterval(() => {
-  server.clients.forEach(ws => {
-    if (!ws.isAlive) {
-      console.warn(`Client ${ws.user || 'unknown'} is unresponsive, closing connection`);
-      return ws.terminate();
+  function removeUserFromRoom(ws) {
+    if (!ws.room || !rooms[ws.room]) return;
+
+    rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
+    console.log(`🔴 ${ws.user} left room "${ws.room}". Remaining: ${rooms[ws.room].length}`);
+
+    broadcast(ws, ws.room, { type: "user-left", user: ws.user });
+
+    if (rooms[ws.room].length === 0) {
+      delete rooms[ws.room];
     }
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
-
-server.on("close", () => {
-  clearInterval(interval);
+  }
 });
 
+// Server startup logging
 server.on("listening", () => {
-  console.log(`WebSocket Server is running on port ${PORT}`);
+  console.log(`✅ WebSocket Server is running on port ${PORT}`);
 });
 
 server.on("error", (err) => {
-  console.error("WebSocket Server Error:", err);
+  console.error("❌ WebSocket Server Error:", err);
 });
