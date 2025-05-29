@@ -66,6 +66,12 @@ async function fetchIceServers() {
       ],
       username: "YOUR_XIRSYS_USERNAME", // Replace with your Xirsys username
       credential: "YOUR_XIRSYS_CREDENTIAL" // Replace with your Xirsys credential
+    },
+    // Added a free TURN server for testing
+    {
+      urls: "turn:turn.anyfirewall.com:3478?transport=tcp",
+      username: "webrtc",
+      credential: "webrtc"
     }
   ];
 }
@@ -138,6 +144,8 @@ async function startCamera() {
   localVideo.srcObject = localStream;
   localVideo.muted = true;
   await localVideo.play().catch(e => console.error("❌ Video play failed:", e));
+  // Added log to verify video element state
+  console.log("🔍 Local video element playing:", localVideo.readyState, localVideo.currentTime);
 }
 
 ws.onmessage = async (message) => {
@@ -292,6 +300,7 @@ async function createPeer(user) {
     console.log(`🎞️ Received streams:`, event.streams.map(s => ({ id: s.id, active: s.active })));
     if (event.streams && event.streams[0]) {
       addVideoStream(event.streams[0], user);
+      console.log(`🔍 Received tracks for ${user}:`, event.streams[0].getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     } else {
       console.warn(`⚠️ No streams received from ${user}. Check if tracks are sent.`);
     }
@@ -303,9 +312,10 @@ async function createPeer(user) {
         console.warn(`⚠️ Track ${track.kind} is disabled. Enabling it...`);
         track.enabled = true;
       }
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id }); // Corrected from t.id to track.id
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
       const sender = peer.addTrack(track, localStream);
       console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      console.log(`🔍 Sender state for ${track.kind}:`, { mid: sender.mid, readyState: sender.readyState });
     });
   } else {
     console.error("❌ No localStream available for peer:", user);
