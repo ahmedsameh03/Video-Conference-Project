@@ -41,6 +41,11 @@ async function testLocalStream() {
 
 // Run the test when the page loads
 document.addEventListener("DOMContentLoaded", async () => {
+  if (!localVideo || !videoGrid) {
+    console.error("❌ Critical HTML elements (large-video or video-grid) not found!");
+    alert("HTML elements missing. Please check your page structure.");
+    return;
+  }
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   }
@@ -64,8 +69,8 @@ async function fetchIceServers() {
         "turns:fr-turn7.xirsys.com:443?transport=tcp",
         "turns:fr-turn7.xirsys.com:5349?transport=tcp"
       ],
-      username: "zyadmohamed27", // Replace with your Xirsys username
-      credential: "f31d5c32-3c37-11f0-8ccd-0242ac130006" // Replace with your Xirsys credential
+      username: "zyadmohamed27",
+      credential: "f31d5c32-3c37-11f0-8ccd-0242ac130006"
     }
   ];
 }
@@ -303,7 +308,7 @@ async function createPeer(user) {
         console.warn(`⚠️ Track ${track.kind} is disabled. Enabling it...`);
         track.enabled = true;
       }
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id }); // Corrected from t.id to track.id
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
       const sender = peer.addTrack(track, localStream);
       console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
@@ -338,6 +343,10 @@ async function createOffer(user) {
 }
 
 function addVideoStream(stream, user) {
+  if (!stream || !stream.active) {
+    console.error(`❌ Stream for ${user} is null or inactive. Check peer connection.`);
+    return;
+  }
   if (document.querySelector(`video[data-user="${user}"]`)) return;
   console.log(`➕ Adding video stream for ${user} with stream ID: ${stream.id}`);
   const container = document.createElement("div");
@@ -356,6 +365,7 @@ function addVideoStream(stream, user) {
   container.appendChild(videoEl);
   container.appendChild(nameTag);
   videoGrid.appendChild(container);
+  console.log(`✅ Video stream added for ${user}. Video element readyState: ${videoEl.readyState}`);
 }
 
 function removeVideoStream(user) {
