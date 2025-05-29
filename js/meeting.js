@@ -164,16 +164,25 @@ ws.onmessage = async (message) => {
 
       case "offer":
         console.log(`📨 Offer received from ${data.user}`);
-        const peer = peers[data.user] || await createPeer(data.user);
+        let peer = peers[data.user];
+        if (!peer) {
+          peer = await createPeer(data.user);
+        }
         const offerCollision = isMakingOffer || peer.signalingState !== "stable";
 
         isPolite = name.localeCompare(data.user) > 0;
+        console.log(`🔍 isPolite for ${data.user}: ${isPolite}, offerCollision: ${offerCollision}, signalingState: ${peer.signalingState}`);
+
         if (offerCollision && !isPolite) {
           console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
           return;
         }
 
         try {
+          if (peer.signalingState !== "stable") {
+            console.warn(`⚠️ Rolling back signaling state for ${data.user} due to unexpected state: ${peer.signalingState}`);
+            await peer.setLocalDescription({ type: "rollback" });
+          }
           await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
           if (peer._bufferedCandidates?.length) {
             for (const candidate of peer._bufferedCandidates) {
@@ -198,8 +207,19 @@ ws.onmessage = async (message) => {
 
       case "answer":
         console.log(`📬 Answer received from ${data.user}`);
-        if (peers[data.user]) {
-          const peer = peers[data.user];
+        const peer = peers[data.user];
+        if (peer) {
+          if (peer.signalingState !== "have-local-offer") {
+            console.warn(`⚠️ Unexpected answer in signaling state: ${peer.signalingState}. Attempting to recover...`);
+            if (peer.signalingState === "stable") {
+              console.log(`🔄 Recreating offer for ${data.user} to fix state mismatch`);
+              await createOffer(data.user);
+              return;
+            }
+            console.warn(`⚠️ Cannot recover. Ignoring answer.`);
+            return;
+          }
+
           try {
             await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
             if (peer._bufferedCandidates?.length) {
@@ -213,7 +233,7 @@ ws.onmessage = async (message) => {
               }
               peer._bufferedCandidates = [];
             }
-            console.log(`✅ Remote description (answer) set for ${data.user}`);
+            console.log(`✅ Remote description (answer) set successfully for ${data.user}`);
           } catch (e) {
             console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
           }
@@ -322,13 +342,16 @@ async function createPeer(user) {
 
 async function createOffer(user) {
   console.log(`📨 Creating offer for ${user}`);
-  if (!peers[user]) await createPeer(user);
+  if (!peers[user]) {
+    await createPeer(user);
+  }
+  const peer = peers[user];
   try {
-    const peer = peers[user];
     if (peer.signalingState !== "stable") {
-      console.warn(`⚠️ Cannot create offer for ${user}, signaling state is ${peer.signalingState}`);
+      console.warn(`⚠️ Cannot create offer for ${user}, signaling state is ${peer.signalingState}. Waiting...`);
       return;
     }
+    isMakingOffer = true;
     peer._flags = peer._flags || {};
     peer._flags.makingOffer = true;
     const offer = await peer.createOffer();
@@ -338,7 +361,8 @@ async function createOffer(user) {
   } catch (e) {
     console.error("❌ Error creating offer:", e.message, e.stack);
   } finally {
-    peers[user]._flags.makingOffer = false;
+    isMakingOffer = false;
+    peer._flags.makingOffer = false;
   }
 }
 
