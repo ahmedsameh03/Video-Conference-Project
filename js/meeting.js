@@ -64,8 +64,8 @@ async function fetchIceServers() {
         "turns:fr-turn7.xirsys.com:443?transport=tcp",
         "turns:fr-turn7.xirsys.com:5349?transport=tcp"
       ],
-      username: "zyadmohamed27", // Replace with your Xirsys username
-      credential: "f31d5c32-3c37-11f0-8ccd-0242ac130006" // Replace with your Xirsys credential
+      username: "zyadmohamed27",
+      credential: "f31d5c32-3c37-11f0-8ccd-0242ac130006"
     }
   ];
 }
@@ -193,8 +193,13 @@ ws.onmessage = async (message) => {
 
       case "answer":
         console.log(`📬 Answer received from ${data.user}`);
-        if (peers[data.user]) {
-          const peer = peers[data.user];
+        const peer = peers[data.user];
+        if (peer) {
+          if (peer.signalingState !== "have-local-offer") {
+            console.warn(`⚠️ Unexpected answer in signaling state: ${peer.signalingState}. Ignoring.`);
+            return;
+          }
+
           try {
             await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
             if (peer._bufferedCandidates?.length) {
@@ -208,7 +213,7 @@ ws.onmessage = async (message) => {
               }
               peer._bufferedCandidates = [];
             }
-            console.log(`✅ Remote description (answer) set for ${data.user}`);
+            console.log(`✅ Remote description (answer) set successfully for ${data.user}`);
           } catch (e) {
             console.error(`❌ Failed to set remote answer for ${data.user}:`, e.message);
           }
@@ -303,7 +308,7 @@ async function createPeer(user) {
         console.warn(`⚠️ Track ${track.kind} is disabled. Enabling it...`);
         track.enabled = true;
       }
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id }); // Corrected from t.id to track.id
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id });
       const sender = peer.addTrack(track, localStream);
       console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
