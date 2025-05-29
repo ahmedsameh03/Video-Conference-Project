@@ -6,12 +6,12 @@ const rooms = {};
 
 console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
-// WebSocket connection handler
+// ✅ WebSocket connection handler
 server.on("connection", (ws, req) => {
   const origin = req.headers.origin || "";
   const allowedOrigins = [
-    "https://seenmeet.vercel.app",  // Vercel frontend
-    "http://localhost:5500",        // Local dev
+    "https://seenmeet.vercel.app",  // ✅ Vercel frontend
+    "http://localhost:5500",        // ✅ local dev
     "http://127.0.0.1:5500"
   ];
 
@@ -23,10 +23,10 @@ server.on("connection", (ws, req) => {
 
   console.log("🔗 New WebSocket connection established from", origin);
 
-  // Handle incoming WebSocket messages
+  // ✅ Handle incoming WebSocket messages
   ws.on("message", (message) => {
     try {
-      const data = JSON.parse(message);
+      const data = JSON.parse(message);  // ✅ parse before using it
 
       const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
       if (!allowedTypes.includes(data.type)) {
@@ -138,7 +138,7 @@ server.on("connection", (ws, req) => {
   }
 });
 
-// Server startup logging
+// ✅ Server startup logging
 server.on("listening", () => {
   console.log(`✅ WebSocket Server is running on port ${PORT}`);
 });
