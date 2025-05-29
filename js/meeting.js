@@ -303,7 +303,7 @@ async function createPeer(user) {
         console.warn(`⚠️ Track ${track.kind} is disabled. Enabling it...`);
         track.enabled = true;
       }
-      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: t.id });
+      console.log(`➕ Adding local track for ${user}:`, { kind: track.kind, enabled: track.enabled, id: track.id }); // Corrected from t.id to track.id
       const sender = peer.addTrack(track, localStream);
       console.log(`✅ Added ${track.kind} track with sender:`, sender);
     });
