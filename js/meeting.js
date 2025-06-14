@@ -11,7 +11,7 @@ const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
 
 const SIGNALING_SERVER_URL =
-  "wss://video-conference-project-production-65d5.up.railway.app";
+  "wss://video-conference-project-production.up.railway.app";
 
 console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
 const ws = new WebSocket(SIGNALING_SERVER_URL);
