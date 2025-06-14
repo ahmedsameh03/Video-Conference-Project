@@ -33,6 +33,7 @@ const chatInputField = document.getElementById("chat-input-field");
 /** DOM element for the list of participants. */
 const participantsList = document.getElementById("participants-list");
 
+<<<<<<< HEAD
 /** 
  * URL of the signaling server. 
  * NOTE: In a production environment, this should be configurable (e.g., via environment variables or a config file)
@@ -41,6 +42,10 @@ const participantsList = document.getElementById("participants-list");
 const SIGNALING_SERVER_URL = window.location.hostname === "localhost"
   ? "ws://localhost:3001" // Local development
   : `${window.location.protocol === "https:" ? "wss" : "ws"}://video-conference-project-production-65d5.up.railway.app`; // Production (Example)
+=======
+const SIGNALING_SERVER_URL =
+  "wss://video-conference-project-production-65d5.up.railway.app";
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 
 console.log(`[Meeting] Connecting to signaling server at: ${SIGNALING_SERVER_URL}`);
 /** WebSocket connection to the signaling server. */
@@ -61,6 +66,7 @@ let isMediaAccessInProgress = false;
 /** Flag to track if camera initialization has been attempted */
 let hasCameraInitBeenAttempted = false;
 
+<<<<<<< HEAD
 /** Configuration for RTCPeerConnection, including ICE servers. */
 let peerConnectionConfig = null; // Will be fetched asynchronously
 
@@ -77,6 +83,40 @@ function _getQueryParams() {
     params[key] = decodeURIComponent(value);
   });
   return params;
+=======
+// اختبار بسيط للـ Local Stream
+async function testLocalStream() {
+  console.log("🧪 Testing local camera and microphone...");
+  try {
+    const testStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    console.log(
+      "✅ Test Stream successful! Tracks:",
+      testStream
+        .getTracks()
+        .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
+    );
+    localVideo.srcObject = testStream;
+    localVideo.muted = true;
+    await localVideo
+      .play()
+      .catch((e) => console.error("❌ Test Video play failed:", e));
+    testStream.getTracks().forEach((track) => track.stop());
+    console.log("🧪 Test completed. Local camera and microphone are working.");
+  } catch (error) {
+    console.error(
+      "❌ Test Stream failed:",
+      error.name,
+      error.message,
+      error.stack
+    );
+    alert(
+      `Test Stream failed: ${error.name} - ${error.message}. Please check camera/microphone permissions and ensure they are not blocked.`
+    );
+  }
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 }
 
 /**
@@ -96,14 +136,24 @@ async function _fetchIceServers() {
     /*
     // Example of TURN server configuration (replace with actual fetched credentials)
     {
+<<<<<<< HEAD
       username: "YOUR_XIRSYS_USERNAME", // Replace with dynamically fetched username
       credential: "YOUR_XIRSYS_CREDENTIAL", // Replace with dynamically fetched credential
+=======
+      urls: ["stun:fr-turn7.xirsys.com"],
+    },
+    {
+      username:
+        "L2a-fvFXKem5bHUHPf_WEX4oi-Ixl0BHHXuz4z_7KSgyjpfxuzhcVM2Tu_DfwOTUAAAAAGgpFR1haG1lZHNhbWVoMDM=",
+      credential: "c3c10bb4-3372-11f0-a269-fadfa0afc433",
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
       urls: [
         "turn:fr-turn7.xirsys.com:80?transport=udp",
         "turn:fr-turn7.xirsys.com:3478?transport=udp",
         "turn:fr-turn7.xirsys.com:80?transport=tcp",
         "turn:fr-turn7.xirsys.com:3478?transport=tcp",
         "turns:fr-turn7.xirsys.com:443?transport=tcp",
+<<<<<<< HEAD
         "turns:fr-turn7.xirsys.com:5349?transport=tcp"
       ]
     }
@@ -146,11 +196,32 @@ document.addEventListener("DOMContentLoaded", async () => {
  * Handles the WebSocket connection opening.
  * Initiates camera/microphone access and joins the signaling room.
  */
+=======
+        "turns:fr-turn7.xirsys.com:5349?transport=tcp",
+      ],
+    },
+  ];
+}
+
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 ws.onopen = async () => {
   console.log("✅ [Meeting] WebSocket connection established.");
   try {
+<<<<<<< HEAD
     // 1. Join the signaling room first, so we're connected even if media fails
     console.log(`[Meeting] Joining room: ${room} as user: ${name}`);
+=======
+    await startCamera();
+    if (!localStream || !localStream.getTracks().length) {
+      throw new Error("Local stream not initialized or no tracks available.");
+    }
+    console.log(
+      "📹 Local Stream initialized with tracks:",
+      localStream
+        .getTracks()
+        .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
+    );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
     ws.send(JSON.stringify({ type: "join", room, user: name }));
     addParticipant(name); // Add self to the UI list
 
@@ -171,9 +242,16 @@ ws.onopen = async () => {
       }
     }
   } catch (error) {
+<<<<<<< HEAD
     console.error("❌ [Meeting] Error during WebSocket open sequence:", error);
     // We're still connected to the room, just without media
     _showMediaErrorMessage("Failed to access camera/microphone. You can still chat and see others.");
+=======
+    console.error("❌ Failed to start camera before joining:", error);
+    alert(
+      "Failed to start camera/microphone. Please check permissions and try again."
+    );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
   }
 };
 
@@ -182,8 +260,15 @@ ws.onopen = async () => {
  * @param {Event} error - The error event.
  */
 ws.onerror = (error) => {
+<<<<<<< HEAD
   console.error("❌ [Meeting] WebSocket Error:", error);
   alert("WebSocket connection error. Please check the server status and your network connection. Refresh the page to try again.");
+=======
+  console.error("❌ WebSocket Error:", error);
+  alert(
+    "WebSocket connection error. Please check the server and your connection."
+  );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 };
 
 /**
@@ -194,17 +279,90 @@ ws.onerror = (error) => {
 ws.onclose = (event) => {
   console.log(`🔌 [Meeting] WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason || "(No reason provided)"}, Clean: ${event.wasClean}`);
   if (!event.wasClean) {
+<<<<<<< HEAD
     alert("WebSocket connection closed unexpectedly. Please refresh the page to try reconnecting.");
+=======
+    alert(
+      "WebSocket connection closed unexpectedly. Please try refreshing the page."
+    );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
   }
   // Clean up all resources
   _cleanupResources();
 };
 
+<<<<<<< HEAD
 /**
  * Main handler for incoming WebSocket messages (signaling).
  * This function will be enhanced by `meeting-e2ee.js` to handle E2EE messages.
  * @param {MessageEvent} message - The incoming message event.
  */
+=======
+function getQueryParams() {
+  const params = {};
+  new URLSearchParams(window.location.search).forEach((value, key) => {
+    params[key] = decodeURIComponent(value);
+  });
+  return params;
+}
+
+async function startCamera() {
+  console.log("🎥 Attempting to start camera and microphone...");
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    console.log(
+      "✅ Attempt 1: Both camera and microphone accessed successfully."
+    );
+  } catch (error) {
+    console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      console.log("✅ Attempt 2: Camera only accessed successfully.");
+    } catch (error2) {
+      console.warn("⚠️ Attempt 2 failed:", error2.name, error2.message);
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: true,
+        });
+        console.log("✅ Attempt 3: Microphone only accessed successfully.");
+      } catch (error3) {
+        console.error(
+          "❌ All attempts failed:",
+          error3.name,
+          error3.message,
+          error3.stack
+        );
+        throw new Error(
+          "Failed to access camera or microphone after all attempts."
+        );
+      }
+    }
+  }
+
+  if (!localStream.getTracks().length) {
+    throw new Error("No tracks (video or audio) available.");
+  }
+  console.log(
+    "✅ Final Stream Tracks:",
+    localStream
+      .getTracks()
+      .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
+  );
+  localVideo.srcObject = localStream;
+  localVideo.muted = true;
+  await localVideo
+    .play()
+    .catch((e) => console.error("❌ Video play failed:", e));
+}
+
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 ws.onmessage = async (message) => {
   let data;
   try {
@@ -218,6 +376,7 @@ ws.onmessage = async (message) => {
     // --- Signaling Message Handling ---
     switch (data.type) {
       case "new-user":
+<<<<<<< HEAD
         handleNewUser(data.user);
         break;
 
@@ -231,6 +390,105 @@ ws.onmessage = async (message) => {
 
       case "candidate":
         handleCandidate(data.user, data.candidate);
+=======
+        console.log(`✨ New user joined: ${data.user}`);
+
+        // Don't connect to yourself
+        if (data.user === name) return;
+
+        // Add to participant list
+        addParticipant(data.user);
+
+        // If not already connected, create a peer and send an offer
+        if (!peers[data.user]) {
+          await createPeer(data.user);
+          await createOffer(data.user);
+        }
+        break;
+
+      case "offer":
+        console.log(`📨 Offer received from ${data.user}`);
+        const peer = peers[data.user] || (await createPeer(data.user));
+        const offerCollision =
+          isMakingOffer || peer.signalingState !== "stable";
+
+        isPolite = name.localeCompare(data.user) > 0;
+        if (offerCollision && !isPolite) {
+          console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
+          return;
+        }
+
+        try {
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(data.offer)
+          );
+          if (peer._bufferedCandidates?.length) {
+            for (const candidate of peer._bufferedCandidates) {
+              try {
+                await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log(`✅ Buffered ICE candidate added for ${data.user}`);
+              } catch (e) {
+                console.error(`❌ Error adding buffered ICE candidate:`, e);
+              }
+            }
+            peer._bufferedCandidates = [];
+          }
+
+          console.log(`✅ Remote offer set for ${data.user}`);
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          console.log(`✅ Answer created and set for ${data.user}`);
+          ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+        } catch (e) {
+          console.error("❌ Failed to handle offer:", e);
+        }
+        break;
+
+      case "answer":
+        console.log(`📬 Answer received from ${data.user}`);
+        if (peers[data.user]) {
+          const peer = peers[data.user];
+          try {
+            await peer.setRemoteDescription(
+              new RTCSessionDescription(data.answer)
+            );
+            if (peer._bufferedCandidates?.length) {
+              for (const candidate of peer._bufferedCandidates) {
+                try {
+                  await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                  console.log(
+                    `✅ Buffered ICE candidate added for ${data.user}`
+                  );
+                } catch (e) {
+                  console.error(`❌ Error adding buffered ICE candidate:`, e);
+                }
+              }
+              peer._bufferedCandidates = [];
+            }
+
+            console.log(`✅ Remote description (answer) set for ${data.user}`);
+          } catch (e) {
+            console.error(
+              `❌ Failed to set remote answer for ${data.user}:`,
+              e.message
+            );
+          }
+        } else {
+          console.warn(`⚠️ No peer connection found for ${data.user}`);
+        }
+        break;
+
+      case "candidate":
+        const peerConn = peers[data.user];
+        if (peerConn) {
+          if (peerConn.remoteDescription?.type) {
+            await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } else {
+            peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
+            peerConn._bufferedCandidates.push(data.candidate);
+          }
+        }
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
         break;
 
       case "user-left":
@@ -238,7 +496,16 @@ ws.onmessage = async (message) => {
         break;
 
       case "chat":
+<<<<<<< HEAD
         handleChatMessage(data.user, data.text);
+=======
+        console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
+        displayMessage({
+          user: data.user,
+          text: data.text,
+          own: data.user === name,
+        });
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
         break;
 
       // Note: E2EE-specific messages (like key exchange) are handled
@@ -248,6 +515,7 @@ ws.onmessage = async (message) => {
         console.warn(`[Meeting] Received unknown message type: ${data.type}`);
     }
   } catch (error) {
+<<<<<<< HEAD
     console.error("❌ [Meeting] Error parsing or handling WebSocket message:", error, "Raw data:", message.data);
     // Avoid crashing the application due to a single malformed message.
   }
@@ -288,6 +556,33 @@ function _showMediaErrorMessage(message) {
   setTimeout(() => {
     if (notification) {
         notification.style.display = "none";
+=======
+    console.error(
+      "❌ Error handling WebSocket message:",
+      error.name,
+      error.message,
+      error.stack
+    );
+  }
+};
+
+async function createPeer(user) {
+  console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
+  const iceServers = await fetchIceServers();
+  console.log("🧊 ICE Servers used:", iceServers);
+  const peer = new RTCPeerConnection({
+    iceServers: iceServers,
+  });
+
+  peer.oniceconnectionstatechange = () => {
+    console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
+    if (
+      ["failed", "disconnected", "closed"].includes(peer.iceConnectionState)
+    ) {
+      console.error(
+        `❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`
+      );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
     }
   }, 10000);
 }
@@ -345,6 +640,7 @@ async function startCameraAndMic() {
       audio: true 
     };
 
+<<<<<<< HEAD
     try {
       // Attempt 1: Get both video and audio
       console.log("[Meeting] Attempting to access camera and microphone...");
@@ -393,14 +689,48 @@ async function startCameraAndMic() {
           return null;
         }
       }
+=======
+  peer.onicecandidate = (event) => {
+    if (event.candidate) {
+      console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
+      ws.send(
+        JSON.stringify({
+          type: "candidate",
+          candidate: event.candidate,
+          room,
+          user,
+        })
+      );
+    } else {
+      console.log(`🏁 All ICE candidates sent for ${user}`);
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
     }
 
+<<<<<<< HEAD
     // Final check: Ensure the stream has tracks
     if (!stream || !stream.getTracks().length) {
       console.error("[Meeting] Media stream acquired, but it contains no tracks.");
       _showMediaErrorMessage("Failed to access any media devices. You can only chat.");
       isMediaAccessInProgress = false;
       return null;
+=======
+  peer.onicegatheringstatechange = () => {
+    console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
+  };
+
+  peer.ontrack = (event) => {
+    console.log(`🎞️ Track event for ${user}:`, event);
+    console.log(
+      `🎞️ Received streams:`,
+      event.streams.map((s) => ({ id: s.id, active: s.active }))
+    );
+    if (event.streams && event.streams[0]) {
+      addVideoStream(event.streams[0], user);
+    } else {
+      console.warn(
+        `⚠️ No streams received from ${user}. Check if tracks are sent.`
+      );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
     }
 
     isMediaAccessInProgress = false;
@@ -561,6 +891,7 @@ function _cleanupResources() {
   console.log("[Meeting] Cleaning up resources...");
   // Stop all local media tracks
   if (localStream) {
+<<<<<<< HEAD
     localStream.getTracks().forEach(track => {
       if (track.readyState === 'live') { // Check if track is still active
         track.stop();
@@ -777,18 +1108,43 @@ async function createPeer(remoteUser) {
           console.log(`[Meeting] Added local ${track.kind} track (ID: ${track.id}) to peer connection with ${remoteUser}.`);
       } catch (e) {
           console.error(`❌ [Meeting] Error adding local ${track.kind} track to ${remoteUser}:`, e);
+=======
+    localStream.getTracks().forEach((track) => {
+      console.log(`➕ Adding local track for ${user}:`, {
+        kind: track.kind,
+        enabled: track.enabled,
+        id: track.id,
+      });
+      if (track.enabled) {
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      } else {
+        console.warn(
+          `⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`
+        );
+        track.enabled = true;
+        const sender = peer.addTrack(track, localStream);
+        console.log(
+          `✅ Forced enabled and added ${track.kind} track with sender:`,
+          sender
+        );
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
       }
     });
   } else {
     console.warn(`[Meeting] No local stream available to share with ${remoteUser}.`);
   }
 
+<<<<<<< HEAD
   // Apply E2EE if enabled (this will be a no-op if E2EE is not enabled)
   if (typeof e2eeManager !== "undefined" && e2eeManager && e2eeManager.isE2EEEnabled) {
     console.log(`[Meeting] Applying E2EE setup to new peer connection with ${remoteUser}.`);
     e2eeManager.setupPeerConnection(peer);
   }
 
+=======
+  peers[user] = peer;
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
   return peer;
 }
 
@@ -806,6 +1162,7 @@ async function handleNewUser(user) {
   
   // Create a peer connection for the new user
   try {
+<<<<<<< HEAD
     // Set polite flag (the existing user is impolite, the joiner is polite)
     isPolite = false; 
     
@@ -821,6 +1178,26 @@ async function handleNewUser(user) {
 
   } catch (error) {
     console.error(`❌ [Meeting] Error handling new user ${user}:`, error);
+=======
+    peers[user]._flags = peers[user]._flags || {};
+    peers[user]._flags.makingOffer = true;
+    const peer = peers[user];
+    console.log(
+      `🔍 Signaling state before creating offer for ${user}:`,
+      peer.signalingState
+    );
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    console.log(
+      `✅ Offer created and set for ${user}. New signaling state:`,
+      peer.signalingState
+    );
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
+  } catch (e) {
+    console.error("❌ Error creating offer:", e.message, e.stack);
+  } finally {
+    peers[user]._flags.makingOffer = false;
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
   }
 }
 
@@ -833,6 +1210,7 @@ async function handleOffer(user, offer) {
   console.log(`[Meeting] Received offer from ${user}.`);
   
   try {
+<<<<<<< HEAD
     // Get or create peer connection
     let peer = peers[user];
     if (!peer) {
@@ -952,6 +1330,59 @@ function handleUserLeft(user) {
   removeParticipant(user);
   
   // Close and remove the peer connection
+=======
+    const peer = peers[user];
+    console.log(
+      `🔍 Signaling state before setting offer for ${user}:`,
+      peer.signalingState
+    );
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log(
+      `✅ Remote offer set for ${user}. New signaling state:`,
+      peer.signalingState
+    );
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    console.log(
+      `✅ Answer created and set for ${user}. New signaling state:`,
+      peer.signalingState
+    );
+    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
+  } catch (e) {
+    console.error("❌ Error creating answer:", e.message, e.stack);
+  }
+}
+
+function addVideoStream(stream, user) {
+  if (document.querySelector(`video[data-user="${user}"]`)) return;
+  console.log(
+    `➕ Adding video stream for ${user} with stream ID: ${stream.id}`
+  );
+  const container = document.createElement("div");
+  container.classList.add("video-container");
+  container.setAttribute("data-user-container", user);
+
+  const videoEl = document.createElement("video");
+  videoEl.srcObject = stream;
+  videoEl.autoplay = true;
+  videoEl.playsInline = true;
+  videoEl.setAttribute("data-user", user);
+
+  const nameTag = document.createElement("p");
+  nameTag.textContent = user;
+
+  container.appendChild(videoEl);
+  container.appendChild(nameTag);
+  videoGrid.appendChild(container);
+}
+
+function removeVideoStream(user) {
+  console.log(`➖ Removing video stream for ${user}`);
+  const container = document.querySelector(
+    `div[data-user-container="${user}"]`
+  );
+  if (container) container.remove();
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
   if (peers[user]) {
     try {
         peers[user].close();
@@ -1056,6 +1487,7 @@ function updateParticipantCount() {
   }
 }
 
+<<<<<<< HEAD
 /**
  * Toggles the visibility of the chat container.
  */
@@ -1068,11 +1500,93 @@ function toggleChat() {
       const chatButton = document.querySelector("button[onclick='toggleChat()']");
       if (chatButton) {
         chatButton.classList.remove("new-message");
+=======
+function toggleVideo() {
+  if (!localStream) return console.error("No local stream");
+  const videoTracks = localStream.getVideoTracks();
+  if (videoTracks.length) {
+    isVideoOff = !isVideoOff;
+    videoTracks[0].enabled = !isVideoOff;
+    console.log(`📹 Video ${isVideoOff ? "off" : "on"}`);
+    document
+      .getElementById("video-btn")
+      ?.classList.toggle("active", isVideoOff);
+  }
+}
+
+let screenStream, screenVideoElement;
+
+async function shareScreen() {
+  console.log("🖥️ Attempting to share screen...");
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+    });
+
+    screenVideoElement = document.createElement("video");
+    screenVideoElement.srcObject = screenStream;
+    screenVideoElement.autoplay = true;
+    screenVideoElement.id = "screen-share";
+    videoGrid.appendChild(screenVideoElement);
+
+    // ✅ Make sure each peer is a valid RTCPeerConnection
+    Object.entries(peers).forEach(([user, peer]) => {
+      if (peer instanceof RTCPeerConnection) {
+        const sender = peer.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) {
+          sender.replaceTrack(screenStream.getVideoTracks()[0]);
+          console.log(`🔁 Replaced video track for ${user}`);
+        } else {
+          console.warn(`⚠️ No video sender found for ${user}`);
+        }
+      } else {
+        console.warn(`❌ Peer object for ${user} is invalid:`, peer);
+      }
+    });
+
+    screenStream.getVideoTracks()[0].onended = () => {
+      console.log("🛑 Screen share ended.");
+      stopScreenShare();
+    };
+  } catch (error) {
+    console.error("❌ Error sharing screen:", error);
+    alert(`Error sharing screen: ${error.name} - ${error.message}`);
+  }
+}
+
+function stopScreenShare() {
+  console.log("🛑 Stopping screen share...");
+
+  // Stop all tracks from screen stream
+  screenStream?.getTracks().forEach((t) => t.stop());
+
+  // Remove screen share video element and its container if present
+  if (screenVideoElement) {
+    const container = screenVideoElement.closest(".video-container");
+    if (container) {
+      container.remove(); // ✅ removes the black box
+    } else {
+      screenVideoElement.remove(); // fallback in case no container
+    }
+  }
+
+  screenStream = null;
+  screenVideoElement = null;
+
+  // Revert to local camera
+  const cameraTrack = localStream.getVideoTracks()[0];
+  Object.values(peers).forEach((peer) => {
+    if (peer instanceof RTCPeerConnection) {
+      const sender = peer.getSenders().find((s) => s.track?.kind === "video");
+      if (sender) {
+        sender.replaceTrack(cameraTrack);
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
       }
     }
   }
 }
 
+<<<<<<< HEAD
 /**
  * Toggles the visibility of the participants container.
  */
@@ -1086,6 +1600,8 @@ function toggleParticipants() {
 /**
  * Sends a chat message to all participants.
  */
+=======
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
 function sendMessage() {
   const text = chatInputField.value.trim();
   if (!text) return;
@@ -1107,6 +1623,7 @@ function sendMessage() {
   chatInputField.value = "";
 }
 
+<<<<<<< HEAD
 /**
  * Toggles the mute state of the local audio track.
  */
@@ -1332,3 +1849,33 @@ window.shareScreen = shareScreen;
 window.leaveMeeting = leaveMeeting;
 // Note: E2EE related functions (toggleE2EESettings, enableE2EE, disableE2EE) are exposed in meeting-e2ee.js
 
+=======
+function displayMessage({ user, text, own }) {
+  console.log(`📩 Displaying message from ${user}: ${text}`);
+  const el = document.createElement("p");
+  el.innerHTML = `<strong>${user}:</strong> ${text}`;
+  if (own) el.classList.add("own-message");
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function toggleChat() {
+  document.getElementById("chat-container").classList.toggle("visible");
+}
+
+function toggleParticipants() {
+  document.getElementById("participants-container").classList.toggle("visible");
+}
+
+function leaveMeeting() {
+  if (!confirm("Are you sure you want to leave the meeting?")) return;
+  console.log("🚪 Leaving meeting...");
+  localStream?.getTracks().forEach((t) => t.stop());
+  Object.values(peers).forEach((p) => p.close());
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "leave", room, user: name }));
+    ws.close();
+  }
+  window.location.href = "dashboard.html";
+}
+>>>>>>> 1dedc54829265a2481b9f1a8f6ca74b5da857e01
