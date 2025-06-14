@@ -8,13 +8,11 @@ console.log(`✅ WebRTC Signaling Server running on ws://localhost:${PORT}`);
 
 // ✅ WebSocket connection handler
 server.on("connection", (ws, req) => {
-  const origin = req.headers.origin || "";
+  const origin = req.headers.origin;
   const allowedOrigins = [
-    "https://seenmeet.vercel.app",  // ✅ Vercel frontend
-    "http://localhost:5500",        // ✅ local dev
-    "http://127.0.0.1:5500"
+    "http://localhost:5500",
+    "https://seenmeet.vercel.app",
   ];
-
   if (!allowedOrigins.includes(origin)) {
     ws.close(1008, "Unauthorized origin");
     console.warn(`🚫 Connection rejected from unauthorized origin: ${origin}`);
@@ -26,9 +24,16 @@ server.on("connection", (ws, req) => {
   // ✅ Handle incoming WebSocket messages
   ws.on("message", (message) => {
     try {
-      const data = JSON.parse(message);  // ✅ parse before using it
+      const data = JSON.parse(message); // ✅ parse before using it
 
-      const allowedTypes = ["join", "offer", "answer", "candidate", "chat", "leave"];
+      const allowedTypes = [
+        "join",
+        "offer",
+        "answer",
+        "candidate",
+        "chat",
+        "leave",
+      ];
       if (!allowedTypes.includes(data.type)) {
         console.warn(`❌ Rejected unknown message type: ${data.type}`);
         return;
@@ -38,7 +43,11 @@ server.on("connection", (ws, req) => {
 
       if (!rooms[data.room]) rooms[data.room] = [];
 
-      console.log(`📩 Received message of type "${data.type}" in room "${data.room}" from ${ws.user || 'unknown'}`);
+      console.log(
+        `📩 Received message of type "${data.type}" in room "${
+          data.room
+        }" from ${ws.user || "unknown"}`
+      );
 
       switch (data.type) {
         case "join":
@@ -47,13 +56,19 @@ server.on("connection", (ws, req) => {
           }
           ws.room = data.room;
           ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
-          console.log(`👤 ${ws.user} joined room "${ws.room}". Total participants: ${rooms[ws.room].length}`);
+          console.log(
+            `👤 ${ws.user} joined room "${ws.room}". Total participants: ${
+              rooms[ws.room].length
+            }`
+          );
 
           // Send existing users to new user
           const existingUsers = rooms[data.room]
-            .filter(client => client !== ws && client.readyState === WebSocket.OPEN)
-            .map(client => client.user);
-          existingUsers.forEach(user => {
+            .filter(
+              (client) => client !== ws && client.readyState === WebSocket.OPEN
+            )
+            .map((client) => client.user);
+          existingUsers.forEach((user) => {
             ws.send(JSON.stringify({ type: "new-user", user }));
           });
 
@@ -116,8 +131,10 @@ server.on("connection", (ws, req) => {
 
   function broadcast(sender, room, data) {
     const clients = rooms[room] || [];
-    console.log(`📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`);
-    clients.forEach(client => {
+    console.log(
+      `📢 Broadcasting to ${clients.length - 1} clients in room "${room}"`
+    );
+    clients.forEach((client) => {
       if (client !== sender && client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(data));
       }
@@ -127,8 +144,12 @@ server.on("connection", (ws, req) => {
   function removeUserFromRoom(ws) {
     if (!ws.room || !rooms[ws.room]) return;
 
-    rooms[ws.room] = rooms[ws.room].filter(client => client !== ws);
-    console.log(`🔴 ${ws.user} left room "${ws.room}". Remaining: ${rooms[ws.room].length}`);
+    rooms[ws.room] = rooms[ws.room].filter((client) => client !== ws);
+    console.log(
+      `🔴 ${ws.user} left room "${ws.room}". Remaining: ${
+        rooms[ws.room].length
+      }`
+    );
 
     broadcast(ws, ws.room, { type: "user-left", user: ws.user });
 
