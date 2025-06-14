@@ -66,6 +66,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   await testLocalStream();
 });
+document.getElementById("qr-btn").addEventListener("click", () => {
+  const meetingLink = `${window.location.origin}/meeting.html?room=${room}`;
+  QRCode.toCanvas(document.getElementById("qrcode"), meetingLink, (error) => {
+    if (error) {
+      console.error("QR Code generation failed:", error);
+    } else {
+      document.getElementById("qr-modal").style.display = "block";
+    }
+  });
+});
 
 async function fetchIceServers() {
   return [
