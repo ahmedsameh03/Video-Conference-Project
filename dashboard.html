@@ -1,169 +1,124 @@
 <!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SEEN - Video Conferencing Reimagined</title>
-    <link href="css/styles.css" rel="stylesheet" />
+    <link href="css/styles.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet" />
     <!-- Google Fonts -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <!-- Bootstrap CSS -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-      .gradient-text {
-        font-size: 4rem;
-        font-weight: bold;
-        background: linear-gradient(90deg, #0000ff, #ff00ff);
-        background-clip: text; /* Standard property */
-        -webkit-background-clip: text; /* WebKit-specific */
-        -webkit-text-fill-color: transparent; /* Required to make text transparent */
-      }
-      .card:hover {
-        transform: scale(1.05);
-      }
-      .card h4 {
-        font-size: 1.5rem;
-      }
-      .card p {
-        font-size: 1.2rem;
-      }
-      .btn {
-        font-size: 1.2rem;
-      }
+        .gradient-text {
+            font-size: 4rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #0000FF, #FF00FF);
+            background-clip: text; /* Standard property */
+            -webkit-background-clip: text; /* WebKit-specific */
+            -webkit-text-fill-color: transparent; /* Required to make text transparent */
+
+        }
+        .card:hover {
+            transform: scale(1.05);
+        }
+        .card h4 {
+            font-size: 1.5rem;
+        }
+        .card p {   
+            font-size: 1.2rem;
+        }
+        .btn {
+            font-size: 1.2rem;
+        }
     </style>
-  </head>
-  <body class="d-flex flex-column h-100 bg-light">
+</head>
+<body class="d-flex flex-column h-100 bg-light">
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white py-3">
-      <div class="container px-5">
-        <a class="navbar-brand" href="index.html"
-          ><span class="fw-bolder text-primary">SEEN</span></a
-        >
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-          <ul class="navbar-nav ms-auto mb-2 mb-lg-0 small fw-bolder">
-            <li class="nav-item">
-              <a class="nav-link" href="index.html">Home</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="login.html">Login/Sign Up</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="features.html">Features</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="contact.html">Contact</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="privacy.html">Privacy Policy</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="terms.html">Terms of Service</a>
-            </li>
-          </ul>
+        <div class="container px-5">
+            <a class="navbar-brand" href="index.html"><span class="fw-bolder text-primary">SEEN</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" 
+                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 small fw-bolder">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="login.html">Login/Sign Up</a></li>
+                    <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy Policy</a></li>
+                    <li class="nav-item"><a class="nav-link" href="terms.html">Terms of Service</a></li>
+                </ul>
+            </div>
         </div>
-      </div>
     </nav>
 
     <!-- Hero Section -->
     <main class="flex-shrink-0">
-      <section class="py-5 text-center bg-light">
-        <div class="container">
-          <h1 class="gradient-text">Video Conferencing Reimagined</h1>
-          <p class="lead text-muted" style="font-size: 1.5rem">
-            Join the future of communication with SEEN
-          </p>
-          <div class="row mt-4">
-            <!-- Create New Meeting -->
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-4 p-4">
-                <div class="text-primary">
-                  <i class="bi bi-camera-video fs-1"></i>
+        <section class="py-5 text-center bg-light">
+            <div class="container">
+                <h1 class="gradient-text">Video Conferencing Reimagined</h1>
+                <p class="lead text-muted" style="font-size: 1.5rem;">Join the future of communication with SEEN</p>
+                <div class="row mt-4">
+                    <!-- Create New Meeting -->
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm rounded-4 p-4">
+                            <div class="text-primary">
+                                <i class="bi bi-camera-video fs-1"></i>
+                            </div>
+                            <h4 class="fw-bold mt-3">Create New Meeting</h4>
+                            <p class="text-muted">Start a new meeting and connect instantly.</p>
+                            <button class="btn btn-primary" onclick="startMeeting()">Create Meeting</button>
+                        </div>
+                    </div>
+                    <!-- Join Meeting -->
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm rounded-4 p-4">
+                            <div class="text-primary">
+                                <i class="bi bi-people fs-1"></i>
+                            </div>
+                            <h4 class="fw-bold mt-3">Join Meeting</h4>
+                            <p class="text-muted">Enter an existing meeting with a meeting ID.</p>
+                            <button class="btn btn-primary" onclick="joinMeeting()">Join Meeting</button>
+                        </div>
+                    </div>
+                    <!-- Schedule a Meeting -->
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm rounded-4 p-4">
+                            <div class="text-primary">
+                                <i class="bi bi-calendar-check fs-1"></i>
+                            </div>
+                            <h4 class="fw-bold mt-3">Schedule a Meeting</h4>
+                            <p class="text-muted">Plan and organize your meetings effortlessly.</p>
+                            <button class="btn btn-primary" onclick="scheduleMeeting()">Schedule Meeting</button>
+                        </div>
+                    </div>
                 </div>
-                <h4 class="fw-bold mt-3">Create New Meeting</h4>
-                <p class="text-muted">
-                  Start a new meeting and connect instantly.
-                </p>
-                <button class="btn btn-primary" onclick="startMeeting()">
-                  Create Meeting
-                </button>
-              </div>
             </div>
-            <!-- Join Meeting -->
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-4 p-4">
-                <div class="text-primary">
-                  <i class="bi bi-people fs-1"></i>
-                </div>
-                <h4 class="fw-bold mt-3">Join Meeting</h4>
-                <p class="text-muted">
-                  Enter an existing meeting with a meeting ID.
-                </p>
-                <button class="btn btn-primary" onclick="joinMeeting()">
-                  Join Meeting
-                </button>
-              </div>
-            </div>
-            <!-- Schedule a Meeting -->
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-4 p-4">
-                <div class="text-primary">
-                  <i class="bi bi-calendar-check fs-1"></i>
-                </div>
-                <h4 class="fw-bold mt-3">Schedule a Meeting</h4>
-                <p class="text-muted">
-                  Plan and organize your meetings effortlessly.
-                </p>
-                <button class="btn btn-primary" onclick="scheduleMeeting()">
-                  Schedule Meeting
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
     </main>
 
     <!-- Footer -->
     <footer class="bg-white py-4 mt-auto">
-      <div class="container px-5">
-        <div
-          class="row align-items-center justify-content-between flex-column flex-sm-row"
-        >
-          <div class="col-auto">
-            <div class="small m-0">&copy; Your Website 2023</div>
-          </div>
-          <div class="col-auto">
-            <a class="small" href="#!">Privacy</a>
-            <span class="mx-1">&middot;</span>
-            <a class="small" href="#!">Terms</a>
-            <span class="mx-1">&middot;</span>
-            <a class="small" href="#!">Contact</a>
-          </div>
+        <div class="container px-5">
+            <div class="row align-items-center justify-content-between flex-column flex-sm-row">
+                <div class="col-auto">
+                    <div class="small m-0">&copy; Your Website 2023</div>
+                </div>
+                <div class="col-auto">
+                    <a class="small" href="#!">Privacy</a>
+                    <span class="mx-1">&middot;</span>
+                    <a class="small" href="#!">Terms</a>
+                    <span class="mx-1">&middot;</span>
+                    <a class="small" href="#!">Contact</a>
+                </div>
+            </div>
         </div>
-      </div>
     </footer>
 
     <!-- Bootstrap JS -->
@@ -171,43 +126,39 @@
 
     <!-- JavaScript for handling the meeting start -->
     <script>
-      function startMeeting() {
-        // Prompt the user for their name
-        const userName = prompt("Enter your name:");
-        if (userName) {
-          // Generate a random room ID
-          const roomId = generateRoomId();
-          // Redirect the user to the meeting page with room ID and name as URL parameters
-          window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
-            userName
-          )}`;
+        function startMeeting() {
+            // Prompt the user for their name
+            const userName = prompt("Enter your name:");
+            if (userName) {
+                // Generate a random room ID
+                const roomId = generateRoomId();
+                // Redirect the user to the meeting page with room ID and name as URL parameters
+                window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(userName)}`;
+            }
         }
-      }
 
-      function joinMeeting() {
-        // Prompt the user for the meeting ID
-        const roomId = prompt("Enter Meeting ID:");
-        if (roomId) {
-          // Prompt the user for their name
-          const userName = prompt("Enter your name:");
-          if (userName) {
-            // Redirect the user to the meeting page with room ID and name as URL parameters
-            window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
-              userName
-            )}`;
-          }
+        function joinMeeting() {
+            // Prompt the user for the meeting ID
+            const roomId = prompt("Enter Meeting ID:");
+            if (roomId) {
+                // Prompt the user for their name
+                const userName = prompt("Enter your name:");
+                if (userName) {
+                    // Redirect the user to the meeting page with room ID and name as URL parameters
+                    window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(userName)}`;
+                }
+            }
         }
-      }
 
-      function scheduleMeeting() {
-        alert("Feature to schedule a meeting is under development.");
-        // You can add a modal or a separate page for scheduling meetings here
-      }
+        function scheduleMeeting() {
+            alert("Feature to schedule a meeting is under development.");
+            // You can add a modal or a separate page for scheduling meetings here
+        }
 
-      // Function to generate a random room ID
-      function generateRoomId() {
-        return Math.random().toString(36).substr(2, 9);
-      }
+        // Function to generate a random room ID
+        function generateRoomId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
     </script>
-  </body>
+</body>
 </html>
