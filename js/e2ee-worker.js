@@ -1,12 +1,15 @@
-// e2ee-worker.js
 let key = null;
 
 function encode(str) {
   return new TextEncoder().encode(str);
 }
 
+function decode(buffer) {
+  return new TextDecoder().decode(buffer);
+}
+
 function generateKeyMaterial(passphrase) {
-  return self.crypto.subtle.importKey(
+  return window.crypto.subtle.importKey(
     "raw",
     encode(passphrase),
     { name: "PBKDF2" },
@@ -17,7 +20,7 @@ function generateKeyMaterial(passphrase) {
 
 function getKey(passphrase) {
   return generateKeyMaterial(passphrase).then((keyMaterial) => {
-    return self.crypto.subtle.deriveKey(
+    return window.crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
         salt: encode("seen-project-salt"),
@@ -40,13 +43,13 @@ onmessage = async (event) => {
   }
 
   if (type === "encrypt") {
-    const iv = self.crypto.getRandomValues(new Uint8Array(12));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encrypted = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv },
       key,
       data
     );
-    postMessage({ type: "encrypted", data: encrypted, iv }, [encrypted]);
+    postMessage({ type: "encrypted", data: encrypted, iv });
   }
 
   if (type === "decrypt") {
@@ -56,9 +59,9 @@ onmessage = async (event) => {
         key,
         data.data
       );
-      postMessage({ type: "decrypted", data: decrypted }, [decrypted]);
+      postMessage({ type: "decrypted", data: decrypted });
     } catch (e) {
-      console.error("❌ Decryption failed", e);
+      console.error("Decryption failed", e);
     }
   }
 };
