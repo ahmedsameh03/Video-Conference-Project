@@ -1,5 +1,3 @@
-import { E2EEManager } from "./meeting-e2ee.js";
-
 const e2ee = new E2EEManager();
 await e2ee.init();
 const queryParams = getQueryParams();
@@ -320,14 +318,22 @@ ws.onmessage = async (message) => {
         removeVideoStream(data.user);
         removeParticipant(data.user);
         break;
-
       case "chat":
-        console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
-        displayMessage({
-          user: data.user,
-          text: data.text,
-          own: data.user === name,
-        });
+        if (isE2EEEnabled && data.cipher && data.iv) {
+          const decrypted = await e2eeManager.decrypt(data.cipher, data.iv);
+          const decoded = new TextDecoder().decode(decrypted);
+          displayMessage({
+            user: data.user,
+            text: decoded,
+            own: data.user === name,
+          });
+        } else {
+          displayMessage({
+            user: data.user,
+            text: data.text,
+            own: data.user === name,
+          });
+        }
         break;
 
       default:
@@ -629,11 +635,18 @@ function stopScreenShare() {
   });
 }
 
-function sendMessage() {
+async function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
-  console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
+
+  if (isE2EEEnabled) {
+    const encoded = new TextEncoder().encode(msg);
+    const { cipher, iv } = await e2eeManager.encrypt(encoded);
+    ws.send(JSON.stringify({ type: "chat", user: name, cipher, iv, room }));
+  } else {
+    ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
+  }
+
   displayMessage({ user: name, text: msg, own: true });
   chatInputField.value = "";
 }
