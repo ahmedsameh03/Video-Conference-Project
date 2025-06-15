@@ -9,7 +9,7 @@ function decode(buffer) {
 }
 
 function generateKeyMaterial(passphrase) {
-  return window.crypto.subtle.importKey(
+  return self.crypto.subtle.importKey(
     "raw",
     encode(passphrase),
     { name: "PBKDF2" },
@@ -20,7 +20,7 @@ function generateKeyMaterial(passphrase) {
 
 function getKey(passphrase) {
   return generateKeyMaterial(passphrase).then((keyMaterial) => {
-    return window.crypto.subtle.deriveKey(
+    return self.crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
         salt: encode("seen-project-salt"),
@@ -43,7 +43,7 @@ onmessage = async (event) => {
   }
 
   if (type === "encrypt") {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const iv = self.crypto.getRandomValues(new Uint8Array(12));
     const encrypted = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv },
       key,
