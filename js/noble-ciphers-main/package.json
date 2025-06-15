@@ -1,0 +1,72 @@
+{
+  "name": "@noble/ciphers",
+  "version": "2.0.0-beta.1",
+  "description": "Audited & minimal JS implementation of Salsa20, ChaCha and AES",
+  "files": [
+    "src",
+    "*.js",
+    "*.js.map",
+    "*.d.ts",
+    "*.d.ts.map"
+  ],
+  "scripts": {
+    "bench": "node test/benchmark/noble.ts",
+    "bench:compare": "node test/benchmark/compare.ts",
+    "bench:install": "cd test/benchmark; npm install",
+    "build": "npm run build:clean; tsc",
+    "build:release": "npx jsbt esbuild test/build",
+    "build:clean": "rm *.{js,d.ts,js.map,d.ts.map} 2> /dev/null",
+    "lint": "prettier --check 'src/**/*.{js,ts}' 'test/**/*.{js,ts,mjs}'",
+    "format": "prettier --write 'src/**/*.{js,ts}' 'test/**/*.{js,ts,mjs}'",
+    "test": "node --experimental-strip-types --no-warnings test/index.ts",
+    "test:bun": "bun test/index.ts",
+    "test:deno": "deno --allow-env --allow-read test/index.ts",
+    "test:node20": "cd test; npx tsc; node compiled/test/index.js",
+    "test:big": "node test/crosstest.test.js slow"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "homepage": "https://paulmillr.com/noble/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/noble-ciphers.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@paulmillr/jsbt": "0.4.1",
+    "@scure/base": "1.2.5",
+    "@types/node": "22.15.23",
+    "fast-check": "4.1.1",
+    "micro-bmark": "0.4.2",
+    "micro-should": "0.5.3",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">= 20.19.0"
+  },
+  "type": "module",
+  "module": "index.js",
+  "main": "index.js",
+  "sideEffects": false,
+  "keywords": [
+    "salsa20",
+    "chacha",
+    "aes",
+    "cryptography",
+    "crypto",
+    "noble",
+    "cipher",
+    "ciphers",
+    "xsalsa20",
+    "xchacha20",
+    "poly1305",
+    "xsalsa20poly1305",
+    "chacha20poly1305",
+    "xchacha20poly1305",
+    "secretbox",
+    "rijndael",
+    "siv",
+    "ff1"
+  ],
+  "funding": "https://paulmillr.com/funding/"
+}

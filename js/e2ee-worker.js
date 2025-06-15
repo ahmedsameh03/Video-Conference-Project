@@ -1,11 +1,8 @@
+// e2ee-worker.js
 let key = null;
 
 function encode(str) {
   return new TextEncoder().encode(str);
-}
-
-function decode(buffer) {
-  return new TextDecoder().decode(buffer);
 }
 
 function generateKeyMaterial(passphrase) {
@@ -49,7 +46,7 @@ onmessage = async (event) => {
       key,
       data
     );
-    postMessage({ type: "encrypted", data: encrypted, iv });
+    postMessage({ type: "encrypted", data: encrypted, iv }, [encrypted]);
   }
 
   if (type === "decrypt") {
@@ -59,9 +56,9 @@ onmessage = async (event) => {
         key,
         data.data
       );
-      postMessage({ type: "decrypted", data: decrypted });
+      postMessage({ type: "decrypted", data: decrypted }, [decrypted]);
     } catch (e) {
-      console.error("Decryption failed", e);
+      console.error("❌ Decryption failed", e);
     }
   }
 };
