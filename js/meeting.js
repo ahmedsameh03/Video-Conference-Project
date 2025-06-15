@@ -3,7 +3,8 @@ const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
-
+let e2eeManager;
+let isE2EEEnabled = false;
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
@@ -103,6 +104,10 @@ ws.onopen = async () => {
     if (!localStream || !localStream.getTracks().length) {
       throw new Error("Local stream not initialized or no tracks available.");
     }
+    e2eeManager = new E2EEManager();
+    await e2eeManager.init();
+    console.log("🔐 E2EE Manager initialized");
+
     console.log(
       "📹 Local Stream initialized with tracks:",
       localStream
@@ -644,6 +649,31 @@ function toggleChat() {
 
 function toggleParticipants() {
   document.getElementById("participants-container").classList.toggle("visible");
+}
+function toggleE2EE() {
+  isE2EEEnabled = !isE2EEEnabled;
+  console.log(
+    `🔐 End-to-End Encryption ${isE2EEEnabled ? "enabled" : "disabled"}`
+  );
+
+  Object.values(peers).forEach((peer) => {
+    if (peer instanceof RTCPeerConnection) {
+      peer.getSenders().forEach((sender) => {
+        if (sender.track?.kind === "video" || sender.track?.kind === "audio") {
+          e2eeManager.setSenderTransform(sender, isE2EEEnabled);
+        }
+      });
+
+      peer.getReceivers().forEach((receiver) => {
+        if (
+          receiver.track?.kind === "video" ||
+          receiver.track?.kind === "audio"
+        ) {
+          e2eeManager.setReceiverTransform(receiver, isE2EEEnabled);
+        }
+      });
+    }
+  });
 }
 
 function leaveMeeting() {
