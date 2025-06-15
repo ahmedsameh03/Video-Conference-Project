@@ -650,8 +650,18 @@ function toggleChat() {
 function toggleParticipants() {
   document.getElementById("participants-container").classList.toggle("visible");
 }
-function toggleE2EE() {
+window.toggleE2EE = function () {
   isE2EEEnabled = !isE2EEEnabled;
+
+  const btn = document.getElementById("e2ee-btn");
+  if (isE2EEEnabled) {
+    btn.style.backgroundColor = "#28a745"; // ✅ green
+    btn.style.color = "white";
+  } else {
+    btn.style.backgroundColor = ""; // 🔁 default
+    btn.style.color = "";
+  }
+
   console.log(
     `🔐 End-to-End Encryption ${isE2EEEnabled ? "enabled" : "disabled"}`
   );
@@ -674,7 +684,7 @@ function toggleE2EE() {
       });
     }
   });
-}
+};
 
 function leaveMeeting() {
   if (!confirm("Are you sure you want to leave the meeting?")) return;
