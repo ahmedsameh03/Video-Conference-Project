@@ -38,6 +38,7 @@ async function testLocalStream() {
         .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
     );
     localVideo.srcObject = testStream;
+    localVideo.style.transform = "scaleX(-1)";
     localVideo.muted = true;
     await localVideo
       .play()
@@ -567,7 +568,15 @@ async function shareScreen() {
     screenVideoElement.srcObject = screenStream;
     screenVideoElement.autoplay = true;
     screenVideoElement.id = "screen-share";
-    videoGrid.appendChild(screenVideoElement);
+    screenVideoElement.style.width = "300px"; // Small size
+    screenVideoElement.style.height = "200px";
+    screenVideoElement.style.position = "absolute";
+    screenVideoElement.style.bottom = "10px";
+    screenVideoElement.style.right = "10px";
+    screenVideoElement.style.border = "2px solid #4caf50";
+    screenVideoElement.style.zIndex = "999";
+
+    document.body.appendChild(screenVideoElement); // append to body, not grid
 
     // ✅ Make sure each peer is a valid RTCPeerConnection
     Object.entries(peers).forEach(([user, peer]) => {
