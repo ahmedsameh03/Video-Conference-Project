@@ -568,15 +568,19 @@ async function shareScreen() {
     screenVideoElement.srcObject = screenStream;
     screenVideoElement.autoplay = true;
     screenVideoElement.id = "screen-share";
-    screenVideoElement.style.width = "300px"; // Small size
-    screenVideoElement.style.height = "200px";
-    screenVideoElement.style.position = "absolute";
-    screenVideoElement.style.bottom = "10px";
-    screenVideoElement.style.right = "10px";
-    screenVideoElement.style.border = "2px solid #4caf50";
+
+    // Styling for reasonable size in the middle
+    screenVideoElement.style.width = "70%";
+    screenVideoElement.style.height = "70%";
+    screenVideoElement.style.position = "fixed";
+    screenVideoElement.style.top = "50%";
+    screenVideoElement.style.left = "50%";
+    screenVideoElement.style.transform = "translate(-50%, -50%)";
+    screenVideoElement.style.border = "3px solid #4caf50";
+    screenVideoElement.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
     screenVideoElement.style.zIndex = "999";
 
-    document.body.appendChild(screenVideoElement); // append to body, not grid
+    document.body.appendChild(screenVideoElement); // Append to body directly
 
     // ✅ Make sure each peer is a valid RTCPeerConnection
     Object.entries(peers).forEach(([user, peer]) => {
