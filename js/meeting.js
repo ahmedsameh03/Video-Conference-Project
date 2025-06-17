@@ -1,3 +1,4 @@
+import { E2EEManager } from "./meeting-e2ee.js";
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
