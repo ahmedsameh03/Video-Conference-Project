@@ -1,10 +1,9 @@
-import { E2EEManager } from "./meeting-e2ee.js";
+const e2eeManager = new window.E2EEManager();
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
-let e2eeManager;
 let isE2EEEnabled = false;
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
@@ -737,3 +736,26 @@ window.toggleParticipants = toggleParticipants;
 window.openAIFeatures = openAIFeatures;
 window.leaveMeeting = leaveMeeting;
 window.toggleE2EE = toggleE2EE;
+function toggleMute() {
+  console.log("🔇 Mute toggled (not implemented)");
+}
+
+function toggleVideo() {
+  console.log("🎥 Video toggled (not implemented)");
+}
+
+function toggleChat() {
+  console.log("💬 Chat toggled (not implemented)");
+}
+
+function toggleParticipants() {
+  console.log("👥 Participants toggled (not implemented)");
+}
+
+function toggleE2EE() {
+  console.log("🔐 E2EE toggled (not connected yet)");
+}
+
+function shareScreen() {
+  console.log("🖥️ Share screen clicked");
+}

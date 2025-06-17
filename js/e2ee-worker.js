@@ -1,4 +1,4 @@
-importScripts("js/noble-ciphers.min.js");
+importScripts("js/noble-ciphers.min.js"); // ✅ correct
 
 let cipher = null;
 
@@ -27,3 +27,4 @@ onmessage = async (event) => {
     }
   }
 };
+console.log("🛡️ E2EE worker loaded");
