@@ -1,48 +1,29 @@
-// Load noble ciphers for AES-GCM-SIV support
-importScripts("https://cdn.jsdelivr.net/npm/@noble/ciphers/web.js");
+importScripts("js/noble-ciphers.min.js");
 
-const { aes } = nobleCiphers;
-let cipherKey = null;
-
-// Utility functions for encoding/decoding
-function encode(str) {
-  return new TextEncoder().encode(str);
-}
-function decode(buf) {
-  return new TextDecoder().decode(buf);
-}
-
-// Derive a 256-bit key from passphrase (simplified XOR-based hash for worker use)
-function getCipherKeyFromString(passphrase) {
-  const hash = new Uint8Array(32);
-  const encoded = encode(passphrase);
-  for (let i = 0; i < encoded.length; i++) {
-    hash[i % 32] ^= encoded[i];
-  }
-  return hash;
-}
+let cipher = null;
 
 onmessage = async (event) => {
-  const { type, data, keyString } = event.data;
+  const { type, data, keyString, iv } = event.data;
 
   if (type === "init") {
-    cipherKey = getCipherKeyFromString(keyString);
+    const keyBytes = new TextEncoder().encode(
+      keyString.padEnd(32, "0").slice(0, 32)
+    );
+    cipher = nobleCiphers.siv.aes256gcm(keyBytes);
   }
 
   if (type === "encrypt") {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const gcmSiv = aes.gcmSiv(cipherKey, iv);
-    const cipher = gcmSiv.encrypt(new Uint8Array(data));
-    postMessage({ type: "encrypted", data: cipher, iv });
+    const ivBytes = self.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = cipher.seal(ivBytes, new Uint8Array(data));
+    postMessage({ type: "encrypted", data: encrypted, iv: ivBytes });
   }
 
   if (type === "decrypt") {
     try {
-      const gcmSiv = aes.gcmSiv(cipherKey, new Uint8Array(data.iv));
-      const plain = gcmSiv.decrypt(new Uint8Array(data.data));
-      postMessage({ type: "decrypted", data: plain });
+      const decrypted = cipher.open(iv, new Uint8Array(data));
+      postMessage({ type: "decrypted", data: decrypted });
     } catch (e) {
-      console.error("❌ Decryption failed:", e.message);
+      console.error("❌ Decryption failed", e);
     }
   }
 };

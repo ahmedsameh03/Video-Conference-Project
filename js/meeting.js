@@ -727,3 +727,13 @@ function leaveMeeting() {
   }
   window.location.href = "dashboard.html";
 }
+
+// Make control functions accessible from HTML
+window.toggleMute = toggleMute;
+window.toggleVideo = toggleVideo;
+window.shareScreen = shareScreen;
+window.toggleChat = toggleChat;
+window.toggleParticipants = toggleParticipants;
+window.openAIFeatures = openAIFeatures;
+window.leaveMeeting = leaveMeeting;
+window.toggleE2EE = toggleE2EE;
