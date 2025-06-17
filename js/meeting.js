@@ -106,9 +106,10 @@ ws.onopen = async () => {
       throw new Error("Local stream not initialized or no tracks available.");
     }
     e2eeManager = new E2EEManager();
-    await e2eeManager.init();
+    (async () => {
+      await e2eeManager.init();
+    })();
     console.log("🔐 E2EE Manager initialized");
-
     console.log(
       "📹 Local Stream initialized with tracks:",
       localStream
@@ -725,37 +726,4 @@ function leaveMeeting() {
     ws.close();
   }
   window.location.href = "dashboard.html";
-}
-
-// Make control functions accessible from HTML
-window.toggleMute = toggleMute;
-window.toggleVideo = toggleVideo;
-window.shareScreen = shareScreen;
-window.toggleChat = toggleChat;
-window.toggleParticipants = toggleParticipants;
-window.openAIFeatures = openAIFeatures;
-window.leaveMeeting = leaveMeeting;
-window.toggleE2EE = toggleE2EE;
-function toggleMute() {
-  console.log("🔇 Mute toggled (not implemented)");
-}
-
-function toggleVideo() {
-  console.log("🎥 Video toggled (not implemented)");
-}
-
-function toggleChat() {
-  console.log("💬 Chat toggled (not implemented)");
-}
-
-function toggleParticipants() {
-  console.log("👥 Participants toggled (not implemented)");
-}
-
-function toggleE2EE() {
-  console.log("🔐 E2EE toggled (not connected yet)");
-}
-
-function shareScreen() {
-  console.log("🖥️ Share screen clicked");
 }
