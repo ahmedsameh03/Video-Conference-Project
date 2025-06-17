@@ -642,15 +642,15 @@ function stopScreenShare() {
 // Example secure chat sending
 if (e2eeManager.isEnabled()) {
   const text = "Hello, secure world!";
-  const { cipher, iv } = await e2eeManager.encrypt(
+  /* const { cipher, iv } = await e2eeManager.encrypt(
     new TextEncoder().encode(text)
-  );
+  );*/
   ws.send(JSON.stringify({ type: "chat", cipher, iv }));
 }
 
 // Example secure chat receiving
 if (e2eeManager.isEnabled() && data.type === "chat") {
-  const plain = await e2eeManager.decrypt(data.cipher, data.iv);
+  //const plain = await e2eeManager.decrypt(data.cipher, data.iv);
   const message = new TextDecoder().decode(plain);
   displayMessage({ user: data.user, text: message, own: false });
 }
@@ -727,3 +727,27 @@ function leaveMeeting() {
   }
   window.location.href = "dashboard.html";
 }
+// ✅ Make button functions available to HTML (global scope)
+window.toggleMute = function () {
+  console.log("🔇 Mute toggled (not implemented)");
+};
+
+window.toggleVideo = function () {
+  console.log("🎥 Video toggled (not implemented)");
+};
+
+window.toggleChat = function () {
+  document.getElementById("chat-container").classList.toggle("visible");
+};
+
+window.toggleParticipants = function () {
+  document.getElementById("participants-container").classList.toggle("visible");
+};
+
+window.toggleE2EE = function () {
+  // your existing toggleE2EE logic here
+};
+
+window.shareScreen = function () {
+  console.log("🖥️ Share screen clicked");
+};
