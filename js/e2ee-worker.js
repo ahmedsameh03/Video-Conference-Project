@@ -1,4 +1,4 @@
-importScripts("js/noble-ciphers.min.js"); // ✅ correct
+importScripts("https://seenmeet.vercel.app/js/noble-ciphers.min.js");
 
 let cipher = null;
 
