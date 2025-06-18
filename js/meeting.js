@@ -16,8 +16,9 @@ const participantsList = document.getElementById("participants-list");
 const SIGNALING_SERVER_URL =
   "wss://video-conference-project-production.up.railway.app";
 
-console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
-const ws = new WebSocket(SIGNALING_SERVER_URL);
+// Don't connect immediately - wait for name to be provided
+let ws = null;
+let isInitialized = false;
 
 const peers = {};
 let isMakingOffer = false;
@@ -63,6 +64,14 @@ showKeyExchangeLoading(true);
 let expectedUsers = new Set();
 let receivedKeys = new Set();
 
+function getQueryParams() {
+  const params = {};
+  new URLSearchParams(window.location.search).forEach((value, key) => {
+    params[key] = decodeURIComponent(value);
+  });
+  return params;
+}
+
 // اختبار بسيط للـ Local Stream
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
@@ -103,15 +112,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById("meeting-id-display")) {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   }
-  if (document.getElementById("user-name-display")) {
-    document.getElementById("user-name-display").textContent = name;
+
+  // Only initialize if name is provided
+  if (name) {
+    if (document.getElementById("user-name-display")) {
+      document.getElementById("user-name-display").textContent = name;
+    }
+    await testLocalStream();
+    await initializeMeeting(name);
+  } else {
+    // Wait for name to be provided via the modal
+    console.log("⏳ Waiting for user to enter name...");
   }
-  await testLocalStream();
 });
 
 document.getElementById("qr-btn").addEventListener("click", () => {
   const meetingId = new URLSearchParams(window.location.search).get("room");
-  const meetingUrl = `${window.location.origin}${window.location.pathname}?room=${meetingId}`;
+  const currentName = new URLSearchParams(window.location.search).get("name");
+  let meetingUrl = `${window.location.origin}${window.location.pathname}?room=${meetingId}`;
+  if (currentName) {
+    meetingUrl += `&name=${encodeURIComponent(currentName)}`;
+  }
   const qrContainer = document.getElementById("qrcode");
   qrContainer.innerHTML = ""; // Clear old QR
   new QRCode(qrContainer, meetingUrl);
@@ -128,7 +149,9 @@ document
     }
 
     try {
-      const qrData = await keyVerification.generateQRData(name);
+      const currentName =
+        new URLSearchParams(window.location.search).get("name") || name;
+      const qrData = await keyVerification.generateQRData(currentName);
       const qrContainer = document.getElementById("e2ee-qrcode");
       qrContainer.innerHTML = ""; // Clear old QR
       new QRCode(qrContainer, qrData);
@@ -224,63 +247,298 @@ async function fetchIceServers() {
   ];
 }
 
-ws.onopen = async () => {
-  console.log("✅ WebSocket connected!");
-  try {
-    await startCamera();
-    if (!localStream || !localStream.getTracks().length) {
+// Function to initialize the meeting connection
+async function initializeMeeting(userName) {
+  if (isInitialized) return;
+
+  console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
+  ws = new WebSocket(SIGNALING_SERVER_URL);
+
+  ws.onopen = async () => {
+    console.log("✅ WebSocket connected!");
+    try {
+      await startCamera();
+      if (!localStream || !localStream.getTracks().length) {
+        alert(
+          "Failed to start camera/microphone. Please check permissions and try again."
+        );
+        return;
+      }
+      e2eeManager = new E2EEManager();
+      const keyInfo = await e2eeManager.initialize();
+      await e2eeManager.addParticipant(userName, keyInfo.publicKeyBase64);
+      transformManager = new WebRTCTransformManager(e2eeManager);
+      keyVerification = new KeyVerification(e2eeManager);
+      console.log("🔐 E2EE system initialized successfully");
+      ws.send(
+        JSON.stringify({
+          type: "join",
+          room,
+          user: userName,
+          publicKey: keyInfo.publicKeyBase64,
+        })
+      );
+      addParticipant(userName);
+      // Wait for key exchange to complete before enabling controls
+      // (handled in ws.onmessage)
+    } catch (error) {
       alert(
         "Failed to start camera/microphone. Please check permissions and try again."
       );
-      return;
+      console.error("❌ Failed to start camera before joining:", error);
     }
-    e2eeManager = new E2EEManager();
-    const keyInfo = await e2eeManager.initialize();
-    await e2eeManager.addParticipant(name, keyInfo.publicKeyBase64);
-    transformManager = new WebRTCTransformManager(e2eeManager);
-    keyVerification = new KeyVerification(e2eeManager);
-    console.log("🔐 E2EE system initialized successfully");
-    ws.send(
-      JSON.stringify({
-        type: "join",
-        room,
-        user: name,
-        publicKey: keyInfo.publicKeyBase64,
-      })
-    );
-    addParticipant(name);
-    // Wait for key exchange to complete before enabling controls
-    // (handled in ws.onmessage)
-  } catch (error) {
+  };
+
+  ws.onerror = (error) => {
+    console.error("❌ WebSocket Error:", error);
     alert(
-      "Failed to start camera/microphone. Please check permissions and try again."
+      "WebSocket connection error. Please check the server and your connection."
     );
-    console.error("❌ Failed to start camera before joining:", error);
-  }
-};
+  };
 
-ws.onerror = (error) => {
-  console.error("❌ WebSocket Error:", error);
-  alert(
-    "WebSocket connection error. Please check the server and your connection."
-  );
-};
+  ws.onclose = (event) => {
+    console.log("🔌 WebSocket connection closed:", event.code, event.reason);
+    if (!event.wasClean) {
+      alert(
+        "WebSocket connection closed unexpectedly. Please try refreshing the page."
+      );
+    }
+  };
 
-ws.onclose = (event) => {
-  console.log("🔌 WebSocket connection closed:", event.code, event.reason);
-  if (!event.wasClean) {
-    alert(
-      "WebSocket connection closed unexpectedly. Please try refreshing the page."
-    );
-  }
-};
+  ws.onmessage = async (message) => {
+    try {
+      const data = JSON.parse(message.data);
+      console.log("📩 WebSocket message received:", data);
+      if (!data.type) return;
+      if (data.type === "new-user" && data.user !== userName) {
+        expectedUsers.add(data.user);
+      }
+      switch (data.type) {
+        case "new-user":
+          console.log(`✨ New user joined: ${data.user}`);
 
-function getQueryParams() {
-  const params = {};
-  new URLSearchParams(window.location.search).forEach((value, key) => {
-    params[key] = decodeURIComponent(value);
-  });
-  return params;
+          // Don't connect to yourself
+          if (data.user === userName) return;
+
+          // Add to participant list
+          addParticipant(data.user);
+
+          // Always handle E2EE key exchange if publicKey is present
+          if (data.publicKey && e2eeManager) {
+            try {
+              const success = await e2eeManager.addParticipant(
+                data.user,
+                data.publicKey
+              );
+              if (success) {
+                receivedKeys.add(data.user);
+                if (
+                  expectedUsers.size > 0 &&
+                  receivedKeys.size === expectedUsers.size
+                ) {
+                  allKeysExchanged = true;
+                  setE2EEControlsEnabled(true);
+                  showKeyExchangeLoading(false);
+                }
+                console.log(`🔐 E2EE key exchange completed with ${data.user}`);
+
+                // Start key rotation if this is the first participant
+                if (e2eeManager.getParticipantCount() === 1) {
+                  e2eeManager.startKeyRotation();
+                }
+              } else {
+                console.error(`❌ E2EE key exchange failed with ${data.user}`);
+              }
+            } catch (error) {
+              alert(
+                `Failed to exchange encryption key with ${data.user}. Try refreshing the page.`
+              );
+              console.error(
+                `❌ E2EE key exchange error with ${data.user}:`,
+                error
+              );
+            }
+          }
+
+          // If not already connected, create a peer and send an offer
+          if (!peers[data.user]) {
+            await createPeer(data.user);
+            await createOffer(data.user);
+          }
+          break;
+
+        case "offer":
+          console.log(`📨 Offer received from ${data.user}`);
+          const peer = peers[data.user] || (await createPeer(data.user));
+          const offerCollision =
+            isMakingOffer || peer.signalingState !== "stable";
+
+          isPolite = userName.localeCompare(data.user) > 0;
+          if (offerCollision && !isPolite) {
+            console.warn(
+              `⚠️ Offer collision from ${data.user}, dropping offer`
+            );
+            return;
+          }
+
+          try {
+            await peer.setRemoteDescription(
+              new RTCSessionDescription(data.offer)
+            );
+            if (peer._bufferedCandidates?.length) {
+              for (const candidate of peer._bufferedCandidates) {
+                try {
+                  await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                  console.log(
+                    `✅ Buffered ICE candidate added for ${data.user}`
+                  );
+                } catch (e) {
+                  console.error(`❌ Error adding buffered ICE candidate:`, e);
+                }
+              }
+              peer._bufferedCandidates = [];
+            }
+
+            console.log(`✅ Remote offer set for ${data.user}`);
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            console.log(`✅ Answer created and set for ${data.user}`);
+            ws.send(
+              JSON.stringify({ type: "answer", answer, room, user: userName })
+            );
+          } catch (e) {
+            console.error("❌ Failed to handle offer:", e);
+          }
+          break;
+
+        case "answer":
+          console.log(`📬 Answer received from ${data.user}`);
+          if (peers[data.user]) {
+            const peer = peers[data.user];
+            try {
+              await peer.setRemoteDescription(
+                new RTCSessionDescription(data.answer)
+              );
+              if (peer._bufferedCandidates?.length) {
+                for (const candidate of peer._bufferedCandidates) {
+                  try {
+                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log(
+                      `✅ Buffered ICE candidate added for ${data.user}`
+                    );
+                  } catch (e) {
+                    console.error(`❌ Error adding buffered ICE candidate:`, e);
+                  }
+                }
+                peer._bufferedCandidates = [];
+              }
+
+              console.log(
+                `✅ Remote description (answer) set for ${data.user}`
+              );
+            } catch (e) {
+              console.error(
+                `❌ Failed to set remote answer for ${data.user}:`,
+                e.message
+              );
+            }
+          } else {
+            console.warn(`⚠️ No peer connection found for ${data.user}`);
+          }
+          break;
+
+        case "candidate":
+          const peerConn = peers[data.user];
+          if (peerConn) {
+            if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
+              try {
+                await peerConn.addIceCandidate(
+                  new RTCIceCandidate(data.candidate)
+                );
+                console.log(`✅ ICE candidate added for ${data.user}`);
+              } catch (e) {
+                console.error(
+                  `❌ Error adding ICE candidate for ${data.user}:`,
+                  e
+                );
+              }
+            } else {
+              // Buffer candidates if remote description not set yet
+              if (!peerConn._bufferedCandidates) {
+                peerConn._bufferedCandidates = [];
+              }
+              peerConn._bufferedCandidates.push(data.candidate);
+              console.log(`📦 Buffered ICE candidate for ${data.user}`);
+            }
+          } else {
+            console.warn(`⚠️ No peer connection found for ${data.user}`);
+          }
+          break;
+
+        case "user-left":
+          console.log(`🚪 User left: ${data.user}`);
+          removeVideoStream(data.user);
+          removeParticipant(data.user);
+
+          // Handle E2EE cleanup
+          if (e2eeManager) {
+            await e2eeManager.removeParticipant(data.user);
+            if (transformManager) {
+              transformManager.removeTransform(peers[data.user], data.user);
+            }
+            if (keyVerification) {
+              keyVerification.clearVerification(data.user);
+            }
+          }
+          break;
+
+        case "chat":
+          console.log(
+            `📩 Chat message received from ${data.user}: ${data.text}`
+          );
+          displayMessage({
+            user: data.user,
+            text: data.text,
+            own: data.user === userName,
+          });
+          break;
+
+        case "e2ee-verification":
+          if (keyVerification && data.user !== userName) {
+            try {
+              const isVerified = await keyVerification.verifyKey(
+                data.user,
+                data.code
+              );
+              if (isVerified) {
+                console.log(`🔐 Key verification successful with ${data.user}`);
+                // Update UI to show verified status
+                updateVerificationStatus(data.user, true);
+              } else {
+                console.warn(`⚠️ Key verification failed with ${data.user}`);
+                updateVerificationStatus(data.user, false);
+              }
+            } catch (error) {
+              console.error(
+                `❌ Key verification error with ${data.user}:`,
+                error
+              );
+            }
+          }
+          break;
+
+        default:
+          console.warn(`❓ Unknown message type: ${data.type}`);
+      }
+    } catch (error) {
+      alert(
+        "An error occurred while processing a message from the server. Please refresh the page."
+      );
+      console.error("❌ Error handling WebSocket message:", error);
+    }
+  };
+
+  isInitialized = true;
 }
 
 async function startCamera() {
@@ -338,213 +596,6 @@ async function startCamera() {
     .play()
     .catch((e) => console.error("❌ Video play failed:", e));
 }
-
-ws.onmessage = async (message) => {
-  try {
-    const data = JSON.parse(message.data);
-    console.log("📩 WebSocket message received:", data);
-    if (!data.type) return;
-    if (data.type === "new-user" && data.user !== name) {
-      expectedUsers.add(data.user);
-    }
-    switch (data.type) {
-      case "new-user":
-        console.log(`✨ New user joined: ${data.user}`);
-
-        // Don't connect to yourself
-        if (data.user === name) return;
-
-        // Add to participant list
-        addParticipant(data.user);
-
-        // Always handle E2EE key exchange if publicKey is present
-        if (data.publicKey && e2eeManager) {
-          try {
-            const success = await e2eeManager.addParticipant(
-              data.user,
-              data.publicKey
-            );
-            if (success) {
-              receivedKeys.add(data.user);
-              if (
-                expectedUsers.size > 0 &&
-                receivedKeys.size === expectedUsers.size
-              ) {
-                allKeysExchanged = true;
-                setE2EEControlsEnabled(true);
-                showKeyExchangeLoading(false);
-              }
-              console.log(`🔐 E2EE key exchange completed with ${data.user}`);
-
-              // Start key rotation if this is the first participant
-              if (e2eeManager.getParticipantCount() === 1) {
-                e2eeManager.startKeyRotation();
-              }
-            } else {
-              console.error(`❌ E2EE key exchange failed with ${data.user}`);
-            }
-          } catch (error) {
-            alert(
-              `Failed to exchange encryption key with ${data.user}. Try refreshing the page.`
-            );
-            console.error(
-              `❌ E2EE key exchange error with ${data.user}:`,
-              error
-            );
-          }
-        }
-
-        // If not already connected, create a peer and send an offer
-        if (!peers[data.user]) {
-          await createPeer(data.user);
-          await createOffer(data.user);
-        }
-        break;
-
-      case "offer":
-        console.log(`📨 Offer received from ${data.user}`);
-        const peer = peers[data.user] || (await createPeer(data.user));
-        const offerCollision =
-          isMakingOffer || peer.signalingState !== "stable";
-
-        isPolite = name.localeCompare(data.user) > 0;
-        if (offerCollision && !isPolite) {
-          console.warn(`⚠️ Offer collision from ${data.user}, dropping offer`);
-          return;
-        }
-
-        try {
-          await peer.setRemoteDescription(
-            new RTCSessionDescription(data.offer)
-          );
-          if (peer._bufferedCandidates?.length) {
-            for (const candidate of peer._bufferedCandidates) {
-              try {
-                await peer.addIceCandidate(new RTCIceCandidate(candidate));
-                console.log(`✅ Buffered ICE candidate added for ${data.user}`);
-              } catch (e) {
-                console.error(`❌ Error adding buffered ICE candidate:`, e);
-              }
-            }
-            peer._bufferedCandidates = [];
-          }
-
-          console.log(`✅ Remote offer set for ${data.user}`);
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
-          console.log(`✅ Answer created and set for ${data.user}`);
-          ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
-        } catch (e) {
-          console.error("❌ Failed to handle offer:", e);
-        }
-        break;
-
-      case "answer":
-        console.log(`📬 Answer received from ${data.user}`);
-        if (peers[data.user]) {
-          const peer = peers[data.user];
-          try {
-            await peer.setRemoteDescription(
-              new RTCSessionDescription(data.answer)
-            );
-            if (peer._bufferedCandidates?.length) {
-              for (const candidate of peer._bufferedCandidates) {
-                try {
-                  await peer.addIceCandidate(new RTCIceCandidate(candidate));
-                  console.log(
-                    `✅ Buffered ICE candidate added for ${data.user}`
-                  );
-                } catch (e) {
-                  console.error(`❌ Error adding buffered ICE candidate:`, e);
-                }
-              }
-              peer._bufferedCandidates = [];
-            }
-
-            console.log(`✅ Remote description (answer) set for ${data.user}`);
-          } catch (e) {
-            console.error(
-              `❌ Failed to set remote answer for ${data.user}:`,
-              e.message
-            );
-          }
-        } else {
-          console.warn(`⚠️ No peer connection found for ${data.user}`);
-        }
-        break;
-
-      case "candidate":
-        const peerConn = peers[data.user];
-        if (peerConn) {
-          if (peerConn.remoteDescription?.type) {
-            await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
-          } else {
-            peerConn._bufferedCandidates = peerConn._bufferedCandidates || [];
-            peerConn._bufferedCandidates.push(data.candidate);
-          }
-        }
-        break;
-
-      case "user-left":
-        console.log(`🚪 User left: ${data.user}`);
-        removeVideoStream(data.user);
-        removeParticipant(data.user);
-
-        // Handle E2EE cleanup
-        if (e2eeManager) {
-          await e2eeManager.removeParticipant(data.user);
-          if (transformManager) {
-            transformManager.removeTransform(peers[data.user], data.user);
-          }
-          if (keyVerification) {
-            keyVerification.clearVerification(data.user);
-          }
-        }
-        break;
-
-      case "chat":
-        console.log(`📩 Chat message received from ${data.user}: ${data.text}`);
-        displayMessage({
-          user: data.user,
-          text: data.text,
-          own: data.user === name,
-        });
-        break;
-
-      case "e2ee-verification":
-        if (keyVerification && data.user !== name) {
-          try {
-            const isVerified = await keyVerification.verifyKey(
-              data.user,
-              data.code
-            );
-            if (isVerified) {
-              console.log(`🔐 Key verification successful with ${data.user}`);
-              // Update UI to show verified status
-              updateVerificationStatus(data.user, true);
-            } else {
-              console.warn(`⚠️ Key verification failed with ${data.user}`);
-              updateVerificationStatus(data.user, false);
-            }
-          } catch (error) {
-            console.error(
-              `❌ Key verification error with ${data.user}:`,
-              error
-            );
-          }
-        }
-        break;
-
-      default:
-        console.warn(`❓ Unknown message type: ${data.type}`);
-    }
-  } catch (error) {
-    alert(
-      "An error occurred while processing a message from the server. Please refresh the page."
-    );
-    console.error("❌ Error handling WebSocket message:", error);
-  }
-};
 
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
@@ -656,27 +707,22 @@ async function createPeer(user) {
 }
 
 async function createOffer(user) {
-  console.log(`📨 Creating offer for ${user}`);
-  if (!peers[user]) await createPeer(user);
+  console.log(`📤 Creating offer for ${user}`);
+  const peer = peers[user];
+  if (!peer) {
+    console.error(`❌ No peer connection found for ${user}`);
+    return;
+  }
+
   try {
-    peers[user]._flags = peers[user]._flags || {};
-    peers[user]._flags.makingOffer = true;
-    const peer = peers[user];
-    console.log(
-      `🔍 Signaling state before creating offer for ${user}:`,
-      peer.signalingState
-    );
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    console.log(
-      `✅ Offer created and set for ${user}. New signaling state:`,
-      peer.signalingState
-    );
-    ws.send(JSON.stringify({ type: "offer", offer, room, user: name }));
-  } catch (e) {
-    console.error("❌ Error creating offer:", e.message, e.stack);
-  } finally {
-    peers[user]._flags.makingOffer = false;
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
+    ws.send(JSON.stringify({ type: "offer", offer, room, user: currentName }));
+    console.log(`✅ Offer sent to ${user}`);
+  } catch (error) {
+    console.error(`❌ Failed to create offer for ${user}:`, error);
   }
 }
 
@@ -866,11 +912,15 @@ function stopScreenShare() {
 
 function sendMessage() {
   const msg = chatInputField.value.trim();
-  if (!msg) return;
-  console.log(`💬 Sending: ${msg}`);
-  ws.send(JSON.stringify({ type: "chat", user: name, text: msg, room }));
-  displayMessage({ user: name, text: msg, own: true });
-  chatInputField.value = "";
+  if (msg) {
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
+    ws.send(
+      JSON.stringify({ type: "chat", user: currentName, text: msg, room })
+    );
+    displayMessage({ user: currentName, text: msg, own: true });
+    chatInputField.value = "";
+  }
 }
 
 function displayMessage({ user, text, own }) {
@@ -945,19 +995,27 @@ function updateVerificationStatus(userId, isVerified) {
 
 // Function to send verification code to other participants
 async function sendVerificationCode(userId) {
-  if (!keyVerification) return;
+  if (!keyVerification) {
+    console.error("❌ Key verification not initialized");
+    return;
+  }
 
   try {
-    const verification = await keyVerification.generateVerificationCode(userId);
+    const verificationCode = await keyVerification.generateVerificationCode(
+      userId
+    );
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
     ws.send(
       JSON.stringify({
         type: "e2ee-verification",
-        user: name,
+        user: currentName,
         targetUser: userId,
-        code: verification.code,
+        code: verificationCode,
         room,
       })
     );
+    console.log(`🔐 Verification code sent to ${userId}`);
   } catch (error) {
     console.error(`❌ Failed to send verification code to ${userId}:`, error);
   }
@@ -980,9 +1038,13 @@ function leaveMeeting() {
 
   localStream?.getTracks().forEach((t) => t.stop());
   Object.values(peers).forEach((p) => p.close());
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "leave", room, user: name }));
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
+    ws.send(JSON.stringify({ type: "leave", room, user: currentName }));
     ws.close();
   }
+
   window.location.href = "dashboard.html";
 }

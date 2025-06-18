@@ -757,15 +757,25 @@
           document.getElementById("name-modal").style.display = "flex";
           const input = document.getElementById("name-input");
           input.focus();
-          document.getElementById("name-submit-btn").onclick = function () {
-            const name = input.value.trim();
-            if (!name) {
-              input.style.border = "1.5px solid #e74c3c";
-              input.focus();
-              return;
-            }
-            setQueryParam("name", name);
-          };
+          document.getElementById("name-submit-btn").onclick =
+            async function () {
+              const name = input.value.trim();
+              if (!name) {
+                input.style.border = "1.5px solid #e74c3c";
+                input.focus();
+                return;
+              }
+              // Hide the modal
+              document.getElementById("name-modal").style.display = "none";
+              // Initialize the meeting with the provided name
+              if (typeof initializeMeeting === "function") {
+                await initializeMeeting(name);
+              }
+              // Update URL without reloading the page
+              const url = new URL(window.location.href);
+              url.searchParams.set("name", name);
+              window.history.replaceState({}, "", url.toString());
+            };
           input.addEventListener("keydown", function (e) {
             if (e.key === "Enter") {
               document.getElementById("name-submit-btn").click();
