@@ -1054,3 +1054,60 @@ function leaveMeeting() {
 
   window.location.href = "dashboard.html";
 }
+
+// Manual E2EE Key Verification logic
+function openManualE2EEModal() {
+  const modal = document.getElementById("e2ee-manual-modal");
+  if (!modal) return;
+  // Show modal
+  modal.style.display = "flex";
+  // Show user's own key
+  let myKey = "";
+  if (e2eeManager && e2eeManager.keyPair) {
+    // Export public key as base64
+    window.crypto.subtle
+      .exportKey("spki", e2eeManager.keyPair.publicKey)
+      .then((buf) => {
+        myKey = e2eeManager.arrayBufferToBase64(buf);
+        document.getElementById("my-e2ee-key").value = myKey;
+      });
+  }
+  // Clear previous result and input
+  document.getElementById("e2ee-verify-result").textContent = "";
+  document.getElementById("other-e2ee-key").value = "";
+}
+
+document
+  .getElementById("e2ee-verify-btn")
+  .addEventListener("click", openManualE2EEModal);
+
+document
+  .getElementById("copy-my-e2ee-key")
+  .addEventListener("click", function () {
+    const key = document.getElementById("my-e2ee-key").value;
+    if (key) {
+      navigator.clipboard.writeText(key);
+      this.textContent = "Copied!";
+      setTimeout(() => (this.textContent = "Copy"), 1200);
+    }
+  });
+
+document
+  .getElementById("verify-e2ee-key-btn")
+  .addEventListener("click", function () {
+    const myKey = document.getElementById("my-e2ee-key").value.trim();
+    const otherKey = document.getElementById("other-e2ee-key").value.trim();
+    const resultDiv = document.getElementById("e2ee-verify-result");
+    if (!otherKey) {
+      resultDiv.textContent = "Please enter the other user's key.";
+      resultDiv.style.color = "#ffc107";
+      return;
+    }
+    if (myKey === otherKey) {
+      resultDiv.textContent = "✅ Keys Match!";
+      resultDiv.style.color = "#4caf50";
+    } else {
+      resultDiv.textContent = "❌ Keys Do NOT Match!";
+      resultDiv.style.color = "#ff4d4d";
+    }
+  });

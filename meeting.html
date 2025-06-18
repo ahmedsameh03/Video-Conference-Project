@@ -670,7 +670,7 @@
         data-bs-placement="top"
         aria-label="Verify End-to-End Encryption Keys"
       >
-        <i class="fas fa-shield-alt"></i>
+        <i class="fas fa-key"></i>
       </button>
       <button
         id="e2ee-scan-btn"
@@ -819,6 +819,129 @@
           "
         >
           Join Meeting
+        </button>
+      </div>
+    </div>
+
+    <!-- E2EE Manual Verification Modal -->
+    <div
+      id="e2ee-manual-modal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+      "
+    >
+      <div
+        style="
+          background: #23272f;
+          border-radius: 18px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+          padding: 32px 28px 24px 28px;
+          min-width: 320px;
+          max-width: 95vw;
+          width: 370px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        "
+      >
+        <h5
+          style="
+            margin-bottom: 18px;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+            font-size: 1.15rem;
+          "
+        >
+          🔑 Manual E2EE Key Verification
+        </h5>
+        <div style="width: 100%; margin-bottom: 16px">
+          <label style="color: #bbb; font-size: 0.98rem"
+            >Your Encryption Key:</label
+          >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-top: 4px;
+            "
+          >
+            <input
+              id="my-e2ee-key"
+              type="text"
+              readonly
+              style="
+                flex: 1;
+                background: #181a20;
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 0.98rem;
+              "
+            />
+            <button
+              id="copy-my-e2ee-key"
+              class="btn btn-sm btn-primary"
+              style="padding: 6px 12px"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+        <div style="width: 100%; margin-bottom: 16px">
+          <label style="color: #bbb; font-size: 0.98rem"
+            >Other User's Key:</label
+          >
+          <input
+            id="other-e2ee-key"
+            type="text"
+            placeholder="Paste their key here"
+            style="
+              width: 100%;
+              background: #181a20;
+              color: #fff;
+              border: none;
+              border-radius: 6px;
+              padding: 8px 10px;
+              font-size: 0.98rem;
+              margin-top: 4px;
+            "
+          />
+        </div>
+        <button
+          id="verify-e2ee-key-btn"
+          class="btn btn-success"
+          style="width: 100%; margin-bottom: 10px"
+        >
+          Verify
+        </button>
+        <div
+          id="e2ee-verify-result"
+          style="
+            width: 100%;
+            text-align: center;
+            min-height: 24px;
+            color: #fff;
+            font-weight: 500;
+          "
+        ></div>
+        <button
+          class="btn btn-sm btn-dark"
+          style="margin-top: 10px"
+          onclick="document.getElementById('e2ee-manual-modal').style.display='none'"
+        >
+          Close
         </button>
       </div>
     </div>
