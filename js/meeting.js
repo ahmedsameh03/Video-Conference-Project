@@ -143,29 +143,6 @@ document.getElementById("qr-btn").addEventListener("click", () => {
   document.getElementById("qr-modal").style.display = "block";
 });
 
-// E2EE Key verification QR code
-document
-  .getElementById("e2ee-verify-btn")
-  .addEventListener("click", async () => {
-    if (!keyVerification) {
-      alert("E2EE not initialized yet");
-      return;
-    }
-
-    try {
-      const currentName =
-        new URLSearchParams(window.location.search).get("name") || name;
-      const qrData = await keyVerification.generateQRData(currentName);
-      const qrContainer = document.getElementById("e2ee-qrcode");
-      qrContainer.innerHTML = ""; // Clear old QR
-      new QRCode(qrContainer, qrData);
-      document.getElementById("e2ee-verify-modal").style.display = "block";
-    } catch (error) {
-      console.error("❌ Failed to generate E2EE verification QR:", error);
-      alert("Failed to generate verification QR code");
-    }
-  });
-
 // QR Scanner logic
 let html5QrCodeInstance = null;
 
