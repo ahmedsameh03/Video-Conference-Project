@@ -1,29 +1,48 @@
-importScripts("js/noble-ciphers.min.js");
+// Load noble ciphers for AES-GCM-SIV support
+importScripts("https://cdn.jsdelivr.net/npm/@noble/ciphers/web.js");
 
-let cipher = null;
+const { aes } = nobleCiphers;
+let cipherKey = null;
+
+// Utility functions for encoding/decoding
+function encode(str) {
+  return new TextEncoder().encode(str);
+}
+function decode(buf) {
+  return new TextDecoder().decode(buf);
+}
+
+// Derive a 256-bit key from passphrase (simplified XOR-based hash for worker use)
+function getCipherKeyFromString(passphrase) {
+  const hash = new Uint8Array(32);
+  const encoded = encode(passphrase);
+  for (let i = 0; i < encoded.length; i++) {
+    hash[i % 32] ^= encoded[i];
+  }
+  return hash;
+}
 
 onmessage = async (event) => {
-  const { type, data, keyString, iv } = event.data;
+  const { type, data, keyString } = event.data;
 
   if (type === "init") {
-    const keyBytes = new TextEncoder().encode(
-      keyString.padEnd(32, "0").slice(0, 32)
-    );
-    cipher = nobleCiphers.siv.aes256gcm(keyBytes);
+    cipherKey = getCipherKeyFromString(keyString);
   }
 
   if (type === "encrypt") {
-    const ivBytes = self.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = cipher.seal(ivBytes, new Uint8Array(data));
-    postMessage({ type: "encrypted", data: encrypted, iv: ivBytes });
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const gcmSiv = aes.gcmSiv(cipherKey, iv);
+    const cipher = gcmSiv.encrypt(new Uint8Array(data));
+    postMessage({ type: "encrypted", data: cipher, iv });
   }
 
   if (type === "decrypt") {
     try {
-      const decrypted = cipher.open(iv, new Uint8Array(data));
-      postMessage({ type: "decrypted", data: decrypted });
+      const gcmSiv = aes.gcmSiv(cipherKey, new Uint8Array(data.iv));
+      const plain = gcmSiv.decrypt(new Uint8Array(data.data));
+      postMessage({ type: "decrypted", data: plain });
     } catch (e) {
-      console.error("❌ Decryption failed", e);
+      console.error("❌ Decryption failed:", e.message);
     }
   }
 };
