@@ -133,6 +133,7 @@ ws.onopen = async () => {
     // Initialize E2EE system
     e2eeManager = new E2EEManager();
     const keyInfo = await e2eeManager.initialize();
+    await e2eeManager.addParticipant(name, keyInfo.publicKeyBase64);
     transformManager = new WebRTCTransformManager(e2eeManager);
     keyVerification = new KeyVerification(e2eeManager);
 
