@@ -545,6 +545,16 @@
       >
         <i class="fas fa-shield-alt"></i>
       </button>
+      <button
+        id="e2ee-scan-btn"
+        class="control-btn"
+        title="Scan E2EE QR Code"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        aria-label="Scan E2EE QR Code"
+      >
+        <i class="fas fa-qrcode"></i>
+      </button>
       <!-- AI Features Button -->
       <button
         onclick="openAIFeatures()"
@@ -566,6 +576,37 @@
       >
         <i class="fas fa-phone-slash"></i>
       </button>
+    </div>
+
+    <!-- E2EE QR Scanner Modal -->
+    <div
+      id="e2ee-scan-modal"
+      style="
+        display: none;
+        position: fixed;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        min-width: 300px;
+      "
+    >
+      <h5 style="text-align: center; margin-bottom: 15px">
+        🔍 Scan E2EE QR Code
+      </h5>
+      <div
+        id="e2ee-qr-scanner"
+        style="width: 300px; height: 300px; margin: 0 auto"
+      ></div>
+      <div style="text-align: center; margin-top: 15px">
+        <button class="btn btn-sm btn-dark" onclick="closeE2EEScanModal()">
+          Close
+        </button>
+      </div>
     </div>
 
     <!-- Bootstrap JS Bundle -->

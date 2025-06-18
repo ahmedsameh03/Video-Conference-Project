@@ -101,6 +101,70 @@ document
     }
   });
 
+// QR Scanner logic
+let html5QrCodeInstance = null;
+
+function openE2EEScanModal() {
+  document.getElementById("e2ee-scan-modal").style.display = "block";
+  if (!window.Html5Qrcode) {
+    alert("QR code scanner library not loaded!");
+    return;
+  }
+  if (!html5QrCodeInstance) {
+    html5QrCodeInstance = new Html5Qrcode("e2ee-qr-scanner");
+  }
+  html5QrCodeInstance.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: 250,
+    },
+    async (decodedText, decodedResult) => {
+      try {
+        const qrData = JSON.parse(decodedText);
+        if (
+          qrData.type === "e2ee-verification" &&
+          qrData.userId &&
+          qrData.code
+        ) {
+          // Compare scanned code with our own generated code for that user
+          const isVerified = await keyVerification.verifyKey(
+            qrData.userId,
+            qrData.code
+          );
+          updateVerificationStatus(qrData.userId, isVerified);
+          alert(
+            isVerified
+              ? `✅ Keys match for ${qrData.userId}!`
+              : `❌ Keys do NOT match for ${qrData.userId}!`
+          );
+          closeE2EEScanModal();
+        } else {
+          alert("Invalid E2EE QR code format.");
+        }
+      } catch (e) {
+        alert("Failed to parse QR code.");
+      }
+    },
+    (errorMessage) => {
+      // Ignore scan errors
+    }
+  );
+}
+
+function closeE2EEScanModal() {
+  document.getElementById("e2ee-scan-modal").style.display = "none";
+  if (html5QrCodeInstance) {
+    html5QrCodeInstance.stop().then(() => {
+      html5QrCodeInstance.clear();
+    });
+  }
+}
+
+document
+  .getElementById("e2ee-scan-btn")
+  .addEventListener("click", openE2EEScanModal);
+
 async function fetchIceServers() {
   return [
     {
