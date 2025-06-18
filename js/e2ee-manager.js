@@ -42,6 +42,24 @@ class E2EEManager {
 
   async addParticipant(userId, publicKeyBase64) {
     try {
+      // Special-case: if adding self, generate a symmetric AES-GCM key
+      if (
+        userId === window.name ||
+        userId === (typeof name !== "undefined" ? name : undefined)
+      ) {
+        const sessionKey = await window.crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        this.sessionKeys.set(userId, sessionKey);
+        this.participants.add(userId);
+        console.log(
+          `🔐 Added self (${userId}) to E2EE session with symmetric key`
+        );
+        return true;
+      }
+
       const publicKeyBuffer = this.base64ToArrayBuffer(publicKeyBase64);
       const publicKey = await window.crypto.subtle.importKey(
         "spki",
@@ -54,7 +72,7 @@ class E2EEManager {
         []
       );
 
-      // Derive shared secret
+      // Derive shared secret (raw bits)
       const sharedSecret = await window.crypto.subtle.deriveBits(
         {
           name: "ECDH",
@@ -64,7 +82,16 @@ class E2EEManager {
         256
       );
 
-      // Derive session key from shared secret
+      // Import shared secret as a CryptoKey for PBKDF2
+      const sharedSecretKey = await window.crypto.subtle.importKey(
+        "raw",
+        sharedSecret,
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+
+      // Derive session key from shared secret key
       const sessionKey = await window.crypto.subtle.deriveKey(
         {
           name: "PBKDF2",
@@ -72,7 +99,7 @@ class E2EEManager {
           iterations: 100000,
           hash: "SHA-256",
         },
-        sharedSecret,
+        sharedSecretKey,
         { name: "AES-GCM", length: 256 },
         false,
         ["encrypt", "decrypt"]
