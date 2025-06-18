@@ -5,6 +5,12 @@ class WebRTCTransformManager {
   }
 
   async setupSenderTransform(sender, targetUserId) {
+    if (!sender) {
+      console.warn(
+        `Sender is undefined for ${targetUserId}. Skipping sender transform.`
+      );
+      return;
+    }
     if (
       !this.e2eeManager.isInitialized ||
       !this.e2eeManager.isParticipant(targetUserId)
@@ -55,6 +61,12 @@ class WebRTCTransformManager {
   }
 
   async setupReceiverTransform(receiver, sourceUserId) {
+    if (!receiver) {
+      console.warn(
+        `Receiver is undefined for ${sourceUserId}. Skipping receiver transform.`
+      );
+      return;
+    }
     if (
       !this.e2eeManager.isInitialized ||
       !this.e2eeManager.isParticipant(sourceUserId)
@@ -105,6 +117,12 @@ class WebRTCTransformManager {
   }
 
   removeTransform(peerConnection, userId) {
+    if (!peerConnection || peerConnection.connectionState === "closed") {
+      console.warn(
+        `Peer connection for ${userId} is undefined or closed. Skipping transform removal.`
+      );
+      return;
+    }
     // Remove transforms for this user
     const senders = peerConnection.getSenders();
     const receivers = peerConnection.getReceivers();
@@ -125,6 +143,12 @@ class WebRTCTransformManager {
   }
 
   async applyE2EEToPeer(peerConnection, userId) {
+    if (!peerConnection || peerConnection.connectionState === "closed") {
+      console.warn(
+        `Peer connection for ${userId} is undefined or closed. Skipping E2EE transform application.`
+      );
+      return;
+    }
     if (!this.e2eeManager.isInitialized) {
       console.warn("⚠️ E2EE Manager not initialized");
       return;

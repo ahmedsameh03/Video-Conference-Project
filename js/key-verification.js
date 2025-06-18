@@ -45,27 +45,21 @@ class KeyVerification {
     try {
       const generated = await this.generateVerificationCode(userId);
       const isMatch = generated.code === verificationCode.toUpperCase();
-
       this.verificationStatus.set(userId, {
         verified: isMatch,
         timestamp: Date.now(),
         code: verificationCode,
       });
-
-      console.log(
-        `🔐 Key verification for ${userId}: ${
-          isMatch ? "✅ SUCCESS" : "❌ FAILED"
-        }`
-      );
-
-      // Trigger callback if exists
-      const callback = this.verificationCallbacks.get(userId);
-      if (callback) {
-        callback(isMatch, verificationCode);
+      if (!isMatch) {
+        alert(
+          `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
+        );
       }
-
       return isMatch;
     } catch (error) {
+      alert(
+        `Key verification failed for ${userId}. Please try again or refresh the page.`
+      );
       console.error(`❌ Key verification failed for ${userId}:`, error);
       return false;
     }

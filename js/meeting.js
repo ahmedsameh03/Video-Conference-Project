@@ -25,6 +25,44 @@ let isPolite = false;
 let isSettingRemoteAnswerPending = false;
 let localStream;
 
+// Add a global state for key exchange
+let allKeysExchanged = false;
+
+function setE2EEControlsEnabled(enabled) {
+  document.getElementById("e2ee-btn").disabled = !enabled;
+  document.getElementById("e2ee-verify-btn").disabled = !enabled;
+  document.getElementById("e2ee-scan-btn").disabled = !enabled;
+}
+
+function showKeyExchangeLoading(show) {
+  let loading = document.getElementById("key-exchange-loading");
+  if (!loading) {
+    loading = document.createElement("div");
+    loading.id = "key-exchange-loading";
+    loading.style.position = "fixed";
+    loading.style.top = "10px";
+    loading.style.left = "50%";
+    loading.style.transform = "translateX(-50%)";
+    loading.style.background = "#fff";
+    loading.style.padding = "10px 20px";
+    loading.style.borderRadius = "8px";
+    loading.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
+    loading.style.zIndex = "2000";
+    loading.style.fontWeight = "bold";
+    loading.innerText = "Exchanging encryption keys...";
+    document.body.appendChild(loading);
+  }
+  loading.style.display = show ? "block" : "none";
+}
+
+// Disable E2EE controls initially
+setE2EEControlsEnabled(false);
+showKeyExchangeLoading(true);
+
+// Track expected users for key exchange
+let expectedUsers = new Set();
+let receivedKeys = new Set();
+
 // اختبار بسيط للـ Local Stream
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
@@ -191,26 +229,17 @@ ws.onopen = async () => {
   try {
     await startCamera();
     if (!localStream || !localStream.getTracks().length) {
-      throw new Error("Local stream not initialized or no tracks available.");
+      alert(
+        "Failed to start camera/microphone. Please check permissions and try again."
+      );
+      return;
     }
-
-    // Initialize E2EE system
     e2eeManager = new E2EEManager();
     const keyInfo = await e2eeManager.initialize();
     await e2eeManager.addParticipant(name, keyInfo.publicKeyBase64);
     transformManager = new WebRTCTransformManager(e2eeManager);
     keyVerification = new KeyVerification(e2eeManager);
-
     console.log("🔐 E2EE system initialized successfully");
-
-    console.log(
-      "📹 Local Stream initialized with tracks:",
-      localStream
-        .getTracks()
-        .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
-    );
-
-    // Send join message with public key
     ws.send(
       JSON.stringify({
         type: "join",
@@ -220,11 +249,13 @@ ws.onopen = async () => {
       })
     );
     addParticipant(name);
+    // Wait for key exchange to complete before enabling controls
+    // (handled in ws.onmessage)
   } catch (error) {
-    console.error("❌ Failed to start camera before joining:", error);
     alert(
       "Failed to start camera/microphone. Please check permissions and try again."
     );
+    console.error("❌ Failed to start camera before joining:", error);
   }
 };
 
@@ -313,7 +344,9 @@ ws.onmessage = async (message) => {
     const data = JSON.parse(message.data);
     console.log("📩 WebSocket message received:", data);
     if (!data.type) return;
-
+    if (data.type === "new-user" && data.user !== name) {
+      expectedUsers.add(data.user);
+    }
     switch (data.type) {
       case "new-user":
         console.log(`✨ New user joined: ${data.user}`);
@@ -332,6 +365,15 @@ ws.onmessage = async (message) => {
               data.publicKey
             );
             if (success) {
+              receivedKeys.add(data.user);
+              if (
+                expectedUsers.size > 0 &&
+                receivedKeys.size === expectedUsers.size
+              ) {
+                allKeysExchanged = true;
+                setE2EEControlsEnabled(true);
+                showKeyExchangeLoading(false);
+              }
               console.log(`🔐 E2EE key exchange completed with ${data.user}`);
 
               // Start key rotation if this is the first participant
@@ -342,6 +384,9 @@ ws.onmessage = async (message) => {
               console.error(`❌ E2EE key exchange failed with ${data.user}`);
             }
           } catch (error) {
+            alert(
+              `Failed to exchange encryption key with ${data.user}. Try refreshing the page.`
+            );
             console.error(
               `❌ E2EE key exchange error with ${data.user}:`,
               error
@@ -494,12 +539,10 @@ ws.onmessage = async (message) => {
         console.warn(`❓ Unknown message type: ${data.type}`);
     }
   } catch (error) {
-    console.error(
-      "❌ Error handling WebSocket message:",
-      error.name,
-      error.message,
-      error.stack
+    alert(
+      "An error occurred while processing a message from the server. Please refresh the page."
     );
+    console.error("❌ Error handling WebSocket message:", error);
   }
 };
 
@@ -521,6 +564,9 @@ async function createPeer(user) {
     try {
       await transformManager.applyE2EEToPeer(peer, user);
     } catch (err) {
+      alert(
+        `Failed to apply E2EE transforms for ${user}. The call will continue unencrypted.`
+      );
       console.warn(`⚠️ Could not apply E2EE transforms for ${user}:`, err);
     }
   }
@@ -684,14 +730,17 @@ function addVideoStream(stream, user) {
 }
 
 function removeVideoStream(user) {
-  console.log(`➖ Removing video stream for ${user}`);
-  const container = document.querySelector(
-    `div[data-user-container="${user}"]`
-  );
-  if (container) container.remove();
-  if (peers[user]) {
-    peers[user].close();
-    delete peers[user];
+  try {
+    const container = document.querySelector(
+      `div[data-user-container="${user}"]`
+    );
+    if (container) container.remove();
+    if (peers[user]) {
+      peers[user].close();
+      delete peers[user];
+    }
+  } catch (error) {
+    console.warn(`Warning: Failed to remove video stream for ${user}:`, error);
   }
 }
 
@@ -841,6 +890,12 @@ function toggleParticipants() {
   document.getElementById("participants-container").classList.toggle("visible");
 }
 window.toggleE2EE = async function () {
+  if (!allKeysExchanged) {
+    alert(
+      "Please wait until all encryption keys are exchanged before enabling E2EE."
+    );
+    return;
+  }
   if (!e2eeManager || !e2eeManager.isInitialized) {
     alert("E2EE system not initialized yet");
     return;
