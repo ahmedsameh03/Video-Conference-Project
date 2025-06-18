@@ -42,20 +42,42 @@ class E2EEManager {
 
   async addParticipant(userId, publicKeyBase64) {
     try {
-      // Special-case: if adding self, generate a symmetric AES-GCM key
-      if (
-        userId === window.name ||
-        userId === (typeof name !== "undefined" ? name : undefined)
-      ) {
+      // Get current user name from URL parameters
+      const currentName = new URLSearchParams(window.location.search).get(
+        "name"
+      );
+
+      // Special-case: if adding self, create a shared secret for verification
+      if (userId === currentName) {
+        // For self-verification, we need to create a shared secret
+        // We'll use a deterministic method based on the user's public key
+        const selfPublicKey = await window.crypto.subtle.exportKey(
+          "spki",
+          this.keyPair.publicKey
+        );
+
+        // Create a "shared secret" for self by hashing the public key
+        const hash = await window.crypto.subtle.digest(
+          "SHA-256",
+          selfPublicKey
+        );
+        const sharedSecret = new ArrayBuffer(32);
+        const hashArray = new Uint8Array(hash);
+        const secretArray = new Uint8Array(sharedSecret);
+        secretArray.set(hashArray.slice(0, 32));
+
+        // Create session key for self
         const sessionKey = await window.crypto.subtle.generateKey(
           { name: "AES-GCM", length: 256 },
           true,
           ["encrypt", "decrypt"]
         );
+
+        this.sharedSecrets.set(userId, sharedSecret);
         this.sessionKeys.set(userId, sessionKey);
         this.participants.add(userId);
         console.log(
-          `🔐 Added self (${userId}) to E2EE session with symmetric key`
+          `🔐 Added self (${userId}) to E2EE session with self-verification key`
         );
         return true;
       }

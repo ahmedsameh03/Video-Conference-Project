@@ -7,30 +7,49 @@ class KeyVerification {
 
   async generateVerificationCode(userId) {
     try {
-      const sessionKey = this.e2eeManager.sessionKeys.get(userId);
-      if (!sessionKey) {
-        throw new Error(`No session key found for user ${userId}`);
+      // Get the shared secret for this user
+      const sharedSecret = this.e2eeManager.sharedSecrets.get(userId);
+      if (!sharedSecret) {
+        throw new Error(`No shared secret found for user ${userId}`);
       }
 
-      // Generate a random verification message
-      const verificationMessage = `VERIFY-${userId}-${Date.now()}`;
+      // Create a verification message that includes both user IDs
+      const currentName =
+        new URLSearchParams(window.location.search).get("name") || "unknown";
+      const verificationMessage = `VERIFY-${currentName}-${userId}-${Date.now()}`;
+
+      console.log(
+        `🔐 Generating verification code for ${userId} from ${currentName}`
+      );
+      console.log(`🔐 Verification message: ${verificationMessage}`);
+
+      // Create a hash of the shared secret and verification message
       const messageBuffer = new TextEncoder().encode(verificationMessage);
+      const sharedSecretBuffer = new Uint8Array(sharedSecret);
 
-      // Encrypt the message
-      const encrypted = await this.e2eeManager.encrypt(messageBuffer, userId);
+      // Combine shared secret and message
+      const combined = new Uint8Array(
+        sharedSecretBuffer.length + messageBuffer.length
+      );
+      combined.set(sharedSecretBuffer, 0);
+      combined.set(messageBuffer, sharedSecretBuffer.length);
 
-      // Create a hash of the encrypted data for verification
-      const hash = await window.crypto.subtle.digest("SHA-256", encrypted);
+      // Create hash
+      const hash = await window.crypto.subtle.digest("SHA-256", combined);
 
       // Convert to base64 and take first 8 characters
       const hashArray = new Uint8Array(hash);
       const hashBase64 = btoa(String.fromCharCode(...hashArray));
       const verificationCode = hashBase64.substring(0, 8).toUpperCase();
 
+      console.log(`🔐 Generated verification code: ${verificationCode}`);
+
       return {
         code: verificationCode,
         message: verificationMessage,
         timestamp: Date.now(),
+        userId: currentName,
+        targetUserId: userId,
       };
     } catch (error) {
       console.error(
@@ -41,21 +60,96 @@ class KeyVerification {
     }
   }
 
-  async verifyKey(userId, verificationCode) {
+  async verifyKey(userId, verificationCode, qrData = null) {
     try {
-      const generated = await this.generateVerificationCode(userId);
-      const isMatch = generated.code === verificationCode.toUpperCase();
-      this.verificationStatus.set(userId, {
-        verified: isMatch,
-        timestamp: Date.now(),
-        code: verificationCode,
-      });
-      if (!isMatch) {
-        alert(
-          `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
+      console.log(
+        `🔐 Verifying key for ${userId} with code: ${verificationCode}`
+      );
+      console.log(`🔐 QR data:`, qrData);
+
+      // If we have QR data, use it for verification
+      if (qrData && qrData.userId && qrData.targetUserId) {
+        // Verify that the QR code is for the correct user
+        if (qrData.targetUserId !== userId) {
+          console.error(
+            `❌ QR code target user (${qrData.targetUserId}) doesn't match expected user (${userId})`
+          );
+          return false;
+        }
+
+        // Get the shared secret for this user
+        const sharedSecret = this.e2eeManager.sharedSecrets.get(userId);
+        if (!sharedSecret) {
+          throw new Error(`No shared secret found for user ${userId}`);
+        }
+
+        // Recreate the verification message from QR data
+        const verificationMessage = `VERIFY-${qrData.userId}-${qrData.targetUserId}-${qrData.timestamp}`;
+        console.log(
+          `🔐 Recreated verification message: ${verificationMessage}`
         );
+
+        // Create the same hash as the generator
+        const messageBuffer = new TextEncoder().encode(verificationMessage);
+        const sharedSecretBuffer = new Uint8Array(sharedSecret);
+
+        // Combine shared secret and message
+        const combined = new Uint8Array(
+          sharedSecretBuffer.length + messageBuffer.length
+        );
+        combined.set(sharedSecretBuffer, 0);
+        combined.set(messageBuffer, sharedSecretBuffer.length);
+
+        // Create hash
+        const hash = await window.crypto.subtle.digest("SHA-256", combined);
+
+        // Convert to base64 and take first 8 characters
+        const hashArray = new Uint8Array(hash);
+        const hashBase64 = btoa(String.fromCharCode(...hashArray));
+        const expectedCode = hashBase64.substring(0, 8).toUpperCase();
+
+        console.log(
+          `🔐 Expected code: ${expectedCode}, Received code: ${verificationCode}`
+        );
+
+        const isMatch = expectedCode === verificationCode.toUpperCase();
+
+        this.verificationStatus.set(userId, {
+          verified: isMatch,
+          timestamp: Date.now(),
+          code: verificationCode,
+          qrData: qrData,
+        });
+
+        if (!isMatch) {
+          console.error(
+            `❌ Key verification failed for ${userId}. Expected: ${expectedCode}, Got: ${verificationCode}`
+          );
+          alert(
+            `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
+          );
+        } else {
+          console.log(`✅ Key verification successful for ${userId}`);
+        }
+
+        return isMatch;
+      } else {
+        // Fallback to old method for backward compatibility
+        console.log(`🔐 Using fallback verification method for ${userId}`);
+        const generated = await this.generateVerificationCode(userId);
+        const isMatch = generated.code === verificationCode.toUpperCase();
+        this.verificationStatus.set(userId, {
+          verified: isMatch,
+          timestamp: Date.now(),
+          code: verificationCode,
+        });
+        if (!isMatch) {
+          alert(
+            `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
+          );
+        }
+        return isMatch;
       }
-      return isMatch;
     } catch (error) {
       alert(
         `Key verification failed for ${userId}. Please try again or refresh the page.`
@@ -83,7 +177,8 @@ class KeyVerification {
       const verification = await this.generateVerificationCode(userId);
       const qrData = {
         type: "e2ee-verification",
-        userId: userId,
+        userId: verification.userId,
+        targetUserId: verification.targetUserId,
         code: verification.code,
         timestamp: verification.timestamp,
       };
@@ -110,7 +205,7 @@ class KeyVerification {
         throw new Error("QR code is too old");
       }
 
-      return await this.verifyKey(qrData.userId, qrData.code);
+      return await this.verifyKey(qrData.targetUserId, qrData.code, qrData);
     } catch (error) {
       console.error("❌ QR verification failed:", error);
       return false;

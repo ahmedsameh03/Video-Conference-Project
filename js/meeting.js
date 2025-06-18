@@ -184,14 +184,16 @@ function openE2EEScanModal() {
         if (
           qrData.type === "e2ee-verification" &&
           qrData.userId &&
+          qrData.targetUserId &&
           qrData.code
         ) {
           // Compare scanned code with our own generated code for that user
           const isVerified = await keyVerification.verifyKey(
-            qrData.userId,
-            qrData.code
+            qrData.targetUserId,
+            qrData.code,
+            qrData
           );
-          updateVerificationStatus(qrData.userId, isVerified);
+          updateVerificationStatus(qrData.targetUserId, isVerified);
           alert(
             isVerified
               ? `✅ Keys match for ${qrData.userId}!`
