@@ -1,4 +1,3 @@
-import { E2EEManager } from "./meeting-e2ee.js";
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
@@ -639,22 +638,6 @@ function stopScreenShare() {
   });
 }
 
-// Example secure chat sending
-if (e2eeManager.isEnabled()) {
-  const text = "Hello, secure world!";
-  const { cipher, iv } = await e2eeManager.encrypt(
-    new TextEncoder().encode(text)
-  );
-  ws.send(JSON.stringify({ type: "chat", cipher, iv }));
-}
-
-// Example secure chat receiving
-if (e2eeManager.isEnabled() && data.type === "chat") {
-  const plain = await e2eeManager.decrypt(data.cipher, data.iv);
-  const message = new TextDecoder().decode(plain);
-  displayMessage({ user: data.user, text: message, own: false });
-}
-
 function sendMessage() {
   const msg = chatInputField.value.trim();
   if (!msg) return;
@@ -727,13 +710,3 @@ function leaveMeeting() {
   }
   window.location.href = "dashboard.html";
 }
-
-// Make control functions accessible from HTML
-window.toggleMute = toggleMute;
-window.toggleVideo = toggleVideo;
-window.shareScreen = shareScreen;
-window.toggleChat = toggleChat;
-window.toggleParticipants = toggleParticipants;
-window.openAIFeatures = openAIFeatures;
-window.leaveMeeting = leaveMeeting;
-window.toggleE2EE = toggleE2EE;

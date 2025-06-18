@@ -1,29 +1,67 @@
-importScripts("js/noble-ciphers.min.js");
+let key = null;
 
-let cipher = null;
+function encode(str) {
+  return new TextEncoder().encode(str);
+}
+
+function decode(buffer) {
+  return new TextDecoder().decode(buffer);
+}
+
+function generateKeyMaterial(passphrase) {
+  return window.crypto.subtle.importKey(
+    "raw",
+    encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits", "deriveKey"]
+  );
+}
+
+function getKey(passphrase) {
+  return generateKeyMaterial(passphrase).then((keyMaterial) => {
+    return window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: encode("seen-project-salt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  });
+}
 
 onmessage = async (event) => {
-  const { type, data, keyString, iv } = event.data;
+  const { type, data, keyString } = event.data;
 
   if (type === "init") {
-    const keyBytes = new TextEncoder().encode(
-      keyString.padEnd(32, "0").slice(0, 32)
-    );
-    cipher = nobleCiphers.siv.aes256gcm(keyBytes);
+    key = await getKey(keyString);
   }
 
   if (type === "encrypt") {
-    const ivBytes = self.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = cipher.seal(ivBytes, new Uint8Array(data));
-    postMessage({ type: "encrypted", data: encrypted, iv: ivBytes });
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      data
+    );
+    postMessage({ type: "encrypted", data: encrypted, iv });
   }
 
   if (type === "decrypt") {
     try {
-      const decrypted = cipher.open(iv, new Uint8Array(data));
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: data.iv },
+        key,
+        data.data
+      );
       postMessage({ type: "decrypted", data: decrypted });
     } catch (e) {
-      console.error("❌ Decryption failed", e);
+      console.error("Decryption failed", e);
     }
   }
 };
