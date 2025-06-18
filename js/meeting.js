@@ -128,11 +128,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 document.getElementById("qr-btn").addEventListener("click", () => {
   const meetingId = new URLSearchParams(window.location.search).get("room");
-  const currentName = new URLSearchParams(window.location.search).get("name");
-  let meetingUrl = `${window.location.origin}${window.location.pathname}?room=${meetingId}`;
-  if (currentName) {
-    meetingUrl += `&name=${encodeURIComponent(currentName)}`;
-  }
+  // Only include the room parameter in the QR code - don't include the name
+  // This way, users who scan the QR code will be prompted to enter their own name
+  const meetingUrl = `${window.location.origin}${window.location.pathname}?room=${meetingId}`;
   const qrContainer = document.getElementById("qrcode");
   qrContainer.innerHTML = ""; // Clear old QR
   new QRCode(qrContainer, meetingUrl);
