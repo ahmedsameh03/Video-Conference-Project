@@ -324,7 +324,7 @@ ws.onmessage = async (message) => {
         // Add to participant list
         addParticipant(data.user);
 
-        // Handle E2EE key exchange
+        // Always handle E2EE key exchange if publicKey is present
         if (data.publicKey && e2eeManager) {
           try {
             const success = await e2eeManager.addParticipant(

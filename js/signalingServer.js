@@ -57,23 +57,28 @@ server.on("connection", (ws, req) => {
           }
           ws.room = data.room;
           ws.user = data.user || `User-${Math.floor(Math.random() * 1000)}`;
+          ws.publicKey = data.publicKey;
           console.log(
             `👤 ${ws.user} joined room "${ws.room}". Total participants: ${
               rooms[ws.room].length
             }`
           );
 
-          // Send existing users to new user
-          const existingUsers = rooms[data.room]
-            .filter(
-              (client) => client !== ws && client.readyState === WebSocket.OPEN
-            )
-            .map((client) => client.user);
-          existingUsers.forEach((user) => {
-            ws.send(JSON.stringify({ type: "new-user", user }));
+          // Send existing users (with publicKey) to new user
+          const existingUsers = rooms[data.room].filter(
+            (client) => client !== ws && client.readyState === WebSocket.OPEN
+          );
+          existingUsers.forEach((client) => {
+            ws.send(
+              JSON.stringify({
+                type: "new-user",
+                user: client.user,
+                publicKey: client.publicKey,
+              })
+            );
           });
 
-          // Notify others about the new user (with public key if available)
+          // Notify others about the new user (with public key)
           const joinData = { type: "new-user", user: ws.user };
           if (data.publicKey) {
             joinData.publicKey = data.publicKey;
