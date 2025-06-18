@@ -113,6 +113,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("meeting-id-display").textContent = `#${room}`;
   }
 
+  const qrModal = document.getElementById("qr-modal");
+  if (qrModal) qrModal.style.display = "none";
+
   // Only initialize if name is provided
   if (name) {
     if (document.getElementById("user-name-display")) {
