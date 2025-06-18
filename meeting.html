@@ -347,6 +347,95 @@
         font-size: 18px;
         cursor: pointer;
       }
+
+      #name-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 3000;
+        justify-content: center;
+        align-items: center;
+        animation: fadeIn 0.4s;
+      }
+      #name-modal .modal-content {
+        background: #fff;
+        padding: 32px 24px 24px 24px;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+        min-width: 320px;
+        max-width: 90vw;
+        text-align: center;
+        position: relative;
+        animation: popIn 0.3s;
+      }
+      #name-modal .user-icon {
+        font-size: 2.5rem;
+        color: #4070f4;
+        margin-bottom: 10px;
+      }
+      #name-modal input[type="text"] {
+        width: 90%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #bfc9d1;
+        margin-bottom: 18px;
+        font-size: 1rem;
+        transition: border 0.2s;
+      }
+      #name-modal input[type="text"]:focus {
+        border: 1.5px solid #4070f4;
+        outline: none;
+      }
+      #name-modal button {
+        background: linear-gradient(90deg, #4070f4 60%, #5a8dee 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 28px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(64, 112, 244, 0.08);
+        transition: background 0.2s;
+      }
+      #name-modal button:hover {
+        background: linear-gradient(90deg, #3058c7 60%, #4070f4 100%);
+      }
+      @media (max-width: 500px) {
+        #name-modal .modal-content {
+          min-width: 90vw;
+          padding: 20px 8px 16px 8px;
+        }
+        #name-modal input[type="text"] {
+          font-size: 0.95rem;
+        }
+        #name-modal button {
+          font-size: 0.95rem;
+          padding: 9px 18px;
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes popIn {
+        0% {
+          transform: scale(0.9);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
     </style>
   </head>
   <body>
@@ -610,48 +699,22 @@
     </div>
 
     <!-- Name Prompt Modal -->
-    <div
-      id="name-modal"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
-        z-index: 3000;
-        justify-content: center;
-        align-items: center;
-      "
-    >
-      <div
-        style="
-          background: #fff;
-          padding: 30px 20px;
-          border-radius: 10px;
-          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-          min-width: 300px;
-          text-align: center;
-        "
-      >
-        <h5 style="margin-bottom: 15px">Enter Your Name</h5>
+    <div id="name-modal">
+      <div class="modal-content">
+        <div class="user-icon">
+          <i class="fas fa-user-circle"></i>
+        </div>
+        <h5 style="margin-bottom: 15px; font-weight: 600; color: #222">
+          Enter Your Name
+        </h5>
         <input
           id="name-input"
           type="text"
           placeholder="Your name"
-          style="
-            width: 90%;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            margin-bottom: 15px;
-          "
+          autocomplete="off"
         />
         <br />
-        <button id="name-submit-btn" class="btn btn-primary">
-          Join Meeting
-        </button>
+        <button id="name-submit-btn">Join Meeting</button>
       </div>
     </div>
 
@@ -692,14 +755,22 @@
       document.addEventListener("DOMContentLoaded", function () {
         if (!getQueryParam("name")) {
           document.getElementById("name-modal").style.display = "flex";
+          const input = document.getElementById("name-input");
+          input.focus();
           document.getElementById("name-submit-btn").onclick = function () {
-            const name = document.getElementById("name-input").value.trim();
+            const name = input.value.trim();
             if (!name) {
-              alert("Please enter your name.");
+              input.style.border = "1.5px solid #e74c3c";
+              input.focus();
               return;
             }
             setQueryParam("name", name);
           };
+          input.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+              document.getElementById("name-submit-btn").click();
+            }
+          });
         }
       });
     </script>
