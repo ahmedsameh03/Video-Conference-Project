@@ -30,9 +30,11 @@ let localStream;
 let allKeysExchanged = false;
 
 function setE2EEControlsEnabled(enabled) {
-  document.getElementById("e2ee-btn").disabled = !enabled;
-  document.getElementById("e2ee-verify-btn").disabled = !enabled;
-  document.getElementById("e2ee-scan-btn").disabled = !enabled;
+  const e2eeBtn = document.getElementById("e2ee-btn");
+  if (e2eeBtn) e2eeBtn.disabled = !enabled;
+
+  const e2eeVerifyBtn = document.getElementById("e2ee-verify-btn");
+  if (e2eeVerifyBtn) e2eeVerifyBtn.disabled = !enabled;
 }
 
 function showKeyExchangeLoading(show) {
