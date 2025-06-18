@@ -207,10 +207,6 @@ function closeE2EEScanModal() {
   }
 }
 
-document
-  .getElementById("e2ee-scan-btn")
-  .addEventListener("click", openE2EEScanModal);
-
 async function fetchIceServers() {
   return [
     {
