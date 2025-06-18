@@ -134,6 +134,9 @@ document.getElementById("qr-btn").addEventListener("click", () => {
   const qrContainer = document.getElementById("qrcode");
   qrContainer.innerHTML = ""; // Clear old QR
   new QRCode(qrContainer, meetingUrl);
+  // Set the link text for copying
+  const qrLinkElem = document.getElementById("qr-link");
+  if (qrLinkElem) qrLinkElem.textContent = meetingUrl;
   document.getElementById("qr-modal").style.display = "block";
 });
 
