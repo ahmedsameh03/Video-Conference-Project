@@ -396,6 +396,46 @@
       </div>
     </div>
 
+    <!-- E2EE Verification Modal -->
+    <div
+      id="e2ee-verify-modal"
+      style="
+        display: none;
+        position: fixed;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        min-width: 300px;
+      "
+    >
+      <h5 style="text-align: center; margin-bottom: 15px">
+        🔐 E2EE Key Verification
+      </h5>
+      <div
+        id="e2ee-qrcode"
+        style="text-align: center; margin-bottom: 15px"
+      ></div>
+      <div style="text-align: center; margin-bottom: 15px">
+        <p style="font-size: 14px; color: #666">
+          Scan this QR code with another participant to verify your encryption
+          keys match.
+        </p>
+      </div>
+      <div style="text-align: center">
+        <button
+          class="btn btn-sm btn-dark"
+          onclick="document.getElementById('e2ee-verify-modal').style.display='none'"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+
     <!-- Video Grid -->
     <div class="video-grid" id="video-grid">
       <div class="video-container" id="main-video-container">
@@ -495,6 +535,16 @@
       >
         <i class="fas fa-lock"></i>
       </button>
+      <button
+        id="e2ee-verify-btn"
+        class="control-btn"
+        title="Verify E2EE Keys"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        aria-label="Verify End-to-End Encryption Keys"
+      >
+        <i class="fas fa-shield-alt"></i>
+      </button>
       <!-- AI Features Button -->
       <button
         onclick="openAIFeatures()"
@@ -522,6 +572,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Font Awesome JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <!-- Custom JavaScript -->
 
     <script>
@@ -539,7 +591,10 @@
         // You can add more functionality here, such as opening a modal or a sidebar with AI features.
       }
     </script>
-    <script src="js/meeting-e2ee.js"></script>
+    <script src="js/e2ee-manager.js"></script>
+    <script src="js/webrtc-transform-manager.js"></script>
+    <script src="js/key-verification.js"></script>
+    <script src="js/e2ee-test.js"></script>
     <script src="js/meeting.js"></script>
   </body>
 </html>

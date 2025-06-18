@@ -33,6 +33,7 @@ server.on("connection", (ws, req) => {
         "candidate",
         "chat",
         "leave",
+        "e2ee-verification",
       ];
       if (!allowedTypes.includes(data.type)) {
         console.warn(`❌ Rejected unknown message type: ${data.type}`);
@@ -72,8 +73,13 @@ server.on("connection", (ws, req) => {
             ws.send(JSON.stringify({ type: "new-user", user }));
           });
 
-          // Notify others about the new user
-          broadcast(ws, data.room, { type: "new-user", user: ws.user });
+          // Notify others about the new user (with public key if available)
+          const joinData = { type: "new-user", user: ws.user };
+          if (data.publicKey) {
+            joinData.publicKey = data.publicKey;
+            console.log(`🔐 ${ws.user} joined with E2EE public key`);
+          }
+          broadcast(ws, data.room, joinData);
           break;
 
         case "offer":
@@ -110,6 +116,39 @@ server.on("connection", (ws, req) => {
             text: data.text,
             room: data.room,
           });
+          break;
+
+        case "e2ee-verification":
+          // Forward verification message to specific user or broadcast
+          if (data.targetUser) {
+            // Send to specific user
+            const targetClient = rooms[data.room].find(
+              (client) =>
+                client.user === data.targetUser &&
+                client.readyState === WebSocket.OPEN
+            );
+            if (targetClient) {
+              targetClient.send(
+                JSON.stringify({
+                  type: "e2ee-verification",
+                  user: ws.user,
+                  code: data.code,
+                  room: data.room,
+                })
+              );
+              console.log(
+                `🔐 E2EE verification sent from ${ws.user} to ${data.targetUser}`
+              );
+            }
+          } else {
+            // Broadcast to all users in room
+            broadcast(ws, data.room, {
+              type: "e2ee-verification",
+              user: ws.user,
+              code: data.code,
+              room: data.room,
+            });
+          }
           break;
 
         case "leave":

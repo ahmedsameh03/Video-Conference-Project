@@ -4,6 +4,8 @@ const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
 let e2eeManager;
+let transformManager;
+let keyVerification;
 let isE2EEEnabled = false;
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
@@ -68,6 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   await testLocalStream();
 });
+
 document.getElementById("qr-btn").addEventListener("click", () => {
   const meetingId = new URLSearchParams(window.location.search).get("room");
   const meetingUrl = `${window.location.origin}${window.location.pathname}?room=${meetingId}`;
@@ -76,6 +79,27 @@ document.getElementById("qr-btn").addEventListener("click", () => {
   new QRCode(qrContainer, meetingUrl);
   document.getElementById("qr-modal").style.display = "block";
 });
+
+// E2EE Key verification QR code
+document
+  .getElementById("e2ee-verify-btn")
+  .addEventListener("click", async () => {
+    if (!keyVerification) {
+      alert("E2EE not initialized yet");
+      return;
+    }
+
+    try {
+      const qrData = await keyVerification.generateQRData(name);
+      const qrContainer = document.getElementById("e2ee-qrcode");
+      qrContainer.innerHTML = ""; // Clear old QR
+      new QRCode(qrContainer, qrData);
+      document.getElementById("e2ee-verify-modal").style.display = "block";
+    } catch (error) {
+      console.error("❌ Failed to generate E2EE verification QR:", error);
+      alert("Failed to generate verification QR code");
+    }
+  });
 
 async function fetchIceServers() {
   return [
@@ -105,9 +129,14 @@ ws.onopen = async () => {
     if (!localStream || !localStream.getTracks().length) {
       throw new Error("Local stream not initialized or no tracks available.");
     }
+
+    // Initialize E2EE system
     e2eeManager = new E2EEManager();
-    await e2eeManager.init();
-    console.log("🔐 E2EE Manager initialized");
+    const keyInfo = await e2eeManager.initialize();
+    transformManager = new WebRTCTransformManager(e2eeManager);
+    keyVerification = new KeyVerification(e2eeManager);
+
+    console.log("🔐 E2EE system initialized successfully");
 
     console.log(
       "📹 Local Stream initialized with tracks:",
@@ -115,7 +144,16 @@ ws.onopen = async () => {
         .getTracks()
         .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
     );
-    ws.send(JSON.stringify({ type: "join", room, user: name }));
+
+    // Send join message with public key
+    ws.send(
+      JSON.stringify({
+        type: "join",
+        room,
+        user: name,
+        publicKey: keyInfo.publicKeyBase64,
+      })
+    );
     addParticipant(name);
   } catch (error) {
     console.error("❌ Failed to start camera before joining:", error);
@@ -221,6 +259,31 @@ ws.onmessage = async (message) => {
         // Add to participant list
         addParticipant(data.user);
 
+        // Handle E2EE key exchange
+        if (data.publicKey && e2eeManager) {
+          try {
+            const success = await e2eeManager.addParticipant(
+              data.user,
+              data.publicKey
+            );
+            if (success) {
+              console.log(`🔐 E2EE key exchange completed with ${data.user}`);
+
+              // Start key rotation if this is the first participant
+              if (e2eeManager.getParticipantCount() === 1) {
+                e2eeManager.startKeyRotation();
+              }
+            } else {
+              console.error(`❌ E2EE key exchange failed with ${data.user}`);
+            }
+          } catch (error) {
+            console.error(
+              `❌ E2EE key exchange error with ${data.user}:`,
+              error
+            );
+          }
+        }
+
         // If not already connected, create a peer and send an offer
         if (!peers[data.user]) {
           await createPeer(data.user);
@@ -316,6 +379,17 @@ ws.onmessage = async (message) => {
         console.log(`🚪 User left: ${data.user}`);
         removeVideoStream(data.user);
         removeParticipant(data.user);
+
+        // Handle E2EE cleanup
+        if (e2eeManager) {
+          await e2eeManager.removeParticipant(data.user);
+          if (transformManager) {
+            transformManager.removeTransform(peers[data.user], data.user);
+          }
+          if (keyVerification) {
+            keyVerification.clearVerification(data.user);
+          }
+        }
         break;
 
       case "chat":
@@ -325,6 +399,30 @@ ws.onmessage = async (message) => {
           text: data.text,
           own: data.user === name,
         });
+        break;
+
+      case "e2ee-verification":
+        if (keyVerification && data.user !== name) {
+          try {
+            const isVerified = await keyVerification.verifyKey(
+              data.user,
+              data.code
+            );
+            if (isVerified) {
+              console.log(`🔐 Key verification successful with ${data.user}`);
+              // Update UI to show verified status
+              updateVerificationStatus(data.user, true);
+            } else {
+              console.warn(`⚠️ Key verification failed with ${data.user}`);
+              updateVerificationStatus(data.user, false);
+            }
+          } catch (error) {
+            console.error(
+              `❌ Key verification error with ${data.user}:`,
+              error
+            );
+          }
+        }
         break;
 
       default:
@@ -663,7 +761,12 @@ function toggleChat() {
 function toggleParticipants() {
   document.getElementById("participants-container").classList.toggle("visible");
 }
-window.toggleE2EE = function () {
+window.toggleE2EE = async function () {
+  if (!e2eeManager || !e2eeManager.isInitialized) {
+    alert("E2EE system not initialized yet");
+    return;
+  }
+
   isE2EEEnabled = !isE2EEEnabled;
 
   const btn = document.getElementById("e2ee-btn");
@@ -679,29 +782,68 @@ window.toggleE2EE = function () {
     `🔐 End-to-End Encryption ${isE2EEEnabled ? "enabled" : "disabled"}`
   );
 
-  Object.values(peers).forEach((peer) => {
-    if (peer instanceof RTCPeerConnection) {
-      peer.getSenders().forEach((sender) => {
-        if (sender.track?.kind === "video" || sender.track?.kind === "audio") {
-          e2eeManager.setSenderTransform(sender, isE2EEEnabled);
-        }
-      });
-
-      peer.getReceivers().forEach((receiver) => {
-        if (
-          receiver.track?.kind === "video" ||
-          receiver.track?.kind === "audio"
-        ) {
-          e2eeManager.setReceiverTransform(receiver, isE2EEEnabled);
-        }
-      });
+  // Apply E2EE to all peer connections
+  for (const [userId, peer] of Object.entries(peers)) {
+    if (
+      peer instanceof RTCPeerConnection &&
+      e2eeManager.isParticipant(userId)
+    ) {
+      if (isE2EEEnabled) {
+        await transformManager.applyE2EEToPeer(peer, userId);
+      } else {
+        transformManager.removeTransform(peer, userId);
+      }
     }
-  });
+  }
 };
+
+// Function to update verification status in UI
+function updateVerificationStatus(userId, isVerified) {
+  const participantElement = document.getElementById(`participant-${userId}`);
+  if (participantElement) {
+    if (isVerified) {
+      participantElement.innerHTML = `${userId} <span style="color: green;">🔐</span>`;
+    } else {
+      participantElement.innerHTML = `${userId} <span style="color: red;">⚠️</span>`;
+    }
+  }
+}
+
+// Function to send verification code to other participants
+async function sendVerificationCode(userId) {
+  if (!keyVerification) return;
+
+  try {
+    const verification = await keyVerification.generateVerificationCode(userId);
+    ws.send(
+      JSON.stringify({
+        type: "e2ee-verification",
+        user: name,
+        targetUser: userId,
+        code: verification.code,
+        room,
+      })
+    );
+  } catch (error) {
+    console.error(`❌ Failed to send verification code to ${userId}:`, error);
+  }
+}
 
 function leaveMeeting() {
   if (!confirm("Are you sure you want to leave the meeting?")) return;
   console.log("🚪 Leaving meeting...");
+
+  // Clean up E2EE resources
+  if (e2eeManager) {
+    e2eeManager.destroy();
+  }
+  if (transformManager) {
+    transformManager.destroy();
+  }
+  if (keyVerification) {
+    keyVerification.clearAllVerifications();
+  }
+
   localStream?.getTracks().forEach((t) => t.stop());
   Object.values(peers).forEach((p) => p.close());
   if (ws.readyState === WebSocket.OPEN) {
