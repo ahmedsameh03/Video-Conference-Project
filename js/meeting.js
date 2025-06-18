@@ -1,16 +1,17 @@
-const e2eeManager = new window.E2EEManager();
+import { E2EEManager } from "./meeting-e2ee.js";
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
 let isMuted = false;
 let isVideoOff = false;
+let e2eeManager;
 let isE2EEEnabled = false;
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
-const encrypted = await e2eeManager.cipher.encrypt(frame.data);
+
 const SIGNALING_SERVER_URL =
   "wss://video-conference-project-production.up.railway.app";
 
@@ -27,7 +28,7 @@ let localStream;
 async function testLocalStream() {
   console.log("🧪 Testing local camera and microphone...");
   try {
-    let testStream = await navigator.mediaDevices.getUserMedia({
+    const testStream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true,
     });
@@ -106,10 +107,9 @@ ws.onopen = async () => {
       throw new Error("Local stream not initialized or no tracks available.");
     }
     e2eeManager = new E2EEManager();
-    (async () => {
-      await e2eeManager.init();
-    })();
+    await e2eeManager.init();
     console.log("🔐 E2EE Manager initialized");
+
     console.log(
       "📹 Local Stream initialized with tracks:",
       localStream
@@ -642,15 +642,15 @@ function stopScreenShare() {
 // Example secure chat sending
 if (e2eeManager.isEnabled()) {
   const text = "Hello, secure world!";
-  /* const { cipher, iv } = await e2eeManager.encrypt(
+  const { cipher, iv } = await e2eeManager.encrypt(
     new TextEncoder().encode(text)
-  );*/
+  );
   ws.send(JSON.stringify({ type: "chat", cipher, iv }));
 }
 
 // Example secure chat receiving
 if (e2eeManager.isEnabled() && data.type === "chat") {
-  //const plain = await e2eeManager.decrypt(data.cipher, data.iv);
+  const plain = await e2eeManager.decrypt(data.cipher, data.iv);
   const message = new TextDecoder().decode(plain);
   displayMessage({ user: data.user, text: message, own: false });
 }
@@ -727,35 +727,13 @@ function leaveMeeting() {
   }
   window.location.href = "dashboard.html";
 }
-// ✅ Make button functions available to HTML (global scope)
-window.toggleMute = function () {
-  console.log("🔇 Mute toggled (not implemented)");
-};
 
-window.toggleVideo = function () {
-  console.log("🎥 Video toggled (not implemented)");
-};
-
-window.toggleChat = function () {
-  document.getElementById("chat-container").classList.toggle("visible");
-};
-
-window.toggleParticipants = function () {
-  document.getElementById("participants-container").classList.toggle("visible");
-};
-
-window.toggleE2EE = function () {
-  // your existing toggleE2EE logic here
-};
-
-window.shareScreen = function () {
-  console.log("🖥️ Share screen clicked");
-};
-
+// Make control functions accessible from HTML
 window.toggleMute = toggleMute;
 window.toggleVideo = toggleVideo;
+window.shareScreen = shareScreen;
 window.toggleChat = toggleChat;
 window.toggleParticipants = toggleParticipants;
-window.toggleE2EE = toggleE2EE;
-window.shareScreen = shareScreen;
+window.openAIFeatures = openAIFeatures;
 window.leaveMeeting = leaveMeeting;
+window.toggleE2EE = toggleE2EE;

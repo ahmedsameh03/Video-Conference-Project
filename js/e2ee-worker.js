@@ -1,4 +1,4 @@
-importScripts("https://seenmeet.vercel.app/js/noble-ciphers.min.js");
+importScripts("js/noble-ciphers.min.js");
 
 let cipher = null;
 
@@ -27,4 +27,3 @@ onmessage = async (event) => {
     }
   }
 };
-console.log("🛡️ E2EE worker loaded");

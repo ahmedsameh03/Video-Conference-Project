@@ -1,4 +1,4 @@
-class E2EEManager {
+export class E2EEManager {
   constructor() {
     this.worker = new Worker("js/e2ee-worker.js");
     this.key = "secure-seen-room-key"; // 🔐 You can randomize this per meeting if needed
@@ -113,4 +113,3 @@ class E2EEManager {
     return true; // You may link this to the toggle switch in the UI
   }
 }
-window.E2EEManager = E2EEManager;
