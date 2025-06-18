@@ -511,6 +511,20 @@ async function createPeer(user) {
     iceServers: iceServers,
   });
 
+  // Apply E2EE transforms immediately after creating the peer connection
+  if (
+    isE2EEEnabled &&
+    e2eeManager &&
+    e2eeManager.isParticipant(user) &&
+    transformManager
+  ) {
+    try {
+      await transformManager.applyE2EEToPeer(peer, user);
+    } catch (err) {
+      console.warn(`⚠️ Could not apply E2EE transforms for ${user}:`, err);
+    }
+  }
+
   peer.oniceconnectionstatechange = () => {
     console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
     if (
