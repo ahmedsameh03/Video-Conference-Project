@@ -538,14 +538,20 @@ async function startCamera() {
       video: true,
       audio: true,
     });
-    // Disable audio and video tracks by default
-    localStream.getAudioTracks().forEach((track) => (track.enabled = false));
-    localStream.getVideoTracks().forEach((track) => (track.enabled = false));
-    // Update UI buttons to reflect off state
-    document.getElementById("mute-btn")?.classList.add("active");
-    document.getElementById("video-btn")?.classList.add("active");
+    // Set audio and video tracks based on isMuted and isVideoOff
+    localStream.getAudioTracks().forEach((track) => (track.enabled = !isMuted));
+    localStream
+      .getVideoTracks()
+      .forEach((track) => (track.enabled = !isVideoOff));
+    // Update UI buttons to reflect the correct state
+    const muteBtn = document.getElementById("mute-btn");
+    const videoBtn = document.getElementById("video-btn");
+    if (muteBtn) muteBtn.classList.toggle("active", isMuted);
+    if (videoBtn) videoBtn.classList.toggle("active", isVideoOff);
     console.log(
-      "✅ Camera and microphone accessed, but both are OFF by default."
+      `✅ Camera and microphone accessed. Mic: ${
+        !isMuted ? "ON" : "OFF"
+      }, Video: ${!isVideoOff ? "ON" : "OFF"}`
     );
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
