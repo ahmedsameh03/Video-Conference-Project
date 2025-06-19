@@ -350,42 +350,51 @@ async function initializeMeeting(userName) {
 
         case "offer":
           console.log(`📨 Offer received from ${data.user}`);
-          const peer = peers[data.user] || (await createPeer(data.user));
+          const offerPeer =
+            peers[data.fromUser] || (await createPeer(data.fromUser));
           const offerCollision =
-            isMakingOffer || peer.signalingState !== "stable";
+            isMakingOffer || offerPeer.signalingState !== "stable";
 
-          isPolite = userName.localeCompare(data.user) > 0;
+          isPolite = userName.localeCompare(data.fromUser) > 0;
           if (offerCollision && !isPolite) {
             console.warn(
-              `⚠️ Offer collision from ${data.user}, dropping offer`
+              `⚠️ Offer collision from ${data.fromUser}, dropping offer`
             );
             return;
           }
 
           try {
-            await peer.setRemoteDescription(
+            await offerPeer.setRemoteDescription(
               new RTCSessionDescription(data.offer)
             );
-            if (peer._bufferedCandidates?.length) {
-              for (const candidate of peer._bufferedCandidates) {
+            if (offerPeer._bufferedCandidates?.length) {
+              for (const candidate of offerPeer._bufferedCandidates) {
                 try {
-                  await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                  await offerPeer.addIceCandidate(
+                    new RTCIceCandidate(candidate)
+                  );
                   console.log(
-                    `✅ Buffered ICE candidate added for ${data.user}`
+                    `✅ Buffered ICE candidate added for ${data.fromUser}`
                   );
                 } catch (e) {
                   console.error(`❌ Error adding buffered ICE candidate:`, e);
                 }
               }
-              peer._bufferedCandidates = [];
+              offerPeer._bufferedCandidates = [];
             }
 
-            console.log(`✅ Remote offer set for ${data.user}`);
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            console.log(`✅ Answer created and set for ${data.user}`);
+            console.log(`✅ Remote offer set for ${data.fromUser}`);
+            const answer = await offerPeer.createAnswer();
+            await offerPeer.setLocalDescription(answer);
+            console.log(`✅ Answer created and set for ${data.fromUser}`);
             ws.send(
-              JSON.stringify({ type: "answer", answer, room, user: userName })
+              JSON.stringify({
+                type: "answer",
+                answer,
+                room,
+                user: userName,
+                toUser: data.fromUser,
+              })
             );
           } catch (e) {
             console.error("❌ Failed to handle offer:", e);
@@ -394,8 +403,8 @@ async function initializeMeeting(userName) {
 
         case "answer":
           console.log(`📬 Answer received from ${data.user}`);
-          if (peers[data.user]) {
-            const peer = peers[data.user];
+          if (peers[data.fromUser]) {
+            const peer = peers[data.fromUser];
             try {
               await peer.setRemoteDescription(
                 new RTCSessionDescription(data.answer)
@@ -405,7 +414,7 @@ async function initializeMeeting(userName) {
                   try {
                     await peer.addIceCandidate(new RTCIceCandidate(candidate));
                     console.log(
-                      `✅ Buffered ICE candidate added for ${data.user}`
+                      `✅ Buffered ICE candidate added for ${data.fromUser}`
                     );
                   } catch (e) {
                     console.error(`❌ Error adding buffered ICE candidate:`, e);
@@ -415,31 +424,31 @@ async function initializeMeeting(userName) {
               }
 
               console.log(
-                `✅ Remote description (answer) set for ${data.user}`
+                `✅ Remote description (answer) set for ${data.fromUser}`
               );
             } catch (e) {
               console.error(
-                `❌ Failed to set remote answer for ${data.user}:`,
+                `❌ Failed to set remote answer for ${data.fromUser}:`,
                 e.message
               );
             }
           } else {
-            console.warn(`⚠️ No peer connection found for ${data.user}`);
+            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
           }
           break;
 
         case "candidate":
-          const peerConn = peers[data.user];
+          const peerConn = peers[data.fromUser];
           if (peerConn) {
             if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
               try {
                 await peerConn.addIceCandidate(
                   new RTCIceCandidate(data.candidate)
                 );
-                console.log(`✅ ICE candidate added for ${data.user}`);
+                console.log(`✅ ICE candidate added for ${data.fromUser}`);
               } catch (e) {
                 console.error(
-                  `❌ Error adding ICE candidate for ${data.user}:`,
+                  `❌ Error adding ICE candidate for ${data.fromUser}:`,
                   e
                 );
               }
@@ -449,10 +458,10 @@ async function initializeMeeting(userName) {
                 peerConn._bufferedCandidates = [];
               }
               peerConn._bufferedCandidates.push(data.candidate);
-              console.log(`📦 Buffered ICE candidate for ${data.user}`);
+              console.log(`📦 Buffered ICE candidate for ${data.fromUser}`);
             }
           } else {
-            console.warn(`⚠️ No peer connection found for ${data.user}`);
+            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
           }
           break;
 
@@ -667,6 +676,7 @@ async function createPeer(user) {
           candidate: event.candidate,
           room,
           user,
+          toUser: user,
         })
       );
     } else {
@@ -736,7 +746,15 @@ async function createOffer(user) {
     await peer.setLocalDescription(offer);
     const currentName =
       new URLSearchParams(window.location.search).get("name") || name;
-    ws.send(JSON.stringify({ type: "offer", offer, room, user: currentName }));
+    ws.send(
+      JSON.stringify({
+        type: "offer",
+        offer,
+        room,
+        user: currentName,
+        toUser: user,
+      })
+    );
     console.log(`✅ Offer sent to ${user}`);
   } catch (error) {
     console.error(`❌ Failed to create offer for ${user}:`, error);
@@ -759,11 +777,19 @@ async function createAnswer(offer, user) {
     );
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
+    ws.send(
+      JSON.stringify({
+        type: "answer",
+        answer,
+        room,
+        user: name,
+        toUser: user,
+      })
+    );
     console.log(
       `✅ Answer created and set for ${user}. New signaling state:`,
       peer.signalingState
     );
-    ws.send(JSON.stringify({ type: "answer", answer, room, user: name }));
   } catch (e) {
     console.error("❌ Error creating answer:", e.message, e.stack);
   }

@@ -88,31 +88,24 @@ server.on("connection", (ws, req) => {
           break;
 
         case "offer":
-          broadcast(ws, data.room, {
-            type: "offer",
-            offer: data.offer,
-            user: ws.user,
-            room: data.room,
-          });
-          break;
-
         case "answer":
-          broadcast(ws, data.room, {
-            type: "answer",
-            answer: data.answer,
-            user: ws.user,
-            room: data.room,
-          });
+        case "candidate": {
+          // Only send to the intended recipient
+          const targetClient = rooms[data.room].find(
+            (client) =>
+              client.user === data.toUser &&
+              client.readyState === WebSocket.OPEN
+          );
+          if (targetClient) {
+            targetClient.send(
+              JSON.stringify({
+                ...data,
+                fromUser: ws.user, // Add sender info
+              })
+            );
+          }
           break;
-
-        case "candidate":
-          broadcast(ws, data.room, {
-            type: "candidate",
-            candidate: data.candidate,
-            user: ws.user,
-            room: data.room,
-          });
-          break;
+        }
 
         case "chat":
           broadcast(ws, data.room, {
