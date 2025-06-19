@@ -1,8 +1,8 @@
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
-let isMuted = false;
-let isVideoOff = false;
+let isMuted = true;
+let isVideoOff = true;
 let e2eeManager;
 let transformManager;
 let keyVerification;
@@ -12,6 +12,7 @@ const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
 const chatInputField = document.getElementById("chat-input-field");
 const participantsList = document.getElementById("participants-list");
+
 const SIGNALING_SERVER_URL =
   "wss://video-conference-project-production.up.railway.app";
 
@@ -537,8 +538,14 @@ async function startCamera() {
       video: true,
       audio: true,
     });
+    // Disable audio and video tracks by default
+    localStream.getAudioTracks().forEach((track) => (track.enabled = false));
+    localStream.getVideoTracks().forEach((track) => (track.enabled = false));
+    // Update UI buttons to reflect off state
+    document.getElementById("mute-btn")?.classList.add("active");
+    document.getElementById("video-btn")?.classList.add("active");
     console.log(
-      "✅ Attempt 1: Both camera and microphone accessed successfully."
+      "✅ Camera and microphone accessed, but both are OFF by default."
     );
   } catch (error) {
     console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
