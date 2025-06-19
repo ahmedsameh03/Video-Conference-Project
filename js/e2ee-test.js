@@ -16,7 +16,6 @@ async function testE2EE() {
       "Public Key (Base64):",
       keyInfo.publicKeyBase64.substring(0, 50) + "..."
     );
-
     // Test 2: Add a participant
     console.log("\nTest 2: Adding participant...");
     const testUserId = "test-user-1";
