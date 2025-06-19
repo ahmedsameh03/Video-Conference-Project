@@ -218,21 +218,34 @@
             .value.trim();
           if (!dateInput || !userName) return;
           const meetingId = generateRoomId();
-          const meetingLink = `${
-            window.location.origin
-          }/meeting.html?room=${meetingId}&name=${encodeURIComponent(
+          const meetingLink = `https://seenmeet.vercel.app/meeting.html?room=${meetingId}&name=${encodeURIComponent(
             userName
           )}`;
           const dateObj = new Date(dateInput);
           const formattedDate = dateObj.toLocaleString();
           document.getElementById("schedule-result").innerHTML = `
           <div class="alert alert-success">
-            <strong>Your meeting is scheduled!</strong><br>
-            <span>Meeting Link: <a href="${meetingLink}" target="_blank">${meetingLink}</a></span><br>
+            <strong>Your meeting is scheduled!</strong><br><br>
+            <span>Meeting Link: <button id='copy-link-btn' class='btn btn-sm btn-outline-primary ms-2 mb-1'>Copy Link</button></span><br>
+            <a href="${meetingLink}" target="_blank" id="meeting-link" style="word-break:break-all;">${meetingLink}</a><br><br>
             <span>Date & Time: <b>${formattedDate}</b></span>
           </div>
         `;
           document.getElementById("schedule-result").style.display = "block";
+          // Add copy functionality
+          setTimeout(() => {
+            const copyBtn = document.getElementById("copy-link-btn");
+            if (copyBtn) {
+              copyBtn.onclick = function () {
+                navigator.clipboard.writeText(meetingLink).then(() => {
+                  copyBtn.textContent = "Copied!";
+                  setTimeout(() => {
+                    copyBtn.textContent = "Copy Link";
+                  }, 1500);
+                });
+              };
+            }
+          }, 100);
         });
 
       function generateRoomId() {
