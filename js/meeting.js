@@ -210,19 +210,19 @@ function closeE2EEScanModal() {
 async function fetchIceServers() {
   return [
     {
-      urls: ["stun:fr-turn7.xirsys.com"],
+      urls: ["stun:fr-turn8.xirsys.com"],
     },
     {
       username:
-        "YTkZ5X0VBbPgnz6cURXwsP3U8v0ZdJQv6zJfW7qJycwcv7FyWz3tGUUVZ4KH4zsMAAAAAGhTZbdhaG1lZHNhbWVoMDM0NA==",
-      credential: "7fc82486-4cab-11f0-8dfd-da78ad95d6d9",
+        "iRlT2G8VsG3rLsOljts9KCK3PrR4Qz-FqbcFQPkPGkbKog8pzzAGy3t3KXT2K23LAAAAAGhUKhdTRUVOR1A=",
+      credential: "8c0a409c-4d20-11f0-bdc7-66ffacc6f8fc",
       urls: [
-        "turn:fr-turn7.xirsys.com:80?transport=udp",
-        "turn:fr-turn7.xirsys.com:3478?transport=udp",
-        "turn:fr-turn7.xirsys.com:80?transport=tcp",
-        "turn:fr-turn7.xirsys.com:3478?transport=tcp",
-        "turns:fr-turn7.xirsys.com:443?transport=tcp",
-        "turns:fr-turn7.xirsys.com:5349?transport=tcp",
+        "turn:fr-turn8.xirsys.com:80?transport=udp",
+        "turn:fr-turn8.xirsys.com:3478?transport=udp",
+        "turn:fr-turn8.xirsys.com:80?transport=tcp",
+        "turn:fr-turn8.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn8.xirsys.com:443?transport=tcp",
+        "turns:fr-turn8.xirsys.com:5349?transport=tcp",
       ],
     },
   ];
