@@ -1,4 +1,6 @@
-// Simple test for E2EE functionality with AES-GCM-SIV (with fallback to AES-GCM)
+// Simple test for E2EE functionality with AES-GCM-SIV
+console.log("🧪 Testing E2EE Implementation with AES-GCM-SIV...");
+
 async function testE2EE() {
   console.log(
     "🧪 Testing E2EE Implementation with AES-GCM-SIV (with fallback)..."
@@ -78,7 +80,6 @@ async function testE2EE() {
 // Test browser compatibility for AES-GCM-SIV
 async function testBrowserCompatibility() {
   console.log("🔍 Testing browser compatibility for AES-GCM-SIV...");
-
   try {
     // Test AES-GCM-SIV support
     const testKey = await window.crypto.subtle.generateKey(
@@ -99,11 +100,10 @@ async function testBrowserCompatibility() {
     console.log("✅ This browser supports AES-GCM-SIV");
     return true;
   } catch (error) {
-    console.log(
-      "⚠️ This browser does not support AES-GCM-SIV, will use AES-GCM fallback"
+    console.error("❌ This browser does not support AES-GCM-SIV encryption");
+    throw new Error(
+      "AES-GCM-SIV encryption is required but not supported by this browser"
     );
-    console.log("Error details:", error.message);
-    return false;
   }
 }
 

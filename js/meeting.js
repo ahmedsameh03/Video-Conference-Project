@@ -40,8 +40,13 @@ function setE2EEControlsEnabled(enabled) {
   const algorithmIndicator = document.getElementById(
     "e2ee-algorithm-indicator"
   );
-  if (algorithmIndicator && enabled) {
-    algorithmIndicator.style.display = "inline";
+  if (algorithmIndicator) {
+    if (enabled) {
+      algorithmIndicator.style.display = "inline";
+      algorithmIndicator.textContent = "AES-GCM-SIV";
+    } else {
+      algorithmIndicator.style.display = "none";
+    }
   }
 }
 
