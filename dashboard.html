@@ -166,92 +166,6 @@
       </div>
     </footer>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- JavaScript for handling the meeting start -->
-    <script>
-      function startMeeting() {
-        // Prompt the user for their name
-        const userName = prompt("Enter your name:");
-        if (userName) {
-          // Generate a random room ID
-          const roomId = generateRoomId();
-          // Redirect the user to the meeting page with room ID and name as URL parameters
-          window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
-            userName
-          )}`;
-        }
-      }
-
-      function joinMeeting() {
-        // Prompt the user for the meeting ID
-        const roomId = prompt("Enter Meeting ID:");
-        if (roomId) {
-          // Prompt the user for their name
-          const userName = prompt("Enter your name:");
-          if (userName) {
-            // Redirect the user to the meeting page with room ID and name as URL parameters
-            window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
-              userName
-            )}`;
-          }
-        }
-      }
-
-      function scheduleMeeting() {
-        const modal = new bootstrap.Modal(
-          document.getElementById("scheduleMeetingModal")
-        );
-        document.getElementById("schedule-meeting-form").reset();
-        document.getElementById("schedule-result").style.display = "none";
-        modal.show();
-      }
-
-      document
-        .getElementById("schedule-meeting-form")
-        .addEventListener("submit", function (e) {
-          e.preventDefault();
-          const dateInput = document.getElementById("scheduled-date").value;
-          const userName = document
-            .getElementById("schedule-user-name")
-            .value.trim();
-          if (!dateInput || !userName) return;
-          const meetingId = generateRoomId();
-          const meetingLink = `https://seenmeet.vercel.app/meeting.html?room=${meetingId}&name=${encodeURIComponent(
-            userName
-          )}`;
-          const dateObj = new Date(dateInput);
-          const formattedDate = dateObj.toLocaleString();
-          document.getElementById("schedule-result").innerHTML = `
-          <div class="alert alert-success">
-            <strong>Your meeting is scheduled!</strong><br><br>
-            <span>Meeting Link: <button id='copy-link-btn' class='btn btn-sm btn-outline-primary ms-2 mb-1'>Copy Link</button></span><br>
-            <a href="${meetingLink}" target="_blank" id="meeting-link" style="word-break:break-all;">${meetingLink}</a><br><br>
-            <span>Date & Time: <b>${formattedDate}</b></span>
-          </div>
-        `;
-          document.getElementById("schedule-result").style.display = "block";
-          // Add copy functionality
-          setTimeout(() => {
-            const copyBtn = document.getElementById("copy-link-btn");
-            if (copyBtn) {
-              copyBtn.onclick = function () {
-                navigator.clipboard.writeText(meetingLink).then(() => {
-                  copyBtn.textContent = "Copied!";
-                  setTimeout(() => {
-                    copyBtn.textContent = "Copy Link";
-                  }, 1500);
-                });
-              };
-            }
-          }, 100);
-        });
-
-      function generateRoomId() {
-        return Math.random().toString(36).substr(2, 9).toUpperCase();
-      }
-    </script>
     <!-- Schedule Meeting Modal -->
     <div
       class="modal fade"
@@ -307,5 +221,92 @@
         </div>
       </div>
     </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- JavaScript for handling the meeting start and scheduling -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        function startMeeting() {
+          const userName = prompt("Enter your name:");
+          if (userName) {
+            const roomId = generateRoomId();
+            window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
+              userName
+            )}`;
+          }
+        }
+
+        function joinMeeting() {
+          const roomId = prompt("Enter Meeting ID:");
+          if (roomId) {
+            const userName = prompt("Enter your name:");
+            if (userName) {
+              window.location.href = `meeting.html?room=${roomId}&name=${encodeURIComponent(
+                userName
+              )}`;
+            }
+          }
+        }
+
+        function scheduleMeeting() {
+          const modal = new bootstrap.Modal(
+            document.getElementById("scheduleMeetingModal")
+          );
+          document.getElementById("schedule-meeting-form").reset();
+          document.getElementById("schedule-result").style.display = "none";
+          modal.show();
+        }
+
+        window.startMeeting = startMeeting;
+        window.joinMeeting = joinMeeting;
+        window.scheduleMeeting = scheduleMeeting;
+
+        document
+          .getElementById("schedule-meeting-form")
+          .addEventListener("submit", function (e) {
+            e.preventDefault();
+            const dateInput = document.getElementById("scheduled-date").value;
+            const userName = document
+              .getElementById("schedule-user-name")
+              .value.trim();
+            if (!dateInput || !userName) return;
+            const meetingId = generateRoomId();
+            const meetingLink = `https://seenmeet.vercel.app/meeting.html?room=${meetingId}&name=${encodeURIComponent(
+              userName
+            )}`;
+            const dateObj = new Date(dateInput);
+            const formattedDate = dateObj.toLocaleString();
+            document.getElementById("schedule-result").innerHTML = `
+            <div class="alert alert-success">
+              <strong>Your meeting is scheduled!</strong><br><br>
+              <span>Meeting Link: <button id='copy-link-btn' class='btn btn-sm btn-outline-primary ms-2 mb-1'>Copy Link</button></span><br>
+              <a href="${meetingLink}" target="_blank" id="meeting-link" style="word-break:break-all;">${meetingLink}</a><br><br>
+              <span>Date & Time: <b>${formattedDate}</b></span>
+            </div>
+          `;
+            document.getElementById("schedule-result").style.display = "block";
+            // Add copy functionality
+            setTimeout(() => {
+              const copyBtn = document.getElementById("copy-link-btn");
+              if (copyBtn) {
+                copyBtn.onclick = function () {
+                  navigator.clipboard.writeText(meetingLink).then(() => {
+                    copyBtn.textContent = "Copied!";
+                    setTimeout(() => {
+                      copyBtn.textContent = "Copy Link";
+                    }, 1500);
+                  });
+                };
+              }
+            }, 100);
+          });
+
+        function generateRoomId() {
+          return Math.random().toString(36).substr(2, 9).toUpperCase();
+        }
+      });
+    </script>
   </body>
 </html>
