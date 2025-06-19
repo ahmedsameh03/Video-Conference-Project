@@ -7,10 +7,45 @@ class E2EEManager {
     this.isInitialized = false;
     this.keyRotationInterval = null;
     this.KEY_ROTATION_TIME = 5 * 60 * 1000; // 5 minutes
+    this.useAESGCM_SIV = true; // Flag to track if AES-GCM-SIV is supported
+  }
+
+  async checkAESGCM_SIVSupport() {
+    try {
+      // Test if AES-GCM-SIV is supported
+      const testKey = await window.crypto.subtle.generateKey(
+        { name: "AES-GCM-SIV", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+
+      const testData = new TextEncoder().encode("test");
+      const testNonce = window.crypto.getRandomValues(new Uint8Array(12));
+
+      await window.crypto.subtle.encrypt(
+        { name: "AES-GCM-SIV", iv: testNonce },
+        testKey,
+        testData
+      );
+
+      this.useAESGCM_SIV = true;
+      console.log("✅ AES-GCM-SIV is supported by this browser");
+      return true;
+    } catch (error) {
+      this.useAESGCM_SIV = false;
+      console.warn(
+        "⚠️ AES-GCM-SIV not supported, falling back to AES-GCM:",
+        error
+      );
+      return false;
+    }
   }
 
   async initialize() {
     try {
+      // Check AES-GCM-SIV support first
+      await this.checkAESGCM_SIVSupport();
+
       // Generate key pair for this participant
       this.keyPair = await window.crypto.subtle.generateKey(
         {
@@ -28,11 +63,13 @@ class E2EEManager {
       );
 
       this.isInitialized = true;
-      console.log("🔐 E2EE Manager initialized successfully");
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
+      console.log(`🔐 E2EE Manager initialized successfully with ${algorithm}`);
 
       return {
         publicKey: publicKey,
         publicKeyBase64: this.arrayBufferToBase64(publicKey),
+        algorithm: algorithm,
       };
     } catch (error) {
       console.error("❌ Failed to initialize E2EE Manager:", error);
@@ -66,9 +103,10 @@ class E2EEManager {
         const secretArray = new Uint8Array(sharedSecret);
         secretArray.set(hashArray.slice(0, 32));
 
-        // Create session key for self
+        // Create session key for self using AES-GCM-SIV or fallback to AES-GCM
+        const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
         const sessionKey = await window.crypto.subtle.generateKey(
-          { name: "AES-GCM", length: 256 },
+          { name: algorithm, length: 256 },
           true,
           ["encrypt", "decrypt"]
         );
@@ -77,7 +115,7 @@ class E2EEManager {
         this.sessionKeys.set(userId, sessionKey);
         this.participants.add(userId);
         console.log(
-          `🔐 Added self (${userId}) to E2EE session with self-verification key`
+          `🔐 Added self (${userId}) to E2EE session with self-verification key using ${algorithm}`
         );
         return true;
       }
@@ -113,7 +151,8 @@ class E2EEManager {
         ["deriveKey"]
       );
 
-      // Derive session key from shared secret key
+      // Derive session key from shared secret key using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const sessionKey = await window.crypto.subtle.deriveKey(
         {
           name: "PBKDF2",
@@ -122,7 +161,7 @@ class E2EEManager {
           hash: "SHA-256",
         },
         sharedSecretKey,
-        { name: "AES-GCM", length: 256 },
+        { name: algorithm, length: 256 },
         false,
         ["encrypt", "decrypt"]
       );
@@ -131,7 +170,9 @@ class E2EEManager {
       this.sessionKeys.set(userId, sessionKey);
       this.participants.add(userId);
 
-      console.log(`🔐 Added participant ${userId} to E2EE session`);
+      console.log(
+        `🔐 Added participant ${userId} to E2EE session using ${algorithm}`
+      );
       return true;
     } catch (error) {
       console.error(`❌ Failed to add participant ${userId}:`, error);
@@ -153,23 +194,24 @@ class E2EEManager {
         throw new Error(`No session key found for user ${userId}`);
       }
 
-      // Generate random IV
-      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      // Generate random nonce/IV (12 bytes)
+      const nonce = window.crypto.getRandomValues(new Uint8Array(12));
 
-      // Encrypt data using AES-GCM
+      // Encrypt data using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const encrypted = await window.crypto.subtle.encrypt(
         {
-          name: "AES-GCM",
-          iv: iv,
+          name: algorithm,
+          iv: nonce,
         },
         sessionKey,
         data
       );
 
-      // Combine IV and encrypted data
-      const result = new Uint8Array(iv.length + encrypted.byteLength);
-      result.set(iv, 0);
-      result.set(new Uint8Array(encrypted), iv.length);
+      // Combine nonce and encrypted data
+      const result = new Uint8Array(nonce.length + encrypted.byteLength);
+      result.set(nonce, 0);
+      result.set(new Uint8Array(encrypted), nonce.length);
 
       return result;
     } catch (error) {
@@ -185,15 +227,16 @@ class E2EEManager {
         throw new Error(`No session key found for user ${userId}`);
       }
 
-      // Extract IV and encrypted data
-      const iv = encryptedData.slice(0, 12);
+      // Extract nonce and encrypted data
+      const nonce = encryptedData.slice(0, 12);
       const data = encryptedData.slice(12);
 
-      // Decrypt data
+      // Decrypt data using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const decrypted = await window.crypto.subtle.decrypt(
         {
-          name: "AES-GCM",
-          iv: iv,
+          name: algorithm,
+          iv: nonce,
         },
         sessionKey,
         data
@@ -211,7 +254,8 @@ class E2EEManager {
 
     for (const [userId, sharedSecret] of this.sharedSecrets) {
       try {
-        // Derive new session key
+        // Derive new session key using AES-GCM-SIV or fallback to AES-GCM
+        const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
         const newSessionKey = await window.crypto.subtle.deriveKey(
           {
             name: "PBKDF2",
@@ -220,7 +264,7 @@ class E2EEManager {
             hash: "SHA-256",
           },
           sharedSecret,
-          { name: "AES-GCM", length: 256 },
+          { name: algorithm, length: 256 },
           false,
           ["encrypt", "decrypt"]
         );

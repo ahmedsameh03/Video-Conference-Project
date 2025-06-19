@@ -31,22 +31,38 @@ This document describes the implementation of **End-to-End Encryption** for the 
 
 1. **ECDH Key Generation**: Each participant generates an ECDH key pair using P-256 curve
 2. **Shared Secret Derivation**: Participants derive shared secrets using ECDH
-3. **Session Key Derivation**: AES-256-GCM session keys are derived from shared secrets using PBKDF2
+3. **Session Key Derivation**: AES-256-GCM-SIV session keys are derived from shared secrets using PBKDF2
 4. **Key Rotation**: Session keys are rotated every 5 minutes for perfect forward secrecy
 
 ### Encryption Algorithm
 
-- **Algorithm**: AES-256-GCM (Galois/Counter Mode)
+- **Primary Algorithm**: AES-256-GCM-SIV (Galois/Counter Mode with Synthetic Initialization Vector)
+- **Fallback Algorithm**: AES-256-GCM (if AES-GCM-SIV is not supported by the browser)
 - **Key Size**: 256 bits
-- **IV Size**: 12 bytes (randomly generated for each encryption)
-- **Authentication**: Built-in with GCM mode
+- **Nonce Size**: 12 bytes (randomly generated for each encryption)
+- **Authentication**: Built-in with GCM-SIV mode
+- **Security Benefits**:
+  - Resistant to nonce reuse attacks
+  - Better security for real-time applications
+  - Deterministic encryption for same plaintext and nonce
+  - Automatic fallback to AES-GCM for broader browser compatibility
+
+### Browser Compatibility
+
+The implementation automatically detects browser support for AES-GCM-SIV and falls back to AES-GCM if needed:
+
+1. **AES-GCM-SIV Support**: Modern browsers (Chrome 67+, Firefox 60+, Safari 14+)
+2. **Fallback to AES-GCM**: Older browsers that don't support AES-GCM-SIV
+3. **Automatic Detection**: Runtime detection ensures optimal security for each browser
 
 ### Security Features
 
 1. **Perfect Forward Secrecy**: Keys rotate automatically
-2. **Authenticated Encryption**: AES-GCM provides both confidentiality and integrity
-3. **Key Verification**: Participants can verify they're using the same keys
-4. **Isolated Key Storage**: Keys are stored in memory only, never persisted
+2. **Authenticated Encryption**: AES-GCM-SIV provides both confidentiality and integrity
+3. **Nonce Reuse Protection**: GCM-SIV is more robust against nonce reuse than standard GCM
+4. **Browser Compatibility**: Automatic fallback ensures security across all supported browsers
+5. **Key Verification**: Participants can verify they're using the same keys
+6. **Isolated Key Storage**: Keys are stored in memory only, never persisted
 
 ## Usage
 

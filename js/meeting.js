@@ -35,6 +35,14 @@ function setE2EEControlsEnabled(enabled) {
 
   const e2eeVerifyBtn = document.getElementById("e2ee-verify-btn");
   if (e2eeVerifyBtn) e2eeVerifyBtn.disabled = !enabled;
+
+  // Show algorithm indicator when controls are enabled
+  const algorithmIndicator = document.getElementById(
+    "e2ee-algorithm-indicator"
+  );
+  if (algorithmIndicator && enabled) {
+    algorithmIndicator.style.display = "inline";
+  }
 }
 
 function showKeyExchangeLoading(show) {
@@ -250,6 +258,17 @@ async function initializeMeeting(userName) {
       await e2eeManager.addParticipant(userName, keyInfo.publicKeyBase64);
       transformManager = new WebRTCTransformManager(e2eeManager);
       keyVerification = new KeyVerification(e2eeManager);
+
+      // Show algorithm indicator
+      const algorithmIndicator = document.getElementById(
+        "e2ee-algorithm-indicator"
+      );
+      if (algorithmIndicator) {
+        algorithmIndicator.textContent = keyInfo.algorithm;
+        algorithmIndicator.style.display = "inline";
+        algorithmIndicator.title = `Using ${keyInfo.algorithm} encryption`;
+      }
+
       console.log("🔐 E2EE system initialized successfully");
       ws.send(
         JSON.stringify({
@@ -1009,12 +1028,25 @@ window.toggleE2EE = async function () {
   isE2EEEnabled = !isE2EEEnabled;
 
   const btn = document.getElementById("e2ee-btn");
+  const algorithmIndicator = document.getElementById(
+    "e2ee-algorithm-indicator"
+  );
+
   if (isE2EEEnabled) {
     btn.style.backgroundColor = "#28a745"; // ✅ green
     btn.style.color = "white";
+    // Show algorithm indicator when E2EE is enabled
+    if (algorithmIndicator) {
+      algorithmIndicator.style.display = "inline";
+      algorithmIndicator.style.color = "#28a745";
+    }
   } else {
     btn.style.backgroundColor = ""; // 🔁 default
     btn.style.color = "";
+    // Hide algorithm indicator when E2EE is disabled
+    if (algorithmIndicator) {
+      algorithmIndicator.style.display = "none";
+    }
   }
 
   console.log(
