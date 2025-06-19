@@ -153,7 +153,7 @@
           class="row align-items-center justify-content-between flex-column flex-sm-row"
         >
           <div class="col-auto">
-            <div class="small m-0">&copy; Your Website 2023</div>
+            <div class="small m-0">&copy; Your Website 2025</div>
           </div>
           <div class="col-auto">
             <a class="small" href="#!">Privacy</a>
@@ -200,14 +200,100 @@
       }
 
       function scheduleMeeting() {
-        alert("Feature to schedule a meeting is under development.");
-        // You can add a modal or a separate page for scheduling meetings here
+        const modal = new bootstrap.Modal(
+          document.getElementById("scheduleMeetingModal")
+        );
+        document.getElementById("schedule-meeting-form").reset();
+        document.getElementById("schedule-result").style.display = "none";
+        modal.show();
       }
 
-      // Function to generate a random room ID
+      document
+        .getElementById("schedule-meeting-form")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+          const dateInput = document.getElementById("scheduled-date").value;
+          const userName = document
+            .getElementById("schedule-user-name")
+            .value.trim();
+          if (!dateInput || !userName) return;
+          const meetingId = generateRoomId();
+          const meetingLink = `${
+            window.location.origin
+          }/meeting.html?room=${meetingId}&name=${encodeURIComponent(
+            userName
+          )}`;
+          const dateObj = new Date(dateInput);
+          const formattedDate = dateObj.toLocaleString();
+          document.getElementById("schedule-result").innerHTML = `
+          <div class="alert alert-success">
+            <strong>Your meeting is scheduled!</strong><br>
+            <span>Meeting Link: <a href="${meetingLink}" target="_blank">${meetingLink}</a></span><br>
+            <span>Date & Time: <b>${formattedDate}</b></span>
+          </div>
+        `;
+          document.getElementById("schedule-result").style.display = "block";
+        });
+
       function generateRoomId() {
-        return Math.random().toString(36).substr(2, 9);
+        return Math.random().toString(36).substr(2, 9).toUpperCase();
       }
     </script>
+
+    <!-- Schedule Meeting Modal -->
+    <div
+      class="modal fade"
+      id="scheduleMeetingModal"
+      tabindex="-1"
+      aria-labelledby="scheduleMeetingModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="scheduleMeetingModalLabel">
+              Schedule a Meeting
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <form id="schedule-meeting-form">
+              <div class="mb-3">
+                <label for="scheduled-date" class="form-label"
+                  >Select Date & Time</label
+                >
+                <input
+                  type="datetime-local"
+                  class="form-control"
+                  id="scheduled-date"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="schedule-user-name" class="form-label"
+                  >Your Name</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="schedule-user-name"
+                  placeholder="Enter your name"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn btn-primary w-100">
+                Schedule
+              </button>
+            </form>
+            <div id="schedule-result" class="mt-4" style="display: none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
