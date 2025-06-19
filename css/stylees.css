@@ -338,6 +338,7 @@ body {
   .controls {
     display: flex !important;
     flex-wrap: wrap;
+    flex-direction: row !important;
     justify-content: center;
     gap: 10px;
     padding: 8px 0;
