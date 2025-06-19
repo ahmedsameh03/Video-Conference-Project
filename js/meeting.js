@@ -210,14 +210,20 @@ function closeE2EEScanModal() {
 async function fetchIceServers() {
   return [
     {
+      urls: ["stun:fr-turn7.xirsys.com"],
+    },
+    {
+      username:
+        "YTkZ5X0VBbPgnz6cURXwsP3U8v0ZdJQv6zJfW7qJycwcv7FyWz3tGUUVZ4KH4zsMAAAAAGhTZbdhaG1lZHNhbWVoMDM0NA==",
+      credential: "7fc82486-4cab-11f0-8dfd-da78ad95d6d9",
       urls: [
-        "stun:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
+        "turn:fr-turn7.xirsys.com:80?transport=udp",
+        "turn:fr-turn7.xirsys.com:3478?transport=udp",
+        "turn:fr-turn7.xirsys.com:80?transport=tcp",
+        "turn:fr-turn7.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn7.xirsys.com:443?transport=tcp",
+        "turns:fr-turn7.xirsys.com:5349?transport=tcp",
       ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
     },
   ];
 }
