@@ -1,8 +1,8 @@
 const queryParams = getQueryParams();
 const room = queryParams.room;
 const name = queryParams.name;
-let isMuted = true;
-let isVideoOff = true;
+let isMuted = false;
+let isVideoOff = false;
 let e2eeManager;
 let transformManager;
 let keyVerification;
