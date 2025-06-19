@@ -7,6 +7,7 @@ class E2EEManager {
     this.isInitialized = false;
     this.keyRotationInterval = null;
     this.KEY_ROTATION_TIME = 5 * 60 * 1000; // 5 minutes
+    this.useAESGCM_SIV = true; // Flag to track if AES-GCM-SIV is supported
   }
 
   async checkAESGCM_SIVSupport() {
@@ -27,19 +28,22 @@ class E2EEManager {
         testData
       );
 
+      this.useAESGCM_SIV = true;
       console.log("✅ AES-GCM-SIV is supported by this browser");
       return true;
     } catch (error) {
-      console.error("❌ This browser does not support AES-GCM-SIV encryption");
-      throw new Error(
-        "AES-GCM-SIV encryption is required but not supported by this browser"
+      this.useAESGCM_SIV = false;
+      console.warn(
+        "⚠️ AES-GCM-SIV not supported, falling back to AES-GCM:",
+        error
       );
+      return false;
     }
   }
 
   async initialize() {
     try {
-      // Check AES-GCM-SIV support first - will throw if not supported
+      // Check AES-GCM-SIV support first
       await this.checkAESGCM_SIVSupport();
 
       // Generate key pair for this participant
@@ -59,12 +63,13 @@ class E2EEManager {
       );
 
       this.isInitialized = true;
-      console.log("🔐 E2EE Manager initialized successfully with AES-GCM-SIV");
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
+      console.log(`🔐 E2EE Manager initialized successfully with ${algorithm}`);
 
       return {
         publicKey: publicKey,
         publicKeyBase64: this.arrayBufferToBase64(publicKey),
-        algorithm: "AES-GCM-SIV",
+        algorithm: algorithm,
       };
     } catch (error) {
       console.error("❌ Failed to initialize E2EE Manager:", error);
@@ -98,9 +103,10 @@ class E2EEManager {
         const secretArray = new Uint8Array(sharedSecret);
         secretArray.set(hashArray.slice(0, 32));
 
-        // Create session key for self using AES-GCM-SIV
+        // Create session key for self using AES-GCM-SIV or fallback to AES-GCM
+        const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
         const sessionKey = await window.crypto.subtle.generateKey(
-          { name: "AES-GCM-SIV", length: 256 },
+          { name: algorithm, length: 256 },
           true,
           ["encrypt", "decrypt"]
         );
@@ -109,7 +115,7 @@ class E2EEManager {
         this.sessionKeys.set(userId, sessionKey);
         this.participants.add(userId);
         console.log(
-          `🔐 Added self (${userId}) to E2EE session with self-verification key using AES-GCM-SIV`
+          `🔐 Added self (${userId}) to E2EE session with self-verification key using ${algorithm}`
         );
         return true;
       }
@@ -145,7 +151,8 @@ class E2EEManager {
         ["deriveKey"]
       );
 
-      // Derive session key from shared secret key using AES-GCM-SIV
+      // Derive session key from shared secret key using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const sessionKey = await window.crypto.subtle.deriveKey(
         {
           name: "PBKDF2",
@@ -154,7 +161,7 @@ class E2EEManager {
           hash: "SHA-256",
         },
         sharedSecretKey,
-        { name: "AES-GCM-SIV", length: 256 },
+        { name: algorithm, length: 256 },
         false,
         ["encrypt", "decrypt"]
       );
@@ -164,7 +171,7 @@ class E2EEManager {
       this.participants.add(userId);
 
       console.log(
-        `🔐 Added participant ${userId} to E2EE session using AES-GCM-SIV`
+        `🔐 Added participant ${userId} to E2EE session using ${algorithm}`
       );
       return true;
     } catch (error) {
@@ -190,10 +197,11 @@ class E2EEManager {
       // Generate random nonce/IV (12 bytes)
       const nonce = window.crypto.getRandomValues(new Uint8Array(12));
 
-      // Encrypt data using AES-GCM-SIV
+      // Encrypt data using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const encrypted = await window.crypto.subtle.encrypt(
         {
-          name: "AES-GCM-SIV",
+          name: algorithm,
           iv: nonce,
         },
         sessionKey,
@@ -223,10 +231,11 @@ class E2EEManager {
       const nonce = encryptedData.slice(0, 12);
       const data = encryptedData.slice(12);
 
-      // Decrypt data using AES-GCM-SIV
+      // Decrypt data using AES-GCM-SIV or fallback to AES-GCM
+      const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const decrypted = await window.crypto.subtle.decrypt(
         {
-          name: "AES-GCM-SIV",
+          name: algorithm,
           iv: nonce,
         },
         sessionKey,
@@ -245,8 +254,9 @@ class E2EEManager {
 
     for (const [userId, sharedSecret] of this.sharedSecrets) {
       try {
-        // Derive new session key using AES-GCM-SIV
-        const sessionKey = await window.crypto.subtle.deriveKey(
+        // Derive new session key using AES-GCM-SIV or fallback to AES-GCM
+        const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
+        const newSessionKey = await window.crypto.subtle.deriveKey(
           {
             name: "PBKDF2",
             salt: new TextEncoder().encode(`session-${userId}-${Date.now()}`),
@@ -254,12 +264,12 @@ class E2EEManager {
             hash: "SHA-256",
           },
           sharedSecret,
-          { name: "AES-GCM-SIV", length: 256 },
+          { name: algorithm, length: 256 },
           false,
           ["encrypt", "decrypt"]
         );
 
-        this.sessionKeys.set(userId, sessionKey);
+        this.sessionKeys.set(userId, newSessionKey);
       } catch (error) {
         console.error(`❌ Failed to rotate keys for ${userId}:`, error);
       }
