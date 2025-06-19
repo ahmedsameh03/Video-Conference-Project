@@ -578,6 +578,31 @@ async function startCamera() {
     .catch((e) => console.error("❌ Video play failed:", e));
 }
 
+function updateConnectionStatus(status) {
+  const el = document.getElementById("connection-status");
+  if (!el) return;
+  el.textContent = status;
+  el.style.display = "block";
+  setTimeout(() => {
+    el.style.display = "none";
+  }, 4000);
+}
+
+function showReconnectButton(show) {
+  const btn = document.getElementById("reconnect-btn");
+  if (!btn) return;
+  btn.style.display = show ? "block" : "none";
+}
+
+// Add reconnect button logic
+const reconnectBtn = document.getElementById("reconnect-btn");
+if (reconnectBtn) {
+  reconnectBtn.onclick = function () {
+    window.location.reload();
+  };
+}
+
+// Wrap RTCPeerConnection creation to add ICE state logging and user feedback
 async function createPeer(user) {
   console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const iceServers = await fetchIceServers();
@@ -603,14 +628,25 @@ async function createPeer(user) {
     }
   }
 
-  peer.oniceconnectionstatechange = () => {
-    console.log(`🔌 ICE state for ${user}:`, peer.iceConnectionState);
+  peer.oniceconnectionstatechange = function () {
+    console.log(
+      "ICE connection state for",
+      user + ":",
+      peer.iceConnectionState
+    );
+    updateConnectionStatus(
+      "ICE state for " + user + ": " + peer.iceConnectionState
+    );
     if (
-      ["failed", "disconnected", "closed"].includes(peer.iceConnectionState)
+      peer.iceConnectionState === "failed" ||
+      peer.iceConnectionState === "disconnected"
     ) {
-      console.error(
-        `❌ ICE connection for ${user} failed/disconnected. State: ${peer.iceConnectionState}`
-      );
+      showReconnectButton(true);
+    } else if (
+      peer.iceConnectionState === "connected" ||
+      peer.iceConnectionState === "completed"
+    ) {
+      showReconnectButton(false);
     }
   };
   peer.onconnectionstatechange = () => {
