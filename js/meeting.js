@@ -19,7 +19,6 @@ const SIGNALING_SERVER_URL =
 // Don't connect immediately - wait for name to be provided
 let ws = null;
 let isInitialized = false;
-
 const peers = {};
 let isMakingOffer = false;
 let isPolite = false;
