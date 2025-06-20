@@ -1,8 +1,8 @@
 class E2EEManager {
   constructor() {
     this.keyPair = null;
-    this.sharedSecrets = new Map(); // userId -> shared secret
-    this.sessionKeys = new Map(); // userId -> session key
+    this.sharedSecrets = new Map(); // userId -> shared secret (ArrayBuffer)
+    this.sessionKeys = new Map(); // userId -> session key (CryptoKey)
     this.participants = new Set();
     this.isInitialized = false;
     this.keyRotationInterval = null;
@@ -103,11 +103,21 @@ class E2EEManager {
         const secretArray = new Uint8Array(sharedSecret);
         secretArray.set(hashArray.slice(0, 32));
 
+        // Derive a deterministic salt from the shared secret itself
+        const salt = await window.crypto.subtle.digest("SHA-256", sharedSecret);
+
         // Create session key for self using AES-GCM-SIV or fallback to AES-GCM
         const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
-        const sessionKey = await window.crypto.subtle.generateKey(
+        const sessionKey = await window.crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt: salt, // Use the derived salt
+            iterations: 100000,
+            hash: "SHA-256",
+          },
+          await window.crypto.subtle.importKey("raw", sharedSecret, { name: "PBKDF2" }, false, ["deriveKey"]),
           { name: algorithm, length: 256 },
-          true,
+          false,
           ["encrypt", "decrypt"]
         );
 
@@ -151,12 +161,15 @@ class E2EEManager {
         ["deriveKey"]
       );
 
+      // Derive a deterministic salt from the shared secret itself
+      const salt = await window.crypto.subtle.digest("SHA-256", sharedSecret);
+
       // Derive session key from shared secret key using AES-GCM-SIV or fallback to AES-GCM
       const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       const sessionKey = await window.crypto.subtle.deriveKey(
         {
           name: "PBKDF2",
-          salt: new TextEncoder().encode(`session-${userId}`),
+          salt: salt, // Use the derived salt
           iterations: 100000,
           hash: "SHA-256",
         },
@@ -254,22 +267,26 @@ class E2EEManager {
 
     for (const [userId, sharedSecret] of this.sharedSecrets) {
       try {
+        // Derive a deterministic salt from the shared secret itself
+        const salt = await window.crypto.subtle.digest("SHA-256", sharedSecret);
+
         // Derive new session key using AES-GCM-SIV or fallback to AES-GCM
         const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
         const newSessionKey = await window.crypto.subtle.deriveKey(
           {
             name: "PBKDF2",
-            salt: new TextEncoder().encode(`session-${userId}-${Date.now()}`),
+            salt: salt, // Use the derived salt
             iterations: 100000,
             hash: "SHA-256",
           },
-          sharedSecret,
+          await window.crypto.subtle.importKey("raw", sharedSecret, { name: "PBKDF2" }, false, ["deriveKey"]),
           { name: algorithm, length: 256 },
           false,
           ["encrypt", "decrypt"]
         );
 
         this.sessionKeys.set(userId, newSessionKey);
+        console.log(`🔐 Rotated keys for ${userId} using ${algorithm}`);
       } catch (error) {
         console.error(`❌ Failed to rotate keys for ${userId}:`, error);
       }
@@ -284,12 +301,14 @@ class E2EEManager {
     this.keyRotationInterval = setInterval(() => {
       this.rotateKeys();
     }, this.KEY_ROTATION_TIME);
+    console.log(`🔄 Key rotation started with interval: ${this.KEY_ROTATION_TIME / 1000} seconds`);
   }
 
   stopKeyRotation() {
     if (this.keyRotationInterval) {
       clearInterval(this.keyRotationInterval);
       this.keyRotationInterval = null;
+      console.log("🔄 Key rotation stopped");
     }
   }
 
