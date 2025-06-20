@@ -60,101 +60,146 @@ class KeyVerification {
     }
   }
 
-  async verifyKey(userId, verificationCode, qrData = null) {
+  async verifyKey(peerId, receivedCode, receivedQrData = null) {
     try {
+      const currentUserName = new URLSearchParams(window.location.search).get("name") || "unknown";
       console.log(
-        `🔐 Verifying key for ${userId} with code: ${verificationCode}`
+        `🔐 Verifying key for peer ${peerId} with code: ${receivedCode}. Current user: ${currentUserName}`
       );
-      console.log(`🔐 QR data:`, qrData);
+      console.log(`🔐 Received QR data:`, receivedQrData);
 
-      // If we have QR data, use it for verification
-      if (qrData && qrData.userId && qrData.targetUserId) {
-        // Verify that the QR code is for the correct user
-        if (qrData.targetUserId !== userId) {
+      if (receivedQrData && receivedQrData.userId && receivedQrData.targetUserId) {
+        // This block handles QR code based verification
+
+        // Validate QR data context
+        if (receivedQrData.userId !== peerId) {
           console.error(
-            `❌ QR code target user (${qrData.targetUserId}) doesn't match expected user (${userId})`
+            `❌ QR data generator (${receivedQrData.userId}) does not match peerId (${peerId}) being verified.`
           );
+          this.verificationStatus.set(peerId, { verified: false, error: "QR data mismatch" });
+          return false;
+        }
+        if (receivedQrData.targetUserId !== currentUserName) {
+          console.error(
+            `❌ QR code is not for the current user. Target: ${receivedQrData.targetUserId}, Current: ${currentUserName}`
+          );
+          this.verificationStatus.set(peerId, { verified: false, error: "QR target mismatch" });
           return false;
         }
 
-        // Get the shared secret for this user
-        const sharedSecret = this.e2eeManager.sharedSecrets.get(userId);
+        // Get the shared secret with the peer who generated the QR code (peerId)
+        const sharedSecret = this.e2eeManager.sharedSecrets.get(peerId);
         if (!sharedSecret) {
-          throw new Error(`No shared secret found for user ${userId}`);
+          throw new Error(`No shared secret found for user ${peerId}`);
         }
 
-        // Recreate the verification message from QR data
-        const verificationMessage = `VERIFY-${qrData.userId}-${qrData.targetUserId}-${qrData.timestamp}`;
+        // Recreate the exact verification message that peerId would have generated
+        const verificationMessage = `VERIFY-${receivedQrData.userId}-${receivedQrData.targetUserId}-${receivedQrData.timestamp}`;
         console.log(
-          `🔐 Recreated verification message: ${verificationMessage}`
+          `🔐 Recreated verification message for QR: ${verificationMessage}`
         );
 
-        // Create the same hash as the generator
+        // Create the same hash as the generator (peerId)
         const messageBuffer = new TextEncoder().encode(verificationMessage);
         const sharedSecretBuffer = new Uint8Array(sharedSecret);
 
-        // Combine shared secret and message
         const combined = new Uint8Array(
           sharedSecretBuffer.length + messageBuffer.length
         );
         combined.set(sharedSecretBuffer, 0);
         combined.set(messageBuffer, sharedSecretBuffer.length);
 
-        // Create hash
         const hash = await window.crypto.subtle.digest("SHA-256", combined);
-
-        // Convert to base64 and take first 8 characters
         const hashArray = new Uint8Array(hash);
         const hashBase64 = btoa(String.fromCharCode(...hashArray));
         const expectedCode = hashBase64.substring(0, 8).toUpperCase();
 
         console.log(
-          `🔐 Expected code: ${expectedCode}, Received code: ${verificationCode}`
+          `🔐 Expected code from ${peerId}: ${expectedCode}, Received code: ${receivedCode}`
         );
 
-        const isMatch = expectedCode === verificationCode.toUpperCase();
+        const isMatch = expectedCode === receivedCode.toUpperCase();
 
-        this.verificationStatus.set(userId, {
+        this.verificationStatus.set(peerId, {
           verified: isMatch,
           timestamp: Date.now(),
-          code: verificationCode,
-          qrData: qrData,
+          method: "qr",
+          receivedCode: receivedCode,
+          expectedCode: expectedCode,
         });
 
         if (!isMatch) {
           console.error(
-            `❌ Key verification failed for ${userId}. Expected: ${expectedCode}, Got: ${verificationCode}`
+            `❌ Key verification failed for ${peerId}. Expected: ${expectedCode}, Got: ${receivedCode}`
           );
           alert(
-            `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
+            `Encryption keys do NOT match for ${peerId}. Please ensure both users have refreshed and rejoined the meeting, or try generating a new QR code.`
           );
         } else {
-          console.log(`✅ Key verification successful for ${userId}`);
+          console.log(`✅ Key verification successful for ${peerId} via QR.`);
         }
+        return isMatch;
 
-        return isMatch;
       } else {
-        // Fallback to old method for backward compatibility
-        console.log(`🔐 Using fallback verification method for ${userId}`);
-        const generated = await this.generateVerificationCode(userId);
-        const isMatch = generated.code === verificationCode.toUpperCase();
-        this.verificationStatus.set(userId, {
-          verified: isMatch,
+        // This block handles manual code input (no QR data)
+        // This path is inherently less reliable without the original message components (timestamp, generator, target)
+        // from the peer who generated the 'receivedCode'.
+        console.warn(
+          `🔐 Attempting manual key verification for ${peerId}. This method is less reliable than QR.`
+        );
+        alert(
+          "Manual key verification is less reliable. Please try using the QR code method if available."
+        );
+        console.error(
+          "❌ Fallback manual key verification is unreliable and likely to fail due to timestamp differences. Use QR codes."
+        );
+        this.verificationStatus.set(peerId, {
+          verified: false,
           timestamp: Date.now(),
-          code: verificationCode,
+          method: "manual_fallback_attempt",
+          receivedCode: receivedCode,
+          error: "Manual verification is unreliable",
         });
-        if (!isMatch) {
-          alert(
-            `Encryption keys do not match for ${userId}. Please ensure both users have refreshed and rejoined the meeting.`
-          );
-        }
-        return isMatch;
+        return false; // Mark as failed due to unreliability
       }
     } catch (error) {
       alert(
-        `Key verification failed for ${userId}. Please try again or refresh the page.`
+        `Key verification failed for ${peerId}. Please try again or refresh the page.`
       );
-      console.error(`❌ Key verification failed for ${userId}:`, error);
+      console.error(`❌ Key verification failed for ${peerId}:`, error);
+      this.verificationStatus.set(peerId, {
+          verified: false,
+          timestamp: Date.now(),
+          error: error.message,
+        });
+      return false;
+    }
+  }
+
+  async verifyQRData(qrDataString) {
+    try {
+      const qrData = JSON.parse(qrDataString);
+
+      if (qrData.type !== "e2ee-verification") {
+        throw new Error("Invalid QR code type");
+      }
+
+      // Check if QR code is not too old (e.g., 5 minutes)
+      const age = Date.now() - qrData.timestamp;
+      if (age > 5 * 60 * 1000) { // 5 minutes validity
+        console.warn("⚠️ QR code is too old:", new Date(qrData.timestamp));
+        alert("This QR code has expired. Please generate a new one.");
+        return false;
+      }
+
+      // Call verifyKey with:
+      // 1. peerId: qrData.userId (the user who generated the QR code)
+      // 2. receivedCode: qrData.code (the code from the QR)
+      // 3. receivedQrData: the full qrData object
+      return await this.verifyKey(qrData.userId, qrData.code, qrData);
+    } catch (error) {
+      console.error("❌ QR verification failed:", error);
+      alert(`QR code verification failed: ${error.message}`);
       return false;
     }
   }
