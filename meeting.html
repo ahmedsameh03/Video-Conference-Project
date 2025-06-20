@@ -32,7 +32,7 @@
       }
       .navbar-custom {
         background-color: #ffffff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1 );
       }
       .navbar-brand {
         font-size: 1.5rem;
@@ -516,7 +516,7 @@
       <div style="text-align: center; margin-top: 10px">
         <button
           class="btn btn-sm btn-dark"
-          onclick="document.getElementById('qr-modal').style.display='none'"
+          onclick="document.getElementById(\'qr-modal\').style.display=\'none\'"
         >
           Close
         </button>
@@ -556,7 +556,50 @@
       <div style="text-align: center">
         <button
           class="btn btn-sm btn-dark"
-          onclick="document.getElementById('e2ee-verify-modal').style.display='none'"
+          onclick="document.getElementById(\'e2ee-verify-modal\').style.display=\'none\'"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+
+    <!-- Manual E2EE Verification Modal -->
+    <div
+      id="manual-e2ee-verify-modal"
+      style="
+        display: none;
+        position: fixed;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        min-width: 300px;
+      "
+    >
+      <h5 style="text-align: center; margin-bottom: 15px">
+        🔑 Manual E2EE Key Verification
+      </h5>
+      <div style="margin-bottom: 10px;">
+        <label for="your-encryption-key" class="form-label">Your Key:</label>
+        <input type="text" id="your-encryption-key" class="form-control" readonly>
+        <button class="btn btn-sm btn-primary mt-2" onclick="navigator.clipboard.writeText(document.getElementById(\'your-encryption-key\').value)">Copy</button>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label for="other-user-encryption-key" class="form-label">Other User\'s Key:</label>
+        <input type="text" id="other-user-encryption-key" class="form-control" placeholder="Enter key from other user">
+      </div>
+      <div style="text-align: center; margin-bottom: 15px;">
+        <button id="verify-manual-btn" class="btn btn-success">Verify</button>
+      </div>
+      <p id="manual-verify-status" style="text-align: center; font-weight: bold;"></p>
+      <div style="text-align: center">
+        <button
+          class="btn btn-sm btn-dark"
+          onclick="closeManualE2EEVerifyModal()"
         >
           Close
         </button>
@@ -626,422 +669,5 @@
         class="control-btn"
         title="Share Screen"
         data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Share Your Screen"
-      >
-        <i class="fas fa-desktop"></i>
-      </button>
-      <button
-        onclick="toggleChat()"
-        class="control-btn"
-        title="Toggle Chat"
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Open or Close Chat"
-      >
-        <i class="fas fa-comments"></i>
-      </button>
-      <button
-        onclick="toggleParticipants()"
-        class="control-btn"
-        title="Toggle Participants"
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Show or Hide Participants List"
-      >
-        <i class="fas fa-users"></i>
-      </button>
-      <button
-        id="e2ee-btn"
-        onclick="toggleE2EE()"
-        class="control-btn"
-        title="Toggle End-to-End Encryption"
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Enable or Disable End-to-End Encryption"
-      >
-        <i class="fas fa-lock"></i>
-      </button>
-      <span
-        id="e2ee-algorithm-indicator"
-        style="
-          font-size: 0.7rem;
-          color: #666;
-          margin-left: 5px;
-          font-weight: 500;
-          display: none;
-        "
-      ></span>
-      <button
-        id="e2ee-verify-btn"
-        class="control-btn"
-        title="Verify E2EE Keys"
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Verify End-to-End Encryption Keys"
-      >
-        <i class="fas fa-key"></i>
-      </button>
-      <button
-        onclick="leaveMeeting()"
-        class="control-btn leave-btn"
-        title="Leave Meeting"
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        aria-label="Leave the Meeting"
-      >
-        <i class="fas fa-phone-slash"></i>
-      </button>
-    </div>
-
-    <!-- E2EE QR Scanner Modal -->
-    <div
-      id="e2ee-scan-modal"
-      style="
-        display: none;
-        position: fixed;
-        top: 20%;
-        left: 50%;
-        transform: translateX(-50%);
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-        z-index: 999;
-        min-width: 300px;
-      "
-    >
-      <h5 style="text-align: center; margin-bottom: 15px">
-        🔍 Scan E2EE QR Code
-      </h5>
-      <div
-        id="e2ee-qr-scanner"
-        style="width: 300px; height: 300px; margin: 0 auto"
-      ></div>
-      <div style="text-align: center; margin-top: 15px">
-        <button class="btn btn-sm btn-dark" onclick="closeE2EEScanModal()">
-          Close
-        </button>
-      </div>
-    </div>
-
-    <!-- Name Prompt Modal -->
-    <div
-      id="name-modal"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: 2000;
-        justify-content: center;
-        align-items: center;
-      "
-    >
-      <div
-        class="modal-content"
-        style="
-          background: #23272f;
-          border-radius: 18px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-          padding: 32px 28px 24px 28px;
-          min-width: 320px;
-          max-width: 95vw;
-          width: 350px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        "
-      >
-        <div
-          class="user-icon"
-          style="font-size: 2.5rem; color: #338af3; margin-bottom: 10px"
-        >
-          <i class="fas fa-user-circle"></i>
-        </div>
-        <h5
-          style="
-            margin-bottom: 18px;
-            font-weight: 600;
-            color: #fff;
-            text-align: center;
-            font-size: 1.25rem;
-          "
-        >
-          Enter Your Name
-        </h5>
-        <input
-          id="name-input"
-          type="text"
-          placeholder="Your name"
-          autocomplete="off"
-          style="
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 8px;
-            border: none;
-            background: #181a20;
-            color: #fff;
-            font-size: 1rem;
-            margin-bottom: 18px;
-            outline: none;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-            transition: border 0.2s;
-          "
-        />
-        <button
-          id="name-submit-btn"
-          style="
-            width: 100%;
-            padding: 12px 0;
-            background: linear-gradient(90deg, #2563eb 0%, #338af3 100%);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.08rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-          "
-        >
-          Join Meeting
-        </button>
-      </div>
-    </div>
-
-    <!-- E2EE Manual Verification Modal -->
-    <div
-      id="e2ee-manual-modal"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: 2000;
-        justify-content: center;
-        align-items: center;
-      "
-    >
-      <div
-        style="
-          background: #23272f;
-          border-radius: 18px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-          padding: 32px 28px 24px 28px;
-          min-width: 320px;
-          max-width: 95vw;
-          width: 370px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        "
-      >
-        <h5
-          style="
-            margin-bottom: 18px;
-            font-weight: 600;
-            color: #fff;
-            text-align: center;
-            font-size: 1.15rem;
-          "
-        >
-          🔑 Manual E2EE Key Verification
-        </h5>
-        <div style="width: 100%; margin-bottom: 16px">
-          <label style="color: #bbb; font-size: 0.98rem"
-            >Your Encryption Key:</label
-          >
-          <div
-            style="
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-top: 4px;
-            "
-          >
-            <input
-              id="my-e2ee-key"
-              type="text"
-              readonly
-              style="
-                flex: 1;
-                background: #181a20;
-                color: #fff;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 10px;
-                font-size: 0.98rem;
-              "
-            />
-            <button
-              id="copy-my-e2ee-key"
-              class="btn btn-sm btn-primary"
-              style="padding: 6px 12px"
-            >
-              Copy
-            </button>
-          </div>
-        </div>
-        <div style="width: 100%; margin-bottom: 16px">
-          <label style="color: #bbb; font-size: 0.98rem"
-            >Other User's Key:</label
-          >
-          <input
-            id="other-e2ee-key"
-            type="text"
-            placeholder="Paste their key here"
-            style="
-              width: 100%;
-              background: #181a20;
-              color: #fff;
-              border: none;
-              border-radius: 6px;
-              padding: 8px 10px;
-              font-size: 0.98rem;
-              margin-top: 4px;
-            "
-          />
-        </div>
-        <button
-          id="verify-e2ee-key-btn"
-          class="btn btn-success"
-          style="width: 100%; margin-bottom: 10px"
-        >
-          Verify
-        </button>
-        <div
-          id="e2ee-verify-result"
-          style="
-            width: 100%;
-            text-align: center;
-            min-height: 24px;
-            color: #fff;
-            font-weight: 500;
-          "
-        ></div>
-        <button
-          class="btn btn-sm btn-dark"
-          style="margin-top: 10px"
-          onclick="document.getElementById('e2ee-manual-modal').style.display='none'"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-
-    <!-- Connection Status and Reconnect Button -->
-    <div
-      id="connection-status"
-      style="
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 2000;
-        background: #222;
-        color: #fff;
-        padding: 8px 16px;
-        border-radius: 8px;
-        display: none;
-      "
-    ></div>
-    <button
-      id="reconnect-btn"
-      style="
-        position: fixed;
-        top: 60px;
-        right: 10px;
-        z-index: 2000;
-        display: none;
-      "
-    >
-      Reconnect
-    </button>
-
-    <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Font Awesome JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-    <!-- HTML5 QR Code Scanner Library -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <!-- Custom JavaScript -->
-    <script>
-      // Initialize Bootstrap tooltips
-      var tooltipTriggerList = [].slice.call(
-        document.querySelectorAll('[data-bs-toggle="tooltip"]')
-      );
-      var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-      });
-
-      // Name prompt logic
-      function getQueryParam(param) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(param);
-      }
-      function setQueryParam(param, value) {
-        const url = new URL(window.location.href);
-        url.searchParams.set(param, value);
-        window.location.href = url.toString();
-      }
-      document.addEventListener("DOMContentLoaded", function () {
-        if (!getQueryParam("name")) {
-          document.getElementById("name-modal").style.display = "flex";
-          const input = document.getElementById("name-input");
-          input.focus();
-          document.getElementById("name-submit-btn").onclick =
-            async function () {
-              const name = input.value.trim();
-              if (!name) {
-                input.style.border = "1.5px solid #e74c3c";
-                input.focus();
-                return;
-              }
-              // Hide the modal
-              document.getElementById("name-modal").style.display = "none";
-              // Initialize the meeting with the provided name
-              if (typeof initializeMeeting === "function") {
-                await initializeMeeting(name);
-              }
-              // Update URL without reloading the page
-              const url = new URL(window.location.href);
-              url.searchParams.set("name", name);
-              window.history.replaceState({}, "", url.toString());
-            };
-          input.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-              document.getElementById("name-submit-btn").click();
-            }
-          });
-        }
-      });
-
-      // Add event listener for Copy Link button
-      document.addEventListener("DOMContentLoaded", function () {
-        const copyBtn = document.getElementById("copy-link-btn");
-        if (copyBtn) {
-          copyBtn.onclick = function () {
-            const link = document.getElementById("qr-link").textContent;
-            if (link) {
-              navigator.clipboard.writeText(link).then(function () {
-                copyBtn.textContent = "Copied!";
-                setTimeout(() => (copyBtn.textContent = "Copy Link"), 1500);
-              });
-            }
-          };
-        }
-      });
-    </script>
-    <script src="js/e2ee-manager.js"></script>
-    <script src="js/webrtc-transform-manager.js"></script>
-    <script src="js/key-verification.js"></script>
-    <script src="js/e2ee-test.js"></script>
-  </body>
-</html>
+        data-
+(Content truncated due to size limit. Use line ranges to read in chunks)
