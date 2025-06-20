@@ -3,7 +3,6 @@ async function testE2EE() {
   console.log(
     "🧪 Testing E2EE Implementation with AES-GCM-SIV (with fallback)..."
   );
-
   try {
     // Test 1: Initialize E2EE Manager
     console.log("Test 1: Initializing E2EE Manager...");
