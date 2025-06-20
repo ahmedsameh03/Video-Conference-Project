@@ -32,17 +32,27 @@ let isVideoOff = false;
 const peerConnections = {}; // Store peer connections, keyed by user ID
 let ws;
 
-// STUN servers - replace with your own if needed
+// STUN/TURN servers - using XirSys TURN service
 const iceServers = {
     iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        // Add more STUN/TURN servers if necessary
+        { urls: "stun:fr-turn7.xirsys.com" },
+        {
+            username: "gPAqemLEOWxxp3-WgI6iUrP4XG6B3V6QYpm7GM4pugLTs9v2Gz2cw03PK3v5xg0DAAAAAGhUpihTRUVOR1Ay",
+            credential: "7f72ada2-4d6a-11f0-8cd8-6aee953622e2",
+            urls: [
+                "turn:fr-turn7.xirsys.com:80?transport=udp",
+                "turn:fr-turn7.xirsys.com:3478?transport=udp",
+                "turn:fr-turn7.xirsys.com:80?transport=tcp",
+                "turn:fr-turn7.xirsys.com:3478?transport=tcp",
+                "turns:fr-turn7.xirsys.com:443?transport=tcp",
+                "turns:fr-turn7.xirsys.com:5349?transport=tcp"
+            ]
+        }
     ]
 };
 
 // Determine WebSocket URL
-const wsProtocol = window.location.protocol === "https": " ? "wss:" : "ws:";
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 // Assuming signaling server runs on the same host, but on port 3001 or a port defined by environment for Railway
 // For local development, if server is on 3001 and client on different port (e.g. live server), specify 3001.
 // For Railway, it might be on the same port or a different one, often the same if proxied.
