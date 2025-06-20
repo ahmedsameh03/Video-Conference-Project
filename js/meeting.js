@@ -214,6 +214,76 @@ function closeE2EEScanModal() {
   }
 }
 
+// Function to open the manual E2EE verification modal
+async function openManualE2EEVerifyModal() {
+  const manualVerifyModal = document.getElementById("manual-e2ee-verify-modal");
+  const yourKeyInput = document.getElementById("your-encryption-key");
+  const otherUserKeyInput = document.getElementById("other-user-encryption-key");
+  const verifyManualBtn = document.getElementById("verify-manual-btn");
+  const manualVerifyStatus = document.getElementById("manual-verify-status");
+  const participants = Array.from(e2eeManager.participants);
+
+  // For simplicity, this manual verification will compare with the first other participant
+  // In a real app, you'd have a dropdown to select which participant to verify with
+  const otherParticipantId = participants.find(p => p !== name);
+
+  if (!otherParticipantId) {
+    alert("No other participants to verify with.");
+    return;
+  }
+
+  try {
+    // Generate YOUR display code for the other participant
+    const yourDisplayCode = await keyVerification.generateDisplayCode(otherParticipantId);
+    yourKeyInput.value = yourDisplayCode;
+    yourKeyInput.dataset.peerId = otherParticipantId; // Store peerId for later use
+
+    // Clear previous input and status
+    otherUserKeyInput.value = '';
+    manualVerifyStatus.textContent = '';
+    manualVerifyStatus.className = '';
+
+    manualVerifyModal.style.display = 'block';
+
+    // Event listener for manual verification button
+    verifyManualBtn.onclick = async () => {
+      const receivedCode = otherUserKeyInput.value.trim().toUpperCase();
+      const targetPeerId = yourKeyInput.dataset.peerId; // Get the peerId from the stored data
+
+      if (!receivedCode) {
+        manualVerifyStatus.textContent = 'Please enter the other user\'s key.';
+        manualVerifyStatus.className = 'text-warning';
+        return;
+      }
+
+      // Verify the received code against the expected display code
+      // Note: This manual verification is less secure than QR as it lacks timestamp/origin validation
+      const expectedCode = await keyVerification.generateDisplayCode(targetPeerId);
+
+      if (receivedCode === expectedCode) {
+        manualVerifyStatus.textContent = '✅ Keys Match!';
+        manualVerifyStatus.className = 'text-success';
+        keyVerification.verificationStatus.set(targetPeerId, { verified: true, method: 'manual' });
+        updateVerificationStatus(targetPeerId, true);
+      } else {
+        manualVerifyStatus.textContent = '❌ Keys Do NOT Match!';
+        manualVerifyStatus.className = 'text-danger';
+        keyVerification.verificationStatus.set(targetPeerId, { verified: false, method: 'manual' });
+        updateVerificationStatus(targetPeerId, false);
+      }
+    };
+
+  } catch (error) {
+    console.error("❌ Failed to open manual E2EE verify modal:", error);
+    alert("Failed to open manual verification. Ensure E2EE is initialized.");
+  }
+}
+
+// Function to close the manual E2EE verification modal
+function closeManualE2EEVerifyModal() {
+  document.getElementById("manual-e2ee-verify-modal").style.display = "none";
+}
+
 async function fetchIceServers() {
   return [
     {
@@ -479,74 +549,49 @@ async function initializeMeeting(userName) {
               console.log(`📦 Buffered ICE candidate for ${data.fromUser}`);
             }
           } else {
-            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
-          }
-          break;
-
-        case "user-left":
-          console.log(`🚪 User left: ${data.user}`);
-          removeVideoStream(data.user);
-          removeParticipant(data.user);
-
-          // Handle E2EE cleanup
-          if (e2eeManager) {
-            await e2eeManager.removeParticipant(data.user);
-            if (transformManager) {
-              transformManager.removeTransform(peers[data.user], data.user);
+            console.warn(
+              `⚠️ Peer connection not found for ${data.fromUser}. Buffering candidate.`
+            );
+            // This case should ideally not happen if new-user/offer/answer flow is correct
+            // But if it does, we need to buffer the candidate until the peer connection is created
+            if (!peers[data.fromUser]) {
+              peers[data.fromUser] = {}; // Create a placeholder
             }
-            if (keyVerification) {
-              keyVerification.clearVerification(data.user);
+            if (!peers[data.fromUser]._bufferedCandidates) {
+              peers[data.fromUser]._bufferedCandidates = [];
             }
+            peers[data.fromUser]._bufferedCandidates.push(data.candidate);
           }
           break;
 
         case "chat":
-          console.log(
-            `📩 Chat message received from ${data.user}: ${data.text}`
-          );
-          displayMessage({
-            user: data.user,
-            text: data.text,
-            own: data.user === userName,
-          });
+          addChatMessage(data.user, data.text);
+          break;
+
+        case "user-left":
+          console.log(`🔴 User left: ${data.user}`);
+          removeParticipant(data.user);
+          if (peers[data.user]) {
+            peers[data.user].close();
+            delete peers[data.user];
+          }
+          e2eeManager.removeParticipant(data.user);
+          keyVerification.clearVerification(data.user);
           break;
 
         case "e2ee-verification":
-          if (keyVerification && data.user !== userName) {
-            try {
-              const isVerified = await keyVerification.verifyKey(
-                data.user,
-                data.code
-              );
-              if (isVerified) {
-                console.log(`🔐 Key verification successful with ${data.user}`);
-                // Update UI to show verified status
-                updateVerificationStatus(data.user, true);
-              } else {
-                console.warn(`⚠️ Key verification failed with ${data.user}`);
-                updateVerificationStatus(data.user, false);
-              }
-            } catch (error) {
-              console.error(
-                `❌ Key verification error with ${data.user}:`,
-                error
-              );
-            }
-          }
+          // This message is for QR code verification, handled by keyVerification.verifyQRData
+          // The actual verification logic is in key-verification.js
           break;
 
         default:
-          console.warn(`❓ Unknown message type: ${data.type}`);
+          console.warn("⚠️ Unknown message type:", data.type);
+          break;
       }
     } catch (error) {
-      alert(
-        "An error occurred while processing a message from the server. Please refresh the page."
-      );
-      console.error("❌ Error handling WebSocket message:", error);
+      console.error("❌ Error processing WebSocket message:", error);
     }
   };
-
-  isInitialized = true;
 }
 
 async function startCamera() {
@@ -556,638 +601,278 @@ async function startCamera() {
       video: true,
       audio: true,
     });
-    // Set audio and video tracks based on isMuted and isVideoOff
-    localStream.getAudioTracks().forEach((track) => (track.enabled = !isMuted));
-    localStream
-      .getVideoTracks()
-      .forEach((track) => (track.enabled = !isVideoOff));
-    // Update UI buttons to reflect the correct state
-    const muteBtn = document.getElementById("mute-btn");
-    const videoBtn = document.getElementById("video-btn");
-    if (muteBtn) muteBtn.classList.toggle("active", isMuted);
-    if (videoBtn) videoBtn.classList.toggle("active", isVideoOff);
+    console.log("✅ Camera and microphone accessed. Mic: ON, Video: ON");
+
+    // Display local stream in the large video element
+    localVideo.srcObject = localStream;
+    localVideo.style.transform = "scaleX(-1)"; // Mirror effect for local video
+    localVideo.muted = true; // Mute local audio to prevent echo
+    await localVideo.play().catch((e) => console.error("❌ Local video play failed:", e));
+
     console.log(
-      `✅ Camera and microphone accessed. Mic: ${
-        !isMuted ? "ON" : "OFF"
-      }, Video: ${!isVideoOff ? "ON" : "OFF"}`
+      "✅ Final Stream Tracks:",
+      localStream
+        .getTracks()
+        .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
     );
   } catch (error) {
-    console.warn("⚠️ Attempt 1 failed:", error.name, error.message);
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
-      console.log("✅ Attempt 2: Camera only accessed successfully.");
-    } catch (error2) {
-      console.warn("⚠️ Attempt 2 failed:", error2.name, error2.message);
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: false,
-          audio: true,
-        });
-        console.log("✅ Attempt 3: Microphone only accessed successfully.");
-      } catch (error3) {
-        console.error(
-          "❌ All attempts failed:",
-          error3.name,
-          error3.message,
-          error3.stack
-        );
-        throw new Error(
-          "Failed to access camera or microphone after all attempts."
-        );
-      }
-    }
+    console.error("❌ Error accessing camera/microphone:", error);
+    alert(
+      "Could not access camera or microphone. Please check permissions and ensure no other application is using them."
+    );
+    throw error; // Re-throw to stop initialization if camera fails
   }
-
-  if (!localStream.getTracks().length) {
-    throw new Error("No tracks (video or audio) available.");
-  }
-  console.log(
-    "✅ Final Stream Tracks:",
-    localStream
-      .getTracks()
-      .map((t) => ({ kind: t.kind, enabled: t.enabled, id: t.id }))
-  );
-  localVideo.srcObject = localStream;
-  localVideo.muted = true;
-  await localVideo
-    .play()
-    .catch((e) => console.error("❌ Video play failed:", e));
 }
 
-function updateConnectionStatus(status) {
-  const el = document.getElementById("connection-status");
-  if (!el) return;
-  el.textContent = status;
-  el.style.display = "block";
-  setTimeout(() => {
-    el.style.display = "none";
-  }, 4000);
-}
-
-function showReconnectButton(show) {
-  const btn = document.getElementById("reconnect-btn");
-  if (!btn) return;
-  btn.style.display = show ? "block" : "none";
-}
-
-// Add reconnect button logic
-const reconnectBtn = document.getElementById("reconnect-btn");
-if (reconnectBtn) {
-  reconnectBtn.onclick = function () {
-    window.location.reload();
-  };
-}
-
-// Wrap RTCPeerConnection creation to add ICE state logging and user feedback
-async function createPeer(user) {
-  console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
+async function createPeer(userId) {
+  console.log("🤝 Creating RTCPeerConnection for user:", userId);
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
+
   const peer = new RTCPeerConnection({
     iceServers: iceServers,
   });
+  peers[userId] = peer;
 
-  // Apply E2EE transforms immediately after creating the peer connection
-  if (
-    isE2EEEnabled &&
-    e2eeManager &&
-    e2eeManager.isParticipant(user) &&
-    transformManager
-  ) {
-    try {
-      await transformManager.applyE2EEToPeer(peer, user);
-    } catch (err) {
-      alert(
-        `Failed to apply E2EE transforms for ${user}. The call will continue unencrypted.`
-      );
-      console.warn(`⚠️ Could not apply E2EE transforms for ${user}:`, err);
-    }
-  }
+  // Add local stream tracks to the peer connection
+  localStream.getTracks().forEach((track) => {
+    console.log(`➕ Adding local track for ${userId}:`, track);
+    peer.addTrack(track, localStream);
+  });
 
-  peer.oniceconnectionstatechange = function () {
-    console.log(
-      "ICE connection state for",
-      user + ":",
-      peer.iceConnectionState
-    );
-    updateConnectionStatus(
-      "ICE state for " + user + ": " + peer.iceConnectionState
-    );
-    if (
-      peer.iceConnectionState === "failed" ||
-      peer.iceConnectionState === "disconnected"
-    ) {
-      showReconnectButton(true);
-    } else if (
-      peer.iceConnectionState === "connected" ||
-      peer.iceConnectionState === "completed"
-    ) {
-      showReconnectButton(false);
-    }
-  };
-  peer.onconnectionstatechange = () => {
-    console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
-    if (peer.connectionState === "connected") {
-      console.log(`✅ Peer connection established with ${user}`);
-    } else if (peer.connectionState === "failed") {
-      console.error(`❌ Peer connection failed with ${user}`);
-    }
-  };
-
-  peer.onicecandidate = (event) => {
-    if (event.candidate) {
-      console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
+  peer.onicecandidate = ({ candidate }) => {
+    if (candidate) {
+      console.log("🧊 Sending ICE candidate to", userId, ":", candidate);
       ws.send(
         JSON.stringify({
           type: "candidate",
-          candidate: event.candidate,
+          candidate,
           room,
-          user,
-          toUser: user,
+          user: name,
+          toUser: userId,
         })
       );
-    } else {
-      console.log(`🏁 All ICE candidates sent for ${user}`);
     }
   };
 
   peer.onicegatheringstatechange = () => {
-    console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
+    console.log("🧊 ICE gathering state for", userId, ":", peer.iceGatheringState);
   };
 
-  peer.ontrack = (event) => {
-    console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(
-      `🎞️ Received streams:`,
-      event.streams.map((s) => ({ id: s.id, active: s.active }))
-    );
-    if (event.streams && event.streams[0]) {
-      addVideoStream(event.streams[0], user);
-    } else {
-      console.warn(
-        `⚠️ No streams received from ${user}. Check if tracks are sent.`
-      );
+  peer.oniceconnectionstatechange = () => {
+    console.log("🔗 ICE connection state for", userId, ":", peer.iceConnectionState);
+    if (peer.iceConnectionState === "failed") {
+      peer.restartIce();
     }
   };
 
-  if (localStream) {
-    localStream.getTracks().forEach((track) => {
-      console.log(`➕ Adding local track for ${user}:`, {
-        kind: track.kind,
-        enabled: track.enabled,
-        id: track.id,
-      });
-      if (track.enabled) {
-        const sender = peer.addTrack(track, localStream);
-        console.log(`✅ Added ${track.kind} track with sender:`, sender);
-      } else {
-        console.warn(
-          `⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`
-        );
-        track.enabled = true;
-        const sender = peer.addTrack(track, localStream);
-        console.log(
-          `✅ Forced enabled and added ${track.kind} track with sender:`,
-          sender
-        );
+  peer.onsignalingstatechange = () => {
+    console.log("🚦 Signaling state for", userId, ":", peer.signalingState);
+  };
+
+  peer.ontrack = (event) => {
+    console.log("🎧 Remote track received from", userId, ":", event.track);
+    const remoteStream = event.streams[0];
+    const videoElement = document.getElementById(`video-${userId}`);
+
+    if (videoElement) {
+      videoElement.srcObject = remoteStream;
+      videoElement.play().catch((e) => console.error("❌ Remote video play failed:", e));
+    } else {
+      // Create new video element for the remote stream
+      const newVideoContainer = document.createElement("div");
+      newVideoContainer.id = `container-${userId}`;
+      newVideoContainer.classList.add("video-container");
+
+      const newVideo = document.createElement("video");
+      newVideo.id = `video-${userId}`;
+      newVideo.autoplay = true;
+      newVideo.playsInline = true;
+      newVideo.srcObject = remoteStream;
+      newVideo.style.transform = "scaleX(-1)"; // Mirror effect for remote video
+      newVideo.play().catch((e) => console.error("❌ Remote video play failed:", e));
+
+      const userNameDisplay = document.createElement("p");
+      userNameDisplay.textContent = userId;
+
+      newVideoContainer.appendChild(newVideo);
+      newVideoContainer.appendChild(userNameDisplay);
+      videoGrid.appendChild(newVideoContainer);
+    }
+
+    // Apply E2EE transform to the receiver track
+    if (e2eeManager.isInitialized) {
+      transformManager.setupReceiverTransform(event.receiver, userId);
+    }
+  };
+
+  // Apply E2EE transform to the sender tracks
+  if (e2eeManager.isInitialized) {
+    for (const sender of peer.getSenders()) {
+      if (sender.track && (sender.track.kind === "video" || sender.track.kind === "audio")) {
+        transformManager.setupSenderTransform(sender, userId);
       }
-    });
-  } else {
-    console.error("❌ No localStream available for peer:", user);
+    }
   }
 
-  peers[user] = peer;
   return peer;
 }
 
-async function createOffer(user) {
-  console.log(`📤 Creating offer for ${user}`);
-  const peer = peers[user];
-  if (!peer) {
-    console.error(`❌ No peer connection found for ${user}`);
-    return;
-  }
-
+async function createOffer(userId) {
+  isMakingOffer = true;
+  const peer = peers[userId];
   try {
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
+    console.log("📤 Creating offer for", userId);
     ws.send(
       JSON.stringify({
         type: "offer",
         offer,
         room,
-        user: currentName,
-        toUser: user,
-      })
-    );
-    console.log(`✅ Offer sent to ${user}`);
-  } catch (error) {
-    console.error(`❌ Failed to create offer for ${user}:`, error);
-  }
-}
-
-async function createAnswer(offer, user) {
-  console.log(`📬 Creating answer for ${user}`);
-  if (!peers[user]) await createPeer(user);
-  try {
-    const peer = peers[user];
-    console.log(
-      `🔍 Signaling state before setting offer for ${user}:`,
-      peer.signalingState
-    );
-    await peer.setRemoteDescription(new RTCSessionDescription(offer));
-    console.log(
-      `✅ Remote offer set for ${user}. New signaling state:`,
-      peer.signalingState
-    );
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    ws.send(
-      JSON.stringify({
-        type: "answer",
-        answer,
-        room,
         user: name,
-        toUser: user,
+        toUser: userId,
       })
-    );
-    console.log(
-      `✅ Answer created and set for ${user}. New signaling state:`,
-      peer.signalingState
     );
   } catch (e) {
-    console.error("❌ Error creating answer:", e.message, e.stack);
+    console.error("❌ Failed to create offer:", e);
+  } finally {
+    isMakingOffer = false;
   }
 }
 
-function addVideoStream(stream, user) {
-  if (document.querySelector(`video[data-user="${user}"]`)) return;
-  console.log(
-    `➕ Adding video stream for ${user} with stream ID: ${stream.id}`
-  );
-  const container = document.createElement("div");
-  container.classList.add("video-container");
-  container.setAttribute("data-user-container", user);
-
-  const videoEl = document.createElement("video");
-  videoEl.srcObject = stream;
-  videoEl.autoplay = true;
-  videoEl.playsInline = true;
-  videoEl.setAttribute("data-user", user);
-
-  const nameTag = document.createElement("p");
-  nameTag.textContent = user;
-
-  container.appendChild(videoEl);
-  container.appendChild(nameTag);
-  videoGrid.appendChild(container);
-}
-
-function removeVideoStream(user) {
-  try {
-    const container = document.querySelector(
-      `div[data-user-container="${user}"]`
-    );
-    if (container) container.remove();
-    if (peers[user]) {
-      peers[user].close();
-      delete peers[user];
-    }
-  } catch (error) {
-    console.warn(`Warning: Failed to remove video stream for ${user}:`, error);
+function addParticipant(userId) {
+  if (!document.getElementById(`participant-${userId}`)) {
+    const li = document.createElement("li");
+    li.id = `participant-${userId}`;
+    li.textContent = userId;
+    participantsList.appendChild(li);
   }
 }
 
-function addParticipant(user) {
-  if (document.getElementById(`participant-${user}`)) return;
-  const p = document.createElement("p");
-  p.textContent = user;
-  p.id = `participant-${user}`;
-  participantsList.appendChild(p);
-}
-
-function removeParticipant(user) {
-  const p = document.getElementById(`participant-${user}`);
-  if (p) p.remove();
-}
-
-function toggleMute() {
-  if (!localStream) return console.error("No local stream");
-  const audioTracks = localStream.getAudioTracks();
-  if (audioTracks.length) {
-    isMuted = !isMuted;
-    audioTracks[0].enabled = !isMuted;
-    console.log(`🎤 Audio ${isMuted ? "muted" : "unmuted"}`);
-    document.getElementById("mute-btn")?.classList.toggle("active", isMuted);
+function removeParticipant(userId) {
+  const li = document.getElementById(`participant-${userId}`);
+  if (li) {
+    li.remove();
+  }
+  const videoContainer = document.getElementById(`container-${userId}`);
+  if (videoContainer) {
+    videoContainer.remove();
   }
 }
 
-function toggleVideo() {
-  if (!localStream) return console.error("No local stream");
-  const videoTracks = localStream.getVideoTracks();
-  if (videoTracks.length) {
-    isVideoOff = !isVideoOff;
-    videoTracks[0].enabled = !isVideoOff;
-    console.log(`📹 Video ${isVideoOff ? "off" : "on"}`);
-    document
-      .getElementById("video-btn")
-      ?.classList.toggle("active", isVideoOff);
-  }
-}
-
-let screenStream, screenVideoElement;
-
-async function shareScreen() {
-  console.log("🖥️ Attempting to share screen...");
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-    });
-
-    screenVideoElement = document.createElement("video");
-    screenVideoElement.srcObject = screenStream;
-    screenVideoElement.autoplay = true;
-    screenVideoElement.id = "screen-share";
-
-    // Styling for reasonable size in the middle
-    screenVideoElement.style.width = "70%";
-    screenVideoElement.style.height = "70%";
-    screenVideoElement.style.position = "fixed";
-    screenVideoElement.style.top = "50%";
-    screenVideoElement.style.left = "50%";
-    screenVideoElement.style.transform = "translate(-50%, -50%)";
-    screenVideoElement.style.border = "3px solid #4caf50";
-    screenVideoElement.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
-    screenVideoElement.style.zIndex = "999";
-
-    document.body.appendChild(screenVideoElement); // Append to body directly
-
-    // ✅ Make sure each peer is a valid RTCPeerConnection
-    Object.entries(peers).forEach(([user, peer]) => {
-      if (peer instanceof RTCPeerConnection) {
-        const sender = peer.getSenders().find((s) => s.track?.kind === "video");
-        if (sender) {
-          sender.replaceTrack(screenStream.getVideoTracks()[0]);
-          console.log(`🔁 Replaced video track for ${user}`);
-        } else {
-          console.warn(`⚠️ No video sender found for ${user}`);
-        }
-      } else {
-        console.warn(`❌ Peer object for ${user} is invalid:`, peer);
-      }
-    });
-
-    screenStream.getVideoTracks()[0].onended = () => {
-      console.log("🛑 Screen share ended.");
-      stopScreenShare();
-    };
-  } catch (error) {
-    console.error("❌ Error sharing screen:", error);
-    alert(`Error sharing screen: ${error.name} - ${error.message}`);
-  }
-}
-
-function stopScreenShare() {
-  console.log("🛑 Stopping screen share...");
-
-  // Stop all tracks from screen stream
-  screenStream?.getTracks().forEach((t) => t.stop());
-
-  // Remove screen share video element and its container if present
-  if (screenVideoElement) {
-    const container = screenVideoElement.closest(".video-container");
-    if (container) {
-      container.remove(); // ✅ removes the black box
-    } else {
-      screenVideoElement.remove(); // fallback in case no container
-    }
-  }
-
-  screenStream = null;
-  screenVideoElement = null;
-
-  // Revert to local camera
-  const cameraTrack = localStream.getVideoTracks()[0];
-  Object.values(peers).forEach((peer) => {
-    if (peer instanceof RTCPeerConnection) {
-      const sender = peer.getSenders().find((s) => s.track?.kind === "video");
-      if (sender) {
-        sender.replaceTrack(cameraTrack);
-      }
-    }
-  });
+function addChatMessage(user, text) {
+  const messageElement = document.createElement("div");
+  messageElement.textContent = `${user}: ${text}`;
+  chatMessages.appendChild(messageElement);
+  chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
 }
 
 function sendMessage() {
-  const msg = chatInputField.value.trim();
-  if (msg) {
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
-    ws.send(
-      JSON.stringify({ type: "chat", user: currentName, text: msg, room })
-    );
-    displayMessage({ user: currentName, text: msg, own: true });
+  const text = chatInputField.value;
+  if (text.trim() !== "") {
+    ws.send(JSON.stringify({ type: "chat", room, user: name, text }));
+    addChatMessage(name, text); // Display own message immediately
     chatInputField.value = "";
   }
 }
 
-function displayMessage({ user, text, own }) {
-  console.log(`📩 Displaying message from ${user}: ${text}`);
-  const el = document.createElement("p");
-  el.innerHTML = `<strong>${user}:</strong> ${text}`;
-  if (own) el.classList.add("own-message");
-  chatMessages.appendChild(el);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function toggleChat() {
-  document.getElementById("chat-container").classList.toggle("visible");
-}
-
-function toggleParticipants() {
-  document.getElementById("participants-container").classList.toggle("visible");
-}
-window.toggleE2EE = async function () {
-  if (!allKeysExchanged) {
-    alert(
-      "Please wait until all encryption keys are exchanged before enabling E2EE."
-    );
-    return;
-  }
-  if (!e2eeManager || !e2eeManager.isInitialized) {
-    alert("E2EE system not initialized yet");
-    return;
-  }
-
-  isE2EEEnabled = !isE2EEEnabled;
-
-  const btn = document.getElementById("e2ee-btn");
-  const algorithmIndicator = document.getElementById(
-    "e2ee-algorithm-indicator"
-  );
-
-  if (isE2EEEnabled) {
-    btn.style.backgroundColor = "#28a745"; // ✅ green
-    btn.style.color = "white";
-    // Show algorithm indicator when E2EE is enabled
-    if (algorithmIndicator) {
-      algorithmIndicator.style.display = "inline";
-      algorithmIndicator.style.color = "#28a745";
-    }
+function toggleMute() {
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach((track) => (track.enabled = !isMuted));
+  const muteBtn = document.getElementById("mute-btn");
+  if (isMuted) {
+    muteBtn.classList.add("active");
+    muteBtn.innerHTML = 
+      `<i class="fas fa-microphone-slash"></i>`;
   } else {
-    btn.style.backgroundColor = ""; // 🔁 default
-    btn.style.color = "";
-    // Hide algorithm indicator when E2EE is disabled
-    if (algorithmIndicator) {
-      algorithmIndicator.style.display = "none";
-    }
-  }
-
-  console.log(
-    `🔐 End-to-End Encryption ${isE2EEEnabled ? "enabled" : "disabled"}`
-  );
-
-  // Apply E2EE to all peer connections
-  for (const [userId, peer] of Object.entries(peers)) {
-    if (
-      peer instanceof RTCPeerConnection &&
-      e2eeManager.isParticipant(userId)
-    ) {
-      if (isE2EEEnabled) {
-        await transformManager.applyE2EEToPeer(peer, userId);
-      } else {
-        transformManager.removeTransform(peer, userId);
-      }
-    }
-  }
-};
-
-// Function to update verification status in UI
-function updateVerificationStatus(userId, isVerified) {
-  const participantElement = document.getElementById(`participant-${userId}`);
-  if (participantElement) {
-    if (isVerified) {
-      participantElement.innerHTML = `${userId} <span style="color: green;">🔐</span>`;
-    } else {
-      participantElement.innerHTML = `${userId} <span style="color: red;">⚠️</span>`;
-    }
+    muteBtn.classList.remove("active");
+    muteBtn.innerHTML = 
+      `<i class="fas fa-microphone"></i>`;
   }
 }
 
-// Function to send verification code to other participants
-async function sendVerificationCode(userId) {
-  if (!keyVerification) {
-    console.error("❌ Key verification not initialized");
-    return;
+function toggleVideo() {
+  isVideoOff = !isVideoOff;
+  localStream.getVideoTracks().forEach((track) => (track.enabled = !isVideoOff));
+  const videoBtn = document.getElementById("video-btn");
+  if (isVideoOff) {
+    videoBtn.classList.add("active");
+    videoBtn.innerHTML = 
+      `<i class="fas fa-video-slash"></i>`;
+  } else {
+    videoBtn.classList.remove("active");
+    videoBtn.innerHTML = 
+      `<i class="fas fa-video"></i>`;
   }
+}
 
-  try {
-    const verificationCode = await keyVerification.generateVerificationCode(
-      userId
-    );
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
-    ws.send(
-      JSON.stringify({
-        type: "e2ee-verification",
-        user: currentName,
-        targetUser: userId,
-        code: verificationCode,
-        room,
-      })
-    );
-    console.log(`🔐 Verification code sent to ${userId}`);
-  } catch (error) {
-    console.error(`❌ Failed to send verification code to ${userId}:`, error);
-  }
+function shareScreen() {
+  // Implement screen sharing logic here
+  alert("Screen sharing not yet implemented.");
 }
 
 function leaveMeeting() {
-  if (!confirm("Are you sure you want to leave the meeting?")) return;
-  console.log("🚪 Leaving meeting...");
-
-  // Clean up E2EE resources
-  if (e2eeManager) {
-    e2eeManager.destroy();
-  }
-  if (transformManager) {
-    transformManager.destroy();
-  }
-  if (keyVerification) {
-    keyVerification.clearAllVerifications();
-  }
-
-  localStream?.getTracks().forEach((t) => t.stop());
-  Object.values(peers).forEach((p) => p.close());
-
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
-    ws.send(JSON.stringify({ type: "leave", room, user: currentName }));
-    ws.close();
-  }
-
-  window.location.href = "dashboard.html";
+  ws.send(JSON.stringify({ type: "leave", room, user: name }));
+  ws.close();
+  window.location.href = "/"; // Redirect to home or a thank you page
 }
 
-// Manual E2EE Key Verification logic
-function openManualE2EEModal() {
-  const modal = document.getElementById("e2ee-manual-modal");
-  if (!modal) return;
-  // Show modal
-  modal.style.display = "flex";
-  // Show user's own key
-  let myKey = "";
-  if (e2eeManager && e2eeManager.keyPair) {
-    // Export public key as base64
-    window.crypto.subtle
-      .exportKey("spki", e2eeManager.keyPair.publicKey)
-      .then((buf) => {
-        myKey = e2eeManager.arrayBufferToBase64(buf);
-        document.getElementById("my-e2ee-key").value = myKey;
-      });
-  }
-  // Clear previous result and input
-  document.getElementById("e2ee-verify-result").textContent = "";
-  document.getElementById("other-e2ee-key").value = "";
+function toggleChat() {
+  const chatContainer = document.getElementById("chat-container");
+  chatContainer.classList.toggle("visible");
 }
 
-document
-  .getElementById("e2ee-verify-btn")
-  .addEventListener("click", openManualE2EEModal);
+function toggleParticipants() {
+  const participantsContainer = document.getElementById("participants-container");
+  participantsContainer.classList.toggle("visible");
+}
 
-document
-  .getElementById("copy-my-e2ee-key")
-  .addEventListener("click", function () {
-    const key = document.getElementById("my-e2ee-key").value;
-    if (key) {
-      navigator.clipboard.writeText(key);
-      this.textContent = "Copied!";
-      setTimeout(() => (this.textContent = "Copy"), 1200);
+// Update verification status in UI (e.g., next to participant name)
+function updateVerificationStatus(userId, isVerified) {
+  const participantLi = document.getElementById(`participant-${userId}`);
+  if (participantLi) {
+    let statusSpan = participantLi.querySelector(".verification-status");
+    if (!statusSpan) {
+      statusSpan = document.createElement("span");
+      statusSpan.classList.add("verification-status", "ms-2");
+      participantLi.appendChild(statusSpan);
     }
-  });
-
-document
-  .getElementById("verify-e2ee-key-btn")
-  .addEventListener("click", function () {
-    const myKey = document.getElementById("my-e2ee-key").value.trim();
-    const otherKey = document.getElementById("other-e2ee-key").value.trim();
-    const resultDiv = document.getElementById("e2ee-verify-result");
-    if (!otherKey) {
-      resultDiv.textContent = "Please enter the other user's key.";
-      resultDiv.style.color = "#ffc107";
-      return;
-    }
-    if (myKey === otherKey) {
-      resultDiv.textContent = "✅ Keys Match!";
-      resultDiv.style.color = "#4caf50";
+    if (isVerified) {
+      statusSpan.innerHTML = 
+        `<i class="fas fa-check-circle text-success" title="Keys Verified"></i>`;
     } else {
-      resultDiv.textContent = "❌ Keys Do NOT Match!";
-      resultDiv.style.color = "#ff4d4d";
+      statusSpan.innerHTML = 
+        `<i class="fas fa-times-circle text-danger" title="Keys Not Verified"></i>`;
     }
-  });
+  }
+}
+
+// Event listeners for E2EE buttons
+document.getElementById("e2ee-verify-btn").addEventListener("click", async () => {
+  const participants = Array.from(e2eeManager.participants);
+  const otherParticipantId = participants.find(p => p !== name);
+
+  if (!otherParticipantId) {
+    alert("No other participants to verify with.");
+    return;
+  }
+
+  // Generate and display your QR code for the other participant
+  try {
+    const qrDataString = await keyVerification.generateQRData(otherParticipantId);
+    const qrContainer = document.getElementById("e2ee-qrcode");
+    qrContainer.innerHTML = ""; // Clear old QR
+    new QRCode(qrContainer, qrDataString);
+    document.getElementById("e2ee-verify-modal").style.display = "block";
+  } catch (error) {
+    console.error("❌ Failed to generate E2EE QR code:", error);
+    alert("Failed to generate E2EE QR code. Ensure E2EE is initialized and participants are present.");
+  }
+});
+
+document.getElementById("e2ee-scan-btn").addEventListener("click", openE2EEScanModal);
+
+// New event listener for manual verification button
+document.getElementById("manual-e2ee-btn").addEventListener("click", openManualE2EEVerifyModal);
+
