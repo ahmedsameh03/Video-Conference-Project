@@ -314,17 +314,25 @@ async function initializeMeeting(userName) {
       }
       switch (data.type) {
         case "verification-complete":
-          console.log(`✅ ${data.fromUser} has verified you.`);
-          usersWhoVerifiedMe.add(data.fromUser);
-          updateVerificationStatus(data.fromUser, "verified-me");
+          const fromUser = data.fromUser;
+          console.log(
+            `[Verification] ✅ Received verification from ${fromUser}.`
+          );
+          usersWhoVerifiedMe.add(fromUser);
+          updateVerificationStatus(fromUser, "verified-me");
 
           // Check for mutual verification
-          if (myVerifiedUsers.has(data.fromUser)) {
+          console.log(
+            `[Verification] Checking for mutual verification with ${fromUser}. I verified them? ${myVerifiedUsers.has(
+              fromUser
+            )}`
+          );
+          if (myVerifiedUsers.has(fromUser)) {
             console.log(
-              `🤝 Mutual verification with ${data.fromUser} complete! Establishing media.`
+              `[Verification] 🤝 Mutual verification with ${fromUser} is now complete!`
             );
-            establishMediaWithUser(data.fromUser);
-            updateVerificationStatus(data.fromUser, "mutual");
+            updateVerificationStatus(fromUser, "mutual");
+            establishMediaWithUser(fromUser);
           }
           break;
         case "new-user":
@@ -1197,15 +1205,20 @@ document
       );
 
       // Check for mutual verification
+      console.log(
+        `[Verification] Checking for mutual verification with ${selectedUser}. They verified me? ${usersWhoVerifiedMe.has(
+          selectedUser
+        )}`
+      );
       if (usersWhoVerifiedMe.has(selectedUser)) {
         console.log(
-          `🤝 Mutual verification with ${selectedUser} complete! Establishing media.`
+          `[Verification] 🤝 Mutual verification with ${selectedUser} is now complete!`
         );
-        establishMediaWithUser(selectedUser);
         updateVerificationStatus(selectedUser, "mutual");
+        establishMediaWithUser(selectedUser);
       } else {
         console.log(
-          `⏳ Verification for ${selectedUser} is one-way. Waiting for them to verify you.`
+          `[Verification] ⏳ Verification for ${selectedUser} is one-way. Waiting for them to verify you.`
         );
         resultDiv.textContent += " Waiting for them to verify you.";
       }
@@ -1213,7 +1226,7 @@ document
       resultDiv.textContent =
         "❌ Keys Do NOT Match! Connection may not be secure.";
       resultDiv.style.color = "#ff4d4d";
-      updateVerificationStatus(selectedUser, false); // Or a 'failed' state
+      updateVerificationStatus(selectedUser, "failed");
     }
   });
 
@@ -1233,12 +1246,9 @@ async function establishMediaWithUser(userId) {
     return;
   }
 
-  console.log(`🚀 Activating media with ${userId}...`);
-  // Set transceivers to send and receive
+  console.log(`[Media] 🚀 Activating media with ${userId}...`);
+  // This will trigger the 'onnegotiationneeded' event
   pc.getTransceivers().forEach((transceiver) => {
     transceiver.direction = "sendrecv";
   });
-
-  // Forcing negotiation immediately is more reliable
-  await createOffer(userId);
 }
