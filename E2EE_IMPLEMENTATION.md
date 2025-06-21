@@ -2,7 +2,8 @@
 
 ## Overview
 
-This document describes the implementation of **End-to-End Encryption** for the SEEN video conference application. The E2EE system provides secure, encrypted communication between participants using industry-standard cryptographic protocols.
+The implementation of **End-to-End Encryption** for the SEEN video conference application. The E2EE system provides secure, 
+encrypted communication between participants using industry-standard cryptographic protocols.
 
 ## Architecture
 
