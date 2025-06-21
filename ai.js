@@ -11,9 +11,13 @@ let bodyPixNet = null;
 let hands = null;
 let camera = null;
 let lastGesture = null; // Track last gesture for one-time effect
-let peaceActive = false; // For peace gesture one-time effect
 let micPermissionRequested = false; // For transcription mic permission
 let transcriptionInitialized = false; // For transcription setup
+let gestureCooldown = 1500; // ms between triggers for the same gesture
+let gestureHoldTime = 400;  // ms gesture must be held to trigger
+let lastGestureTime = 0;
+let gestureStartTime = 0;
+let lastDetectedGesture = null;
 
 // Canvas contexts
 let mainCanvas, mainCtx;
@@ -397,32 +401,29 @@ function detectGesture(landmarks) {
     } else if (isOpenHand(landmarks)) {
         gesture = 'raised';
     }
+
+    const now = Date.now();
+
     if (gesture) {
-        if (gesture === 'peace') {
-            // Only trigger peace gesture once per continuous sign
-            if (!peaceActive) {
-                peaceActive = true;
-                lastGesture = 'peace';
-                updateGestureIndicator("✌️ Peace Sign");
-                triggerEffect('peace');
+        if (gesture !== lastDetectedGesture) {
+            // New gesture detected, start hold timer
+            gestureStartTime = now;
+            lastDetectedGesture = gesture;
+        } else {
+            // Same gesture is being held
+            if (
+                now - gestureStartTime > gestureHoldTime && // Held long enough
+                now - lastGestureTime > gestureCooldown     // Cooldown passed
+            ) {
+                lastGesture = gesture;
+                lastGestureTime = now;
+                triggerEffect(gesture);
             }
-        } else if (lastGesture !== gesture) {
-            peaceActive = false;
-            lastGesture = gesture;
-            const gestureText = {
-                like: "👍 Thumbs Up",
-                dislike: "👎 Thumbs Down",
-                raised: "✋ Open Hand"
-            };
-            updateGestureIndicator(gestureText[gesture]);
-            triggerEffect(gesture);
         }
     } else {
-        if (lastGesture !== null || peaceActive) {
-            lastGesture = null;
-            peaceActive = false;
-            updateGestureIndicator("No gesture detected");
-        }
+        // No gesture detected, reset
+        lastDetectedGesture = null;
+        gestureStartTime = 0;
     }
 }
 
