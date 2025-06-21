@@ -10,8 +10,7 @@ let isE2EEEnabled = false;
 let isMakingOffer = false;
 let isPolite = false;
 let allKeysExchanged = false;
-let myVerifiedUsers = new Set();
-let usersWhoVerifiedMe = new Set();
+const verificationStates = new Map(); // Replaces myVerifiedUsers and usersWhoVerifiedMe
 let ws;
 const peers = {};
 const pendingStreams = new Map(); // Store streams until verification
@@ -327,22 +326,14 @@ async function initializeMeeting(userName) {
             );
             return;
           }
-          usersWhoVerifiedMe.add(fromUser);
-          updateVerificationStatus(fromUser, "verified-me");
-
-          // Check for mutual verification
-          console.log(
-            `[Verification] Checking for mutual verification with ${fromUser}. I verified them? ${myVerifiedUsers.has(
-              fromUser
-            )}`
-          );
-          if (myVerifiedUsers.has(fromUser)) {
+          const state = verificationStates.get(fromUser);
+          if (state) {
+            state.theyVerified = true;
+            updateVerificationStatus(fromUser, "verified-me");
             console.log(
-              `[Verification] 🤝 Mutual verification with ${fromUser} is now complete!`
+              `[Verification] Received and processed verification from ${fromUser}.`
             );
-            updateVerificationStatus(fromUser, "mutual");
-            establishMediaWithUser(fromUser);
-            activateVideoStream(fromUser);
+            checkMutualVerification(fromUser);
           }
           break;
         case "new-user":
@@ -350,6 +341,12 @@ async function initializeMeeting(userName) {
 
           // Don't connect to yourself
           if (data.user === userName) return;
+
+          // Initialize verification state for the new user
+          verificationStates.set(data.user, {
+            iVerified: false,
+            theyVerified: false,
+          });
 
           // Add to participant list and create a placeholder
           addParticipant(data.user);
@@ -1202,39 +1199,30 @@ document
     if (storedKeyForUser === otherKey) {
       resultDiv.textContent = "✅ Keys Match! Verification step complete.";
       resultDiv.style.color = "#4caf50";
-      myVerifiedUsers.add(selectedUser);
+
+      const state = verificationStates.get(selectedUser);
+      if (state) {
+        state.iVerified = true;
+      }
+
       updateVerificationStatus(selectedUser, "i-verified");
 
       // Notify the other user that they have been verified
-      const currentName =
-        new URLSearchParams(window.location.search).get("name") || name;
       ws.send(
         JSON.stringify({
           type: "verification-complete",
-          fromUser: currentName,
+          fromUser: name,
           toUser: selectedUser,
         })
       );
 
       // Check for mutual verification
       console.log(
-        `[Verification] Checking for mutual verification with ${selectedUser}. They verified me? ${usersWhoVerifiedMe.has(
-          selectedUser
-        )}`
+        `[Verification] Checking for mutual verification with ${selectedUser}. They verified me? ${
+          verificationStates.get(selectedUser)?.theyVerified
+        }`
       );
-      if (usersWhoVerifiedMe.has(selectedUser)) {
-        console.log(
-          `[Verification] 🤝 Mutual verification with ${selectedUser} is now complete!`
-        );
-        updateVerificationStatus(selectedUser, "mutual");
-        establishMediaWithUser(selectedUser);
-        activateVideoStream(selectedUser);
-      } else {
-        console.log(
-          `[Verification] ⏳ Verification for ${selectedUser} is one-way. Waiting for them to verify you.`
-        );
-        resultDiv.textContent += " Waiting for them to verify you.";
-      }
+      checkMutualVerification(selectedUser);
     } else {
       resultDiv.textContent =
         "❌ Keys Do NOT Match! Connection may not be secure.";
@@ -1242,6 +1230,24 @@ document
       updateVerificationStatus(selectedUser, "failed");
     }
   });
+
+function checkMutualVerification(userId) {
+  const state = verificationStates.get(userId);
+  console.log(`[Verification Check] Status for ${userId}:`, state);
+  if (state && state.iVerified && state.theyVerified) {
+    console.log(
+      `[Verification Check] 🤝 Mutual verification confirmed for ${userId}!`
+    );
+    updateVerificationStatus(userId, "mutual");
+    establishMediaWithUser(userId);
+    activateVideoStream(userId);
+    return true;
+  }
+  console.log(
+    `[Verification Check] Mutual verification for ${userId} not yet complete.`
+  );
+  return false;
+}
 
 async function establishMediaWithUser(userId) {
   const pc = peers[userId];
