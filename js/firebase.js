@@ -1,16 +1,19 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey:  "AIzaSyAWhddRJ14PwvggUv7doDWrZq_AQYTNHcc",
+  apiKey: "AIzaSyAWhddRJ14PwvggUv7doDWrZq_AQYTNHcc",
   authDomain: "smart-video-application.firebaseapp.com",
   projectId: "smart-video-application",
   storageBucket: "smart-video-application.appspot.com",
-
   messagingSenderId: "758851089586",
   appId: "1:758851089586:web:8c74989e54b71f75d285ab",
-  measurementId: "G-GVXRFX9R1B"
+  measurementId: "G-GVXRFX9R1B",
 };
 
 // Initialize Firebase
