@@ -1143,13 +1143,24 @@ function openManualE2EEModal() {
   // Show user's own key
   let myKey = "";
   if (e2eeManager && e2eeManager.keyPair) {
-    // Export public key as base64
-    window.crypto.subtle
-      .exportKey("spki", e2eeManager.keyPair.publicKey)
-      .then((buf) => {
-        myKey = e2eeManager.arrayBufferToBase64(buf);
-        document.getElementById("my-e2ee-key").value = myKey;
-      });
+    myKey = e2eeManager.getPublicKeyBase64();
+    document.getElementById("my-e2ee-key").value = myKey;
+  }
+  // Populate user selection dropdown
+  const userSelect = document.getElementById("e2ee-verify-user-select");
+  userSelect.innerHTML = '<option value="">--Select a user--</option>'; // Clear previous options
+  if (e2eeManager) {
+    const participants = e2eeManager.getParticipantList();
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
+    participants.forEach((user) => {
+      if (user !== currentName) {
+        const option = document.createElement("option");
+        option.value = user;
+        option.textContent = user;
+        userSelect.appendChild(option);
+      }
+    });
   }
   // Clear previous result and input
   document.getElementById("e2ee-verify-result").textContent = "";
@@ -1174,19 +1185,41 @@ document
 document
   .getElementById("verify-e2ee-key-btn")
   .addEventListener("click", function () {
-    const myKey = document.getElementById("my-e2ee-key").value.trim();
+    const selectedUser = document.getElementById(
+      "e2ee-verify-user-select"
+    ).value;
     const otherKey = document.getElementById("other-e2ee-key").value.trim();
     const resultDiv = document.getElementById("e2ee-verify-result");
+
+    if (!selectedUser) {
+      resultDiv.textContent = "Please select a user to verify.";
+      resultDiv.style.color = "#ffc107";
+      return;
+    }
+
     if (!otherKey) {
       resultDiv.textContent = "Please enter the other user's key.";
       resultDiv.style.color = "#ffc107";
       return;
     }
-    if (myKey === otherKey) {
-      resultDiv.textContent = "✅ Keys Match!";
-      resultDiv.style.color = "#4caf50";
-    } else {
-      resultDiv.textContent = "❌ Keys Do NOT Match!";
+
+    const storedKeyForUser = e2eeManager.getParticipantPublicKey(selectedUser);
+
+    if (!storedKeyForUser) {
+      resultDiv.textContent = "Could not find a stored key for this user.";
       resultDiv.style.color = "#ff4d4d";
+      return;
+    }
+
+    if (storedKeyForUser === otherKey) {
+      resultDiv.textContent = "✅ Keys Match! The connection is secure.";
+      resultDiv.style.color = "#4caf50";
+      // Optionally, mark user as verified
+      updateVerificationStatus(selectedUser, true);
+    } else {
+      resultDiv.textContent =
+        "❌ Keys Do NOT Match! Connection may not be secure.";
+      resultDiv.style.color = "#ff4d4d";
+      updateVerificationStatus(selectedUser, false);
     }
   });

@@ -842,89 +842,32 @@
           align-items: center;
         "
       >
-        <h5
-          style="
-            margin-bottom: 18px;
-            font-weight: 600;
-            color: #fff;
-            text-align: center;
-            font-size: 1.15rem;
-          "
-        >
-          🔑 Manual E2EE Key Verification
-        </h5>
-        <div style="width: 100%; margin-bottom: 16px">
-          <label style="color: #bbb; font-size: 0.98rem"
-            >Your Encryption Key:</label
-          >
-          <div
-            style="
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-top: 4px;
-            "
-          >
-            <input
-              id="my-e2ee-key"
-              type="text"
-              readonly
-              style="
-                flex: 1;
-                background: #181a20;
-                color: #fff;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 10px;
-                font-size: 0.98rem;
-              "
-            />
-            <button
-              id="copy-my-e2ee-key"
-              class="btn btn-sm btn-primary"
-              style="padding: 6px 12px"
-            >
-              Copy
-            </button>
+        <span class="close-button" onclick="closeManualE2EEModal()">×</span>
+        <h2>🔑 E2EE Key Verification</h2>
+        <div class="e2ee-manual-verification">
+          <p>Your Encryption Key:</p>
+          <div class="key-container">
+            <input type="text" id="my-e2ee-key" readonly />
+            <button id="copy-my-e2ee-key">Copy</button>
           </div>
+
+          <p>Select user to verify:</p>
+          <select id="e2ee-verify-user-select" class="e2ee-select">
+            <option value="">--Select a user--</option>
+          </select>
+
+          <p>Other User's Key:</p>
+          <div class="key-container">
+            <input
+              type="text"
+              id="other-e2ee-key"
+              placeholder="Paste their key here"
+            />
+          </div>
+
+          <button id="verify-e2ee-key-btn" class="verify-btn">Verify</button>
+          <div id="e2ee-verify-result"></div>
         </div>
-        <div style="width: 100%; margin-bottom: 16px">
-          <label style="color: #bbb; font-size: 0.98rem"
-            >Other User's Key:</label
-          >
-          <input
-            id="other-e2ee-key"
-            type="text"
-            placeholder="Paste their key here"
-            style="
-              width: 100%;
-              background: #181a20;
-              color: #fff;
-              border: none;
-              border-radius: 6px;
-              padding: 8px 10px;
-              font-size: 0.98rem;
-              margin-top: 4px;
-            "
-          />
-        </div>
-        <button
-          id="verify-e2ee-key-btn"
-          class="btn btn-success"
-          style="width: 100%; margin-bottom: 10px"
-        >
-          Verify
-        </button>
-        <div
-          id="e2ee-verify-result"
-          style="
-            width: 100%;
-            text-align: center;
-            min-height: 24px;
-            color: #fff;
-            font-weight: 500;
-          "
-        ></div>
         <button
           class="btn btn-sm btn-dark"
           style="margin-top: 10px"

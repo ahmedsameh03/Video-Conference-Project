@@ -3,6 +3,7 @@ class E2EEManager {
     this.keyPair = null;
     this.sharedSecrets = new Map(); // userId -> shared secret
     this.sessionKeys = new Map(); // userId -> session key
+    this.participantKeys = new Map(); // userId -> publicKeyBase64
     this.participants = new Set();
     this.isInitialized = false;
     this.keyRotationInterval = null;
@@ -66,9 +67,15 @@ class E2EEManager {
       const algorithm = this.useAESGCM_SIV ? "AES-GCM-SIV" : "AES-GCM";
       console.log(`🔐 E2EE Manager initialized successfully with ${algorithm}`);
 
+      // Store own public key
+      const publicKeyBase64 = this.arrayBufferToBase64(publicKey);
+      const currentName =
+        new URLSearchParams(window.location.search).get("name") || "unknown";
+      this.participantKeys.set(currentName, publicKeyBase64);
+
       return {
         publicKey: publicKey,
-        publicKeyBase64: this.arrayBufferToBase64(publicKey),
+        publicKeyBase64: publicKeyBase64,
         algorithm: algorithm,
       };
     } catch (error) {
@@ -79,6 +86,9 @@ class E2EEManager {
 
   async addParticipant(userId, publicKeyBase64) {
     try {
+      // Store the participant's public key
+      this.participantKeys.set(userId, publicKeyBase64);
+
       // Get current user name from URL parameters
       const currentName = new URLSearchParams(window.location.search).get(
         "name"
@@ -184,6 +194,7 @@ class E2EEManager {
     this.sharedSecrets.delete(userId);
     this.sessionKeys.delete(userId);
     this.participants.delete(userId);
+    this.participantKeys.delete(userId);
     console.log(`🔐 Removed participant ${userId} from E2EE session`);
   }
 
@@ -328,5 +339,22 @@ class E2EEManager {
     this.keyPair = null;
     this.isInitialized = false;
     console.log("🔐 E2EE Manager destroyed");
+  }
+
+  // Utility to get own public key as base64
+  getPublicKeyBase64() {
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || "unknown";
+    return this.participantKeys.get(currentName) || null;
+  }
+
+  // Get a specific participant's public key
+  getParticipantPublicKey(userId) {
+    return this.participantKeys.get(userId) || null;
+  }
+
+  // Get the list of all participants
+  getParticipantList() {
+    return Array.from(this.participants);
   }
 }
