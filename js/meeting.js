@@ -315,10 +315,18 @@ async function initializeMeeting(userName) {
       }
       switch (data.type) {
         case "verification-complete":
-          const fromUser = data.fromUser;
           console.log(
-            `[Verification] ✅ Received verification from ${fromUser}.`
+            `[Verification] Received 'verification-complete' message:`,
+            data
           );
+          const fromUser = data.fromUser;
+          if (!fromUser) {
+            console.error(
+              "[Verification] Discarding malformed 'verification-complete' message.",
+              data
+            );
+            return;
+          }
           usersWhoVerifiedMe.add(fromUser);
           updateVerificationStatus(fromUser, "verified-me");
 
@@ -676,15 +684,13 @@ async function createPeer(user) {
   // Handle ICE candidates
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      const currentName =
-        new URLSearchParams(window.location.search).get("name") || name;
       ws.send(
         JSON.stringify({
           type: "candidate",
           candidate: event.candidate,
           room,
           toUser: user,
-          fromUser: currentName,
+          fromUser: userName,
         })
       );
     }
@@ -740,14 +746,12 @@ async function createAnswer(user) {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
     ws.send(
       JSON.stringify({
         type: "answer",
         answer: pc.localDescription,
         toUser: user,
-        fromUser: currentName,
+        fromUser: userName,
       })
     );
   } catch (err) {
@@ -1098,9 +1102,7 @@ function leaveMeeting() {
   Object.values(peers).forEach((p) => p.close());
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
-    ws.send(JSON.stringify({ type: "leave", room, user: currentName }));
+    ws.send(JSON.stringify({ type: "leave", room, user: userName }));
     ws.close();
   }
 
