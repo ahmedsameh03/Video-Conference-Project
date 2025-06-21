@@ -221,8 +221,8 @@ async function fetchIceServers() {
     },
     {
       username:
-        "gPAqemLEOWxxp3-WgI6iUrP4XG6B3V6QYpm7GM4pugLTs9v2Gz2cw03PK3v5xg0DAAAAAGhUpihTRUVOR1Ay",
-      credential: "7f72ada2-4d6a-11f0-8cd8-6aee953622e2",
+        "huKntz4GRVlRWIWnZ6JFKuNwlF1AG1d8Obm0i_u4o6DHsvQQtgbk44G2Nh5lq9QhAAAAAGhWEJ5TRUVOR1Az",
+      credential: "8a7571e8-4e42-11f0-8f74-ce0c22b1fe9d",
       urls: [
         "turn:fr-turn7.xirsys.com:80?transport=udp",
         "turn:fr-turn7.xirsys.com:3478?transport=udp",
