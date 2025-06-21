@@ -1227,3 +1227,9 @@ document
       updateVerificationStatus(selectedUser, false);
     }
   });
+
+// Function to open E2EE Security Testing Dashboard
+function openSecurityTesting() {
+  // Open E2EE testing dashboard in a new tab
+  window.open("e2ee-test-dashboard.html", "_blank");
+}
