@@ -297,9 +297,12 @@
          width: 640,
          height: 480,
      });
+
+     camera.start();
  }
 
  function onGestureResults(results) {
+     console.log("onGestureResults called", results);
      if (!isGestureEnabled) return;
      
      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -554,9 +557,7 @@
          
          // Setup gesture recognition
          setupGestureRecognition(video);
-         if (camera) {
-             camera.start();
-         }
+         // Removed: if (camera) { camera.start(); }
          
          // Setup transcription
          await setupTranscription();
