@@ -125,16 +125,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   const qrModal = document.getElementById("qr-modal");
   if (qrModal) qrModal.style.display = "none";
 
-  // Only initialize if name is provided
-  if (name) {
-    if (document.getElementById("user-name-display")) {
-      document.getElementById("user-name-display").textContent = name;
+  // Always wait for name to be provided via the modal
+  // This ensures camera/mic permissions are only requested after user enters their name
+  console.log("⏳ Waiting for user to enter name...");
+
+  // Update the name modal logic to handle both cases (with and without name parameter)
+  const nameModal = document.getElementById("name-modal");
+  if (nameModal) {
+    nameModal.style.display = "flex";
+    const input = document.getElementById("name-input");
+    if (input) {
+      // Pre-fill with name from URL if available
+      if (name) {
+        input.value = name;
+      }
+      input.focus();
     }
-    await testLocalStream();
-    await initializeMeeting(name);
-  } else {
-    // Wait for name to be provided via the modal
-    console.log("⏳ Waiting for user to enter name...");
   }
 });
 
@@ -275,6 +281,19 @@ async function initializeMeeting(userName) {
         })
       );
       addParticipant(userName);
+
+      // Initialize AI features after camera/mic permissions are granted
+      if (typeof initialize === "function") {
+        try {
+          console.log("🤖 Initializing AI features...");
+          await initialize();
+          console.log("✅ AI features initialized successfully");
+        } catch (error) {
+          console.warn("⚠️ AI features initialization failed:", error);
+          // Don't block the meeting if AI features fail to initialize
+        }
+      }
+
       // Wait for key exchange to complete before enabling controls
       // (handled in ws.onmessage)
     } catch (error) {

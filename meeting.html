@@ -444,78 +444,78 @@
       /* Ai CSS */
       video,
       canvas {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          border-radius: 12px;
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 12px;
       }
 
-      #ai-controls { 
-          display: none;
-          justify-content: center;
+      #ai-controls {
+        display: none;
+        justify-content: center;
       }
 
       #controls {
-          position: fixed;
-          bottom: 115px;
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-          padding: 15px 25px;
-          border-radius: 30px;
-          z-index: 10;
-          display: flex;
-          gap: 20px;
-          align-items: center;
+        position: fixed;
+        bottom: 115px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 30px;
+        z-index: 10;
+        display: flex;
+        gap: 20px;
+        align-items: center;
       }
 
       .control-group {
-          display: flex;
-          align-items: center;
-          gap: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       select,
       button {
-          padding: 8px 12px;
-          font-size: 14px;
-          border-radius: 20px;
-          border: none;
-          background: rgba(255, 255, 255, 0.9);
-          cursor: pointer;
-          transition: all 0.3s ease;
+        padding: 8px 12px;
+        font-size: 14px;
+        border-radius: 20px;
+        border: none;
+        background: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        transition: all 0.3s ease;
       }
 
       select:hover,
       button:hover {
-          background: white;
-          transform: translateY(-1px);
+        background: white;
+        transform: translateY(-1px);
       }
 
       #transcription {
-          position: fixed;
-          bottom: 200px;
-          width: 80%;
-          background-color: rgba(0, 0, 0, 0.7);
-          color: #fff;
-          padding: 15px;
-          border-radius: 10px;
-          text-align: center;
-          font-size: 1.2em;
-          z-index: 10;
-          transition: opacity 0.3s ease;
+        position: fixed;
+        bottom: 200px;
+        width: 80%;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 1.2em;
+        z-index: 10;
+        transition: opacity 0.3s ease;
       }
 
       .loading {
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-          padding: 20px;
-          border-radius: 10px;
-          z-index: 100;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        z-index: 100;
       }
     </style>
   </head>
@@ -652,28 +652,38 @@
     <div id="ai-controls">
       <div id="loading" class="loading">Loading AI models...</div>
       <div id="controls">
-          <div class="control-group">
-              <label for="background-select">Background:</label>
-              <select id="background-select">
-                  <option value="office">Office</option>
-                  <option value="blur">Blur</option>
-                  <option value="nature">Nature</option>
-              </select>
-          </div>
-          <div class="control-group">
-              <label for="blur-intensity">Blur Strength:</label>
-              <select id="blur-intensity">
-                  <option value="5">Light</option>
-                  <option value="10" selected>Medium</option>
-                  <option value="15">Strong</option>
-              </select>
-          </div>
-          <button id="camera-toggle">Toggle Camera</button>
-          <button id="mic-toggle">Toggle Mic</button>
-          <button id="gesture-toggle">Toggle Gestures</button>
+        <div class="control-group">
+          <label for="background-select">Background:</label>
+          <select id="background-select">
+            <option value="office">Office</option>
+            <option value="blur">Blur</option>
+            <option value="nature">Nature</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="blur-intensity">Blur Strength:</label>
+          <select id="blur-intensity">
+            <option value="5">Light</option>
+            <option value="10" selected>Medium</option>
+            <option value="15">Strong</option>
+          </select>
+        </div>
+        <button id="camera-toggle">Toggle Camera</button>
+        <button id="mic-toggle">Toggle Mic</button>
+        <button id="gesture-toggle">Toggle Gestures</button>
       </div>
       <div id="transcription">Transcription will appear here...</div>
-      <div id="gesture-indicator" style="text-align:center; margin-top:10px; color:#007bff; font-weight:bold;">Gesture recognition disabled</div>
+      <div
+        id="gesture-indicator"
+        style="
+          text-align: center;
+          margin-top: 10px;
+          color: #007bff;
+          font-weight: bold;
+        "
+      >
+        Gesture recognition disabled
+      </div>
     </div>
     <!-- Participants List -->
     <div class="participants-container" id="participants-container">
@@ -756,7 +766,14 @@
       >
         <i class="fas fa-users"></i>
       </button>
-      <button onclick="openAIFeatures()" class="control-btn" title="AI Features" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="Open AI Features">
+      <button
+        onclick="openAIFeatures()"
+        class="control-btn"
+        title="AI Features"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        aria-label="Open AI Features"
+      >
         <i class="fas fa-robot"></i>
       </button>
       <button
@@ -1002,35 +1019,47 @@
         window.location.href = url.toString();
       }
       document.addEventListener("DOMContentLoaded", function () {
-        if (!getQueryParam("name")) {
-          document.getElementById("name-modal").style.display = "flex";
-          const input = document.getElementById("name-input");
-          input.focus();
-          document.getElementById("name-submit-btn").onclick =
-            async function () {
-              const name = input.value.trim();
-              if (!name) {
-                input.style.border = "1.5px solid #e74c3c";
-                input.focus();
-                return;
-              }
-              // Hide the modal
-              document.getElementById("name-modal").style.display = "none";
-              // Initialize the meeting with the provided name
-              if (typeof initializeMeeting === "function") {
-                await initializeMeeting(name);
-              }
-              // Update URL without reloading the page
-              const url = new URL(window.location.href);
-              url.searchParams.set("name", name);
-              window.history.replaceState({}, "", url.toString());
-            };
-          input.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-              document.getElementById("name-submit-btn").click();
-            }
-          });
+        // Always show the name modal to ensure camera/mic permissions are requested after name entry
+        document.getElementById("name-modal").style.display = "flex";
+        const input = document.getElementById("name-input");
+
+        // Pre-fill with name from URL if available
+        const urlName = getQueryParam("name");
+        if (urlName) {
+          input.value = urlName;
         }
+
+        input.focus();
+        document.getElementById("name-submit-btn").onclick = async function () {
+          const name = input.value.trim();
+          if (!name) {
+            input.style.border = "1.5px solid #e74c3c";
+            input.focus();
+            return;
+          }
+          // Hide the modal
+          document.getElementById("name-modal").style.display = "none";
+
+          // Update the user name display
+          if (document.getElementById("user-name-display")) {
+            document.getElementById("user-name-display").textContent = name;
+          }
+
+          // Initialize the meeting with the provided name
+          if (typeof initializeMeeting === "function") {
+            await initializeMeeting(name);
+          }
+
+          // Update URL without reloading the page
+          const url = new URL(window.location.href);
+          url.searchParams.set("name", name);
+          window.history.replaceState({}, "", url.toString());
+        };
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            document.getElementById("name-submit-btn").click();
+          }
+        });
       });
 
       // Add event listener for Copy Link button
@@ -1049,12 +1078,12 @@
         }
       });
 
-      function openAIFeatures () { 
+      function openAIFeatures() {
         const controls = document.querySelector("#ai-controls");
         if (getComputedStyle(controls).display === "none") {
-            controls.style.display = "flex";
+          controls.style.display = "flex";
         } else {
-            controls.style.display = "none";
+          controls.style.display = "none";
         }
       }
     </script>
