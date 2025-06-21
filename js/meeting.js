@@ -10,6 +10,8 @@ let isE2EEEnabled = false;
 let isMakingOffer = false;
 let isPolite = false;
 let allKeysExchanged = false;
+let myVerifiedUsers = new Set();
+let usersWhoVerifiedMe = new Set();
 let ws;
 const peers = {};
 const localVideo = document.getElementById("large-video");
@@ -312,11 +314,18 @@ async function initializeMeeting(userName) {
       }
       switch (data.type) {
         case "verification-complete":
-          console.log(
-            `✅ ${data.fromUser} has verified you. Establishing media.`
-          );
-          establishMediaWithUser(data.fromUser);
-          updateVerificationStatus(data.fromUser, true);
+          console.log(`✅ ${data.fromUser} has verified you.`);
+          usersWhoVerifiedMe.add(data.fromUser);
+          updateVerificationStatus(data.fromUser, "verified-me");
+
+          // Check for mutual verification
+          if (myVerifiedUsers.has(data.fromUser)) {
+            console.log(
+              `🤝 Mutual verification with ${data.fromUser} complete! Establishing media.`
+            );
+            establishMediaWithUser(data.fromUser);
+            updateVerificationStatus(data.fromUser, "mutual");
+          }
           break;
         case "new-user":
           console.log(`✨ New user joined: ${data.user}`);
@@ -1046,13 +1055,31 @@ window.toggleE2EE = async function () {
   }
 };
 // Function to update verification status in UI
-function updateVerificationStatus(userId, isVerified) {
+function updateVerificationStatus(userId, state) {
+  // state: 'i-verified', 'verified-me', 'mutual'
   const participantElement = document.getElementById(`participant-${userId}`);
   if (participantElement) {
-    if (isVerified) {
-      participantElement.innerHTML = `${userId} <span style="color: green;">🔐</span>`;
-    } else {
-      participantElement.innerHTML = `${userId} <span style="color: red;">⚠️</span>`;
+    let icon = "⚠️";
+    let color = "red";
+    if (state === "mutual") {
+      icon = "🔐";
+      color = "#28a745"; // green
+    } else if (state === "i-verified" || state === "verified-me") {
+      icon = "⏳";
+      color = "#f0ad4e"; // yellow/orange
+    }
+    participantElement.innerHTML = `${userId} <span style="color: ${color}; font-weight: bold;">${icon}</span>`;
+  }
+
+  const container = document.getElementById(`video-container-${userId}`);
+  if (container && container.classList.contains("unverified")) {
+    const statusElement = container.querySelector(".status");
+    if (statusElement) {
+      if (state === "i-verified") {
+        statusElement.textContent = "Waiting for them to verify you";
+      } else if (state === "verified-me") {
+        statusElement.textContent = "This user has verified you";
+      }
     }
   }
 }
@@ -1198,11 +1225,11 @@ document
     }
 
     if (storedKeyForUser === otherKey) {
-      resultDiv.textContent = "✅ Keys Match! The connection is secure.";
+      resultDiv.textContent = "✅ Keys Match! Verification step complete.";
       resultDiv.style.color = "#4caf50";
-      // Mark user as verified and establish media flow
-      updateVerificationStatus(selectedUser, true);
-      establishMediaWithUser(selectedUser);
+      myVerifiedUsers.add(selectedUser);
+      updateVerificationStatus(selectedUser, "i-verified");
+
       // Notify the other user that they have been verified
       const currentName =
         new URLSearchParams(window.location.search).get("name") || name;
@@ -1213,11 +1240,25 @@ document
           toUser: selectedUser,
         })
       );
+
+      // Check for mutual verification
+      if (usersWhoVerifiedMe.has(selectedUser)) {
+        console.log(
+          `🤝 Mutual verification with ${selectedUser} complete! Establishing media.`
+        );
+        establishMediaWithUser(selectedUser);
+        updateVerificationStatus(selectedUser, "mutual");
+      } else {
+        console.log(
+          `⏳ Verification for ${selectedUser} is one-way. Waiting for them to verify you.`
+        );
+        resultDiv.textContent += " Waiting for them to verify you.";
+      }
     } else {
       resultDiv.textContent =
         "❌ Keys Do NOT Match! Connection may not be secure.";
       resultDiv.style.color = "#ff4d4d";
-      updateVerificationStatus(selectedUser, false);
+      updateVerificationStatus(selectedUser, false); // Or a 'failed' state
     }
   });
 
