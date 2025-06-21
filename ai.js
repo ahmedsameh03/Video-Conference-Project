@@ -305,6 +305,8 @@
      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
          const landmarks = results.multiHandLandmarks[0];
          detectGesture(landmarks);
+     } else {
+         updateGestureIndicator("");
      }
  }
 
@@ -396,6 +398,7 @@
              if (!peaceActive) {
                  peaceActive = true;
                  lastGesture = 'peace';
+                 updateGestureIndicator("✌️ Peace Sign");
                  triggerEffect('peace');
              }
          } else if (lastGesture !== gesture) {
@@ -406,15 +409,21 @@
                  dislike: "👎 Thumbs Down",
                  raised: "✋ Open Hand"
              };
+             updateGestureIndicator(gestureText[gesture]);
              triggerEffect(gesture);
          }
      } else {
          if (lastGesture !== null || peaceActive) {
              lastGesture = null;
              peaceActive = false;
+             updateGestureIndicator("No gesture detected");
          }
      }
  }
+
+ function updateGestureIndicator(text) {
+    console.log(text)
+}
 
  function triggerEffect(gestureName) {
      const gestures = {
@@ -605,6 +614,11 @@
          const btn = document.getElementById("gesture-toggle");
          btn.textContent = isGestureEnabled ? "👋 Turn Off Gestures" : "👋 Turn On Gestures";
          btn.classList.toggle("disabled", !isGestureEnabled);
+         if (!isGestureEnabled) {
+             updateGestureIndicator("Gesture recognition disabled");
+         } else {
+             updateGestureIndicator("");
+         }
      });
  }
 
