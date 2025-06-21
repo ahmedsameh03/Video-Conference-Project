@@ -14,6 +14,7 @@ let myVerifiedUsers = new Set();
 let usersWhoVerifiedMe = new Set();
 let ws;
 const peers = {};
+const pendingStreams = new Map(); // Store streams until verification
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
@@ -333,6 +334,7 @@ async function initializeMeeting(userName) {
             );
             updateVerificationStatus(fromUser, "mutual");
             establishMediaWithUser(fromUser);
+            activateVideoStream(fromUser);
           }
           break;
         case "new-user":
@@ -665,8 +667,10 @@ async function createPeer(user) {
 
   // Handle incoming tracks from the other user
   pc.ontrack = (event) => {
-    console.log(`🛤️ Track received from ${user}:`, event.track.kind);
-    addVideoStream(event.streams[0], user);
+    console.log(
+      `[Media] 🛤️ Track received from ${user} and stored. Stream ID: ${event.streams[0].id}`
+    );
+    pendingStreams.set(user, event.streams[0]);
   };
 
   // Handle ICE candidates
@@ -1216,6 +1220,7 @@ document
         );
         updateVerificationStatus(selectedUser, "mutual");
         establishMediaWithUser(selectedUser);
+        activateVideoStream(selectedUser);
       } else {
         console.log(
           `[Verification] ⏳ Verification for ${selectedUser} is one-way. Waiting for them to verify you.`
@@ -1233,16 +1238,18 @@ document
 async function establishMediaWithUser(userId) {
   const pc = peers[userId];
   if (!pc) {
-    console.error(`Cannot establish media, no peer connection for ${userId}`);
+    console.error(
+      `[Media] Cannot establish media, no peer connection for ${userId}`
+    );
     return;
   }
 
   // Check if media is already active
-  const transceivers = pc.getTransceivers();
-  if (transceivers.some((t) => t.direction === "sendrecv")) {
+  if (pc.getTransceivers().some((t) => t.direction === "sendrecv")) {
     console.log(
-      `Media is already established with ${userId}. No action needed.`
+      `[Media] Media is already established with ${userId}. No action needed.`
     );
+    activateVideoStream(userId); // Ensure video is shown even if media was already active
     return;
   }
 
@@ -1251,4 +1258,17 @@ async function establishMediaWithUser(userId) {
   pc.getTransceivers().forEach((transceiver) => {
     transceiver.direction = "sendrecv";
   });
+}
+
+function activateVideoStream(userId) {
+  console.log(`[UI] Activating video for ${userId}`);
+  const stream = pendingStreams.get(userId);
+  if (stream) {
+    addVideoStream(stream, userId);
+    pendingStreams.delete(userId); // Clean up
+  } else {
+    console.warn(
+      `[UI] Wanted to activate video for ${userId}, but no pending stream was found.`
+    );
+  }
 }
