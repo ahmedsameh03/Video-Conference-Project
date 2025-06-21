@@ -7,13 +7,6 @@ let e2eeManager;
 let transformManager;
 let keyVerification;
 let isE2EEEnabled = false;
-let isMakingOffer = false;
-let isPolite = false;
-let allKeysExchanged = false;
-const verificationStates = new Map(); // Replaces myVerifiedUsers and usersWhoVerifiedMe
-let ws;
-const peers = {};
-const pendingStreams = new Map(); // Store streams until verification
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
@@ -24,11 +17,16 @@ const SIGNALING_SERVER_URL =
   "wss://video-conference-project-production.up.railway.app";
 
 // Don't connect immediately - wait for name to be provided
+let ws = null;
 let isInitialized = false;
+const peers = {};
+let isMakingOffer = false;
+let isPolite = false;
+let isSettingRemoteAnswerPending = false;
 let localStream;
 
 // Add a global state for key exchange
-let receivedKeys = new Set();
+let allKeysExchanged = false;
 
 function setE2EEControlsEnabled(enabled) {
   const e2eeBtn = document.getElementById("e2ee-btn");
@@ -73,6 +71,7 @@ showKeyExchangeLoading(true);
 
 // Track expected users for key exchange
 let expectedUsers = new Set();
+let receivedKeys = new Set();
 
 function getQueryParams() {
   const params = {};
@@ -217,18 +216,20 @@ function closeE2EEScanModal() {
 
 async function fetchIceServers() {
   return [
-    { urls: ["stun:fr-turn4.xirsys.com"] },
+    {
+      urls: ["stun:fr-turn7.xirsys.com"],
+    },
     {
       username:
-        "cUZOpdVWEBLF0Ut185izT8u2FICM65KXzn0Ymd32wTTRc-6Is4Y6oPKrjrwX7u_TAAAAAGhWRYBTRUVOR1A0",
-      credential: "0f963c80-4e62-11f0-87f7-d2ba3806b5d3",
+        "huKntz4GRVlRWIWnZ6JFKuNwlF1AG1d8Obm0i_u4o6DHsvQQtgbk44G2Nh5lq9QhAAAAAGhWEJ5TRUVOR1Az",
+      credential: "8a7571e8-4e42-11f0-8f74-ce0c22b1fe9d",
       urls: [
-        "turn:fr-turn4.xirsys.com:80?transport=udp",
-        "turn:fr-turn4.xirsys.com:3478?transport=udp",
-        "turn:fr-turn4.xirsys.com:80?transport=tcp",
-        "turn:fr-turn4.xirsys.com:3478?transport=tcp",
-        "turns:fr-turn4.xirsys.com:443?transport=tcp",
-        "turns:fr-turn4.xirsys.com:5349?transport=tcp",
+        "turn:fr-turn7.xirsys.com:80?transport=udp",
+        "turn:fr-turn7.xirsys.com:3478?transport=udp",
+        "turn:fr-turn7.xirsys.com:80?transport=tcp",
+        "turn:fr-turn7.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn7.xirsys.com:443?transport=tcp",
+        "turns:fr-turn7.xirsys.com:5349?transport=tcp",
       ],
     },
   ];
@@ -311,44 +312,14 @@ async function initializeMeeting(userName) {
         expectedUsers.add(data.user);
       }
       switch (data.type) {
-        case "verification-complete":
-          console.log(
-            `[Verification] Received 'verification-complete' message:`,
-            data
-          );
-          const fromUser = data.fromUser;
-          if (!fromUser) {
-            console.error(
-              "[Verification] Discarding malformed 'verification-complete' message.",
-              data
-            );
-            return;
-          }
-          const state = verificationStates.get(fromUser);
-          if (state) {
-            state.theyVerified = true;
-            updateVerificationStatus(fromUser, "verified-me");
-            console.log(
-              `[Verification] Received and processed verification from ${fromUser}.`
-            );
-            checkMutualVerification(fromUser);
-          }
-          break;
         case "new-user":
           console.log(`✨ New user joined: ${data.user}`);
 
           // Don't connect to yourself
           if (data.user === userName) return;
 
-          // Initialize verification state for the new user
-          verificationStates.set(data.user, {
-            iVerified: false,
-            theyVerified: false,
-          });
-
-          // Add to participant list and create a placeholder
+          // Add to participant list
           addParticipant(data.user);
-          addUnverifiedUserPlaceholder(data.user);
 
           // Always handle E2EE key exchange if publicKey is present
           if (data.publicKey && e2eeManager) {
@@ -387,84 +358,127 @@ async function initializeMeeting(userName) {
             }
           }
 
-          // If not already connected, create a peer. The 'onnegotiationneeded' event will handle sending the offer.
+          // If not already connected, create a peer and send an offer
           if (!peers[data.user]) {
             await createPeer(data.user);
+            await createOffer(data.user);
           }
           break;
 
         case "offer":
+          console.log(`📨 Offer received from ${data.user}`);
+          const offerPeer =
+            peers[data.fromUser] || (await createPeer(data.fromUser));
+          const offerCollision =
+            isMakingOffer || offerPeer.signalingState !== "stable";
+
+          isPolite = userName.localeCompare(data.fromUser) > 0;
+          if (offerCollision && !isPolite) {
+            console.warn(
+              `⚠️ Offer collision from ${data.fromUser}, dropping offer`
+            );
+            return;
+          }
+
           try {
-            const fromUser = data.fromUser;
-            const pc = peers[fromUser];
-            if (!pc) {
-              console.error(
-                `Received offer from ${fromUser}, but no peer connection exists.`
-              );
-              return;
-            }
-
-            const offerCollision =
-              isMakingOffer || pc.signalingState !== "stable";
-            isPolite = userName.localeCompare(fromUser) > 0;
-
-            if (offerCollision && !isPolite) {
-              console.warn(
-                `[Impolite] Offer collision from ${fromUser}. Ignoring their offer.`
-              );
-              return;
-            }
-
-            await pc.setRemoteDescription(
+            await offerPeer.setRemoteDescription(
               new RTCSessionDescription(data.offer)
             );
-            console.log(
-              `[${
-                isPolite ? "Polite" : "Impolite"
-              }] Offer from ${fromUser} accepted.`
+            if (offerPeer._bufferedCandidates?.length) {
+              for (const candidate of offerPeer._bufferedCandidates) {
+                try {
+                  await offerPeer.addIceCandidate(
+                    new RTCIceCandidate(candidate)
+                  );
+                  console.log(
+                    `✅ Buffered ICE candidate added for ${data.fromUser}`
+                  );
+                } catch (e) {
+                  console.error(`❌ Error adding buffered ICE candidate:`, e);
+                }
+              }
+              offerPeer._bufferedCandidates = [];
+            }
+
+            console.log(`✅ Remote offer set for ${data.fromUser}`);
+            const answer = await offerPeer.createAnswer();
+            await offerPeer.setLocalDescription(answer);
+            console.log(`✅ Answer created and set for ${data.fromUser}`);
+            ws.send(
+              JSON.stringify({
+                type: "answer",
+                answer,
+                room,
+                user: userName,
+                toUser: data.fromUser,
+              })
             );
-            await createAnswer(fromUser);
-          } catch (err) {
-            console.error("Error handling offer:", err);
+          } catch (e) {
+            console.error("❌ Failed to handle offer:", e);
           }
           break;
 
         case "answer":
-          try {
-            const fromUser = data.fromUser;
-            const pc = peers[fromUser];
-            if (pc.signalingState === "stable") {
-              console.log(
-                `Ignoring answer from ${fromUser}, signaling state is stable.`
+          console.log(`📬 Answer received from ${data.user}`);
+          if (peers[data.fromUser]) {
+            const peer = peers[data.fromUser];
+            try {
+              await peer.setRemoteDescription(
+                new RTCSessionDescription(data.answer)
               );
-              return;
+              if (peer._bufferedCandidates?.length) {
+                for (const candidate of peer._bufferedCandidates) {
+                  try {
+                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log(
+                      `✅ Buffered ICE candidate added for ${data.fromUser}`
+                    );
+                  } catch (e) {
+                    console.error(`❌ Error adding buffered ICE candidate:`, e);
+                  }
+                }
+                peer._bufferedCandidates = [];
+              }
+
+              console.log(
+                `✅ Remote description (answer) set for ${data.fromUser}`
+              );
+            } catch (e) {
+              console.error(
+                `❌ Failed to set remote answer for ${data.fromUser}:`,
+                e.message
+              );
             }
-            await pc.setRemoteDescription(
-              new RTCSessionDescription(data.answer)
-            );
-            console.log(`✅ Answer from ${fromUser} accepted.`);
-          } catch (err) {
-            console.error("Error handling answer:", err);
+          } else {
+            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
           }
           break;
 
         case "candidate":
-          try {
-            const fromUser = data.fromUser;
-            const pc = peers[fromUser];
-            if (pc.remoteDescription && pc.remoteDescription.type) {
-              await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-              console.log(`✅ ICE candidate added for ${fromUser}`);
+          const peerConn = peers[data.fromUser];
+          if (peerConn) {
+            if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
+              try {
+                await peerConn.addIceCandidate(
+                  new RTCIceCandidate(data.candidate)
+                );
+                console.log(`✅ ICE candidate added for ${data.fromUser}`);
+              } catch (e) {
+                console.error(
+                  `❌ Error adding ICE candidate for ${data.fromUser}:`,
+                  e
+                );
+              }
             } else {
               // Buffer candidates if remote description not set yet
-              if (!pc._bufferedCandidates) {
-                pc._bufferedCandidates = [];
+              if (!peerConn._bufferedCandidates) {
+                peerConn._bufferedCandidates = [];
               }
-              pc._bufferedCandidates.push(data.candidate);
-              console.log(`📦 Buffered ICE candidate for ${fromUser}`);
+              peerConn._bufferedCandidates.push(data.candidate);
+              console.log(`📦 Buffered ICE candidate for ${data.fromUser}`);
             }
-          } catch (e) {
-            console.error(`❌ Error adding ICE candidate for ${fromUser}:`, e);
+          } else {
+            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
           }
           break;
 
@@ -628,194 +642,224 @@ if (reconnectBtn) {
 
 // Wrap RTCPeerConnection creation to add ICE state logging and user feedback
 async function createPeer(user) {
-  if (peers[user]) {
-    console.warn(`Peer connection already exists for ${user}.`);
-    return peers[user];
-  }
-  console.log(`🏗️ Creating new peer connection for ${user}`);
-
+  console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
   const iceServers = await fetchIceServers();
-  const pc = new RTCPeerConnection({
+  console.log("🧊 ICE Servers used:", iceServers);
+  const peer = new RTCPeerConnection({
     iceServers: iceServers,
-    sdpSemantics: "unified-plan",
   });
-  peers[user] = pc;
 
-  // Apply E2EE transforms immediately if E2EE is enabled.
-  if (isE2EEEnabled && e2eeManager && transformManager) {
-    console.log(`[E2EE] Applying E2EE transforms for new peer: ${user}`);
-    await transformManager.applyE2EEToPeer(pc, user);
-  }
-
-  // Add transceivers for audio and video, but disable them initially
-  if (localStream) {
-    localStream.getTracks().forEach((track) => {
-      pc.addTransceiver(track, {
-        direction: "inactive",
-        streams: [localStream],
-      });
-    });
-    console.log(`🎤📹 Transceivers added for ${user} in 'inactive' state.`);
-  }
-
-  // Set up negotiation handler
-  pc.onnegotiationneeded = async () => {
+  // Apply E2EE transforms immediately after creating the peer connection
+  if (
+    isE2EEEnabled &&
+    e2eeManager &&
+    e2eeManager.isParticipant(user) &&
+    transformManager
+  ) {
     try {
-      if (isMakingOffer) {
-        console.log(`⚠️ Skipping negotiation for ${user}, already in progress`);
-        return;
-      }
-      isMakingOffer = true;
-      await createOffer(user);
+      await transformManager.applyE2EEToPeer(peer, user);
     } catch (err) {
-      console.error(`❌ Negotiation failed for ${user}:`, err);
-    } finally {
-      isMakingOffer = false;
+      alert(
+        `Failed to apply E2EE transforms for ${user}. The call will continue unencrypted.`
+      );
+      console.warn(`⚠️ Could not apply E2EE transforms for ${user}:`, err);
+    }
+  }
+
+  peer.oniceconnectionstatechange = function () {
+    console.log(
+      "ICE connection state for",
+      user + ":",
+      peer.iceConnectionState
+    );
+    updateConnectionStatus(
+      "ICE state for " + user + ": " + peer.iceConnectionState
+    );
+    if (
+      peer.iceConnectionState === "failed" ||
+      peer.iceConnectionState === "disconnected"
+    ) {
+      showReconnectButton(true);
+    } else if (
+      peer.iceConnectionState === "connected" ||
+      peer.iceConnectionState === "completed"
+    ) {
+      showReconnectButton(false);
+    }
+  };
+  peer.onconnectionstatechange = () => {
+    console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
+    if (peer.connectionState === "connected") {
+      console.log(`✅ Peer connection established with ${user}`);
+    } else if (peer.connectionState === "failed") {
+      console.error(`❌ Peer connection failed with ${user}`);
     }
   };
 
-  // Handle incoming tracks from the other user
-  pc.ontrack = (event) => {
-    console.log(
-      `[Media] 🛤️ Track received from ${user} and stored. Stream ID: ${event.streams[0].id}`
-    );
-    pendingStreams.set(user, event.streams[0]);
-  };
-
-  // Handle ICE candidates
-  pc.onicecandidate = (event) => {
+  peer.onicecandidate = (event) => {
     if (event.candidate) {
-      const currentUserName = getQueryParam("name");
+      console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
       ws.send(
         JSON.stringify({
           type: "candidate",
           candidate: event.candidate,
           room,
+          user,
           toUser: user,
-          fromUser: currentUserName,
         })
+      );
+    } else {
+      console.log(`🏁 All ICE candidates sent for ${user}`);
+    }
+  };
+
+  peer.onicegatheringstatechange = () => {
+    console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
+  };
+
+  peer.ontrack = (event) => {
+    console.log(`🎞️ Track event for ${user}:`, event);
+    console.log(
+      `🎞️ Received streams:`,
+      event.streams.map((s) => ({ id: s.id, active: s.active }))
+    );
+    if (event.streams && event.streams[0]) {
+      addVideoStream(event.streams[0], user);
+    } else {
+      console.warn(
+        `⚠️ No streams received from ${user}. Check if tracks are sent.`
       );
     }
   };
 
-  // Log connection state changes for debugging
-  pc.oniceconnectionstatechange = () => {
-    console.log(
-      `🧊 ICE connection state for ${user}: ${pc.iceConnectionState}`
-    );
-  };
+  if (localStream) {
+    localStream.getTracks().forEach((track) => {
+      console.log(`➕ Adding local track for ${user}:`, {
+        kind: track.kind,
+        enabled: track.enabled,
+        id: track.id,
+      });
+      if (track.enabled) {
+        const sender = peer.addTrack(track, localStream);
+        console.log(`✅ Added ${track.kind} track with sender:`, sender);
+      } else {
+        console.warn(
+          `⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`
+        );
+        track.enabled = true;
+        const sender = peer.addTrack(track, localStream);
+        console.log(
+          `✅ Forced enabled and added ${track.kind} track with sender:`,
+          sender
+        );
+      }
+    });
+  } else {
+    console.error("❌ No localStream available for peer:", user);
+  }
 
-  pc.onconnectionstatechange = () => {
-    console.log(`🌐 Connection state for ${user}: ${pc.connectionState}`);
-  };
-
-  return pc;
+  peers[user] = peer;
+  return peer;
 }
 
 async function createOffer(user) {
-  try {
-    const peer = peers[user];
-    if (!peer) {
-      console.error(`❌ No peer connection found for ${user}`);
-      return;
-    }
-    console.log(`📤 Creating offer for ${user}`);
+  console.log(`📤 Creating offer for ${user}`);
+  const peer = peers[user];
+  if (!peer) {
+    console.error(`❌ No peer connection found for ${user}`);
+    return;
+  }
 
-    // Set local description
+  try {
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-
-    // Send offer
-    const currentUserName = getQueryParam("name");
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
     ws.send(
       JSON.stringify({
         type: "offer",
-        offer: peer.localDescription,
+        offer,
+        room,
+        user: currentName,
         toUser: user,
-        fromUser: currentUserName,
       })
     );
     console.log(`✅ Offer sent to ${user}`);
-  } catch (err) {
-    console.error(`❌ Failed to create offer for ${user}:`, err);
+  } catch (error) {
+    console.error(`❌ Failed to create offer for ${user}:`, error);
   }
 }
 
-async function createAnswer(user) {
-  const pc = peers[user];
-  if (!pc) return;
-  console.log(`✅ Creating answer for ${user}`);
+async function createAnswer(offer, user) {
+  console.log(`📬 Creating answer for ${user}`);
+  if (!peers[user]) await createPeer(user);
   try {
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    const currentUserName = getQueryParam("name");
+    const peer = peers[user];
+    console.log(
+      `🔍 Signaling state before setting offer for ${user}:`,
+      peer.signalingState
+    );
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log(
+      `✅ Remote offer set for ${user}. New signaling state:`,
+      peer.signalingState
+    );
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
     ws.send(
       JSON.stringify({
         type: "answer",
-        answer: pc.localDescription,
+        answer,
+        room,
+        user: name,
         toUser: user,
-        fromUser: currentUserName,
       })
     );
-  } catch (err) {
-    console.error(`❌ Failed to create/send answer to ${user}:`, err);
+    console.log(
+      `✅ Answer created and set for ${user}. New signaling state:`,
+      peer.signalingState
+    );
+  } catch (e) {
+    console.error("❌ Error creating answer:", e.message, e.stack);
   }
 }
 
 function addVideoStream(stream, user) {
-  let container = document.getElementById(`video-container-${user}`);
+  if (document.querySelector(`video[data-user="${user}"]`)) return;
+  console.log(
+    `➕ Adding video stream for ${user} with stream ID: ${stream.id}`
+  );
+  const container = document.createElement("div");
+  container.classList.add("video-container");
+  container.setAttribute("data-user-container", user);
 
-  // If a placeholder doesn't exist, create the container
-  if (!container) {
-    const videoGrid = document.getElementById("video-grid");
-    container = document.createElement("div");
-    container.id = `video-container-${user}`;
-    container.className = "video-container";
-    videoGrid.appendChild(container);
-  }
-
-  // Clear placeholder content and add video
-  container.innerHTML = "";
-  container.classList.remove("unverified");
-
-  const video = document.createElement("video");
-  video.srcObject = stream;
-  video.autoplay = true;
-  video.playsinline = true;
-  video.className = "user-video";
+  const videoEl = document.createElement("video");
+  videoEl.srcObject = stream;
+  videoEl.autoplay = true;
+  videoEl.playsInline = true;
+  videoEl.setAttribute("data-user", user);
 
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
 
-  container.appendChild(video);
+  container.appendChild(videoEl);
   container.appendChild(nameTag);
+  videoGrid.appendChild(container);
 }
 
 function removeVideoStream(user) {
-  const container = document.getElementById(`video-container-${user}`);
-  if (container) {
-    container.remove();
+  try {
+    const container = document.querySelector(
+      `div[data-user-container="${user}"]`
+    );
+    if (container) container.remove();
+    if (peers[user]) {
+      peers[user].close();
+      delete peers[user];
+    }
+  } catch (error) {
+    console.warn(`Warning: Failed to remove video stream for ${user}:`, error);
   }
-}
-
-function addUnverifiedUserPlaceholder(userId) {
-  if (document.getElementById(`video-container-${userId}`)) return;
-
-  const videoGrid = document.getElementById("video-grid");
-  const container = document.createElement("div");
-  container.id = `video-container-${userId}`;
-  container.className = "video-container unverified";
-
-  const placeholderContent = `
-    <div class="unverified-overlay">
-      <i class="fas fa-user-lock"></i>
-      <p class="username">${userId}</p>
-      <p class="status">Pending verification</p>
-    </div>
-  `;
-  container.innerHTML = placeholderContent;
-  videoGrid.appendChild(container);
 }
 
 function addParticipant(user) {
@@ -1022,39 +1066,13 @@ window.toggleE2EE = async function () {
   }
 };
 // Function to update verification status in UI
-function updateVerificationStatus(userId, state) {
-  // state: 'i-verified', 'verified-me', 'mutual'
+function updateVerificationStatus(userId, isVerified) {
   const participantElement = document.getElementById(`participant-${userId}`);
   if (participantElement) {
-    let icon = "⚠️";
-    let color = "red";
-    if (state === "mutual") {
-      icon = "🔐";
-      color = "#28a745"; // green
-    } else if (state === "i-verified" || state === "verified-me") {
-      icon = "⏳";
-      color = "#f0ad4e"; // yellow/orange
-    }
-    participantElement.innerHTML = `${userId} <span style="color: ${color}; font-weight: bold;">${icon}</span>`;
-  }
-
-  const container = document.getElementById(`video-container-${userId}`);
-  if (!container) return;
-
-  if (state === "mutual") {
-    const overlay = container.querySelector(".unverified-overlay");
-    if (overlay) {
-      overlay.remove();
-    }
-    container.classList.remove("unverified");
-  } else if (container.classList.contains("unverified")) {
-    const statusElement = container.querySelector(".status");
-    if (statusElement) {
-      if (state === "i-verified") {
-        statusElement.textContent = "Waiting for them to verify you";
-      } else if (state === "verified-me") {
-        statusElement.textContent = "This user has verified you";
-      }
+    if (isVerified) {
+      participantElement.innerHTML = `${userId} <span style="color: green;">🔐</span>`;
+    } else {
+      participantElement.innerHTML = `${userId} <span style="color: red;">⚠️</span>`;
     }
   }
 }
@@ -1106,7 +1124,9 @@ function leaveMeeting() {
   Object.values(peers).forEach((p) => p.close());
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "leave", room, user: name }));
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
+    ws.send(JSON.stringify({ type: "leave", room, user: currentName }));
     ws.close();
   }
 
@@ -1198,93 +1218,14 @@ document
     }
 
     if (storedKeyForUser === otherKey) {
-      resultDiv.textContent = "✅ Keys Match! Verification step complete.";
+      resultDiv.textContent = "✅ Keys Match! The connection is secure.";
       resultDiv.style.color = "#4caf50";
-
-      const state = verificationStates.get(selectedUser);
-      if (state) {
-        state.iVerified = true;
-      }
-
-      updateVerificationStatus(selectedUser, "i-verified");
-
-      // Notify the other user that they have been verified
-      const currentUserName = getQueryParam("name");
-      ws.send(
-        JSON.stringify({
-          type: "verification-complete",
-          fromUser: currentUserName,
-          toUser: selectedUser,
-        })
-      );
-
-      // Check for mutual verification
-      console.log(
-        `[Verification] Checking for mutual verification with ${selectedUser}. They verified me? ${
-          verificationStates.get(selectedUser)?.theyVerified
-        }`
-      );
-      checkMutualVerification(selectedUser);
+      // Optionally, mark user as verified
+      updateVerificationStatus(selectedUser, true);
     } else {
       resultDiv.textContent =
         "❌ Keys Do NOT Match! Connection may not be secure.";
       resultDiv.style.color = "#ff4d4d";
-      updateVerificationStatus(selectedUser, "failed");
+      updateVerificationStatus(selectedUser, false);
     }
   });
-
-function checkMutualVerification(userId) {
-  const state = verificationStates.get(userId);
-  console.log(`[Verification Check] Status for ${userId}:`, state);
-  if (state && state.iVerified && state.theyVerified) {
-    console.log(
-      `[Verification Check] 🤝 Mutual verification confirmed for ${userId}!`
-    );
-    updateVerificationStatus(userId, "mutual");
-    establishMediaWithUser(userId);
-    activateVideoStream(userId);
-    return true;
-  }
-  console.log(
-    `[Verification Check] Mutual verification for ${userId} not yet complete.`
-  );
-  return false;
-}
-
-async function establishMediaWithUser(userId) {
-  const pc = peers[userId];
-  if (!pc) {
-    console.error(
-      `[Media] Cannot establish media, no peer connection for ${userId}`
-    );
-    return;
-  }
-
-  // Check if media is already active
-  if (pc.getTransceivers().some((t) => t.direction === "sendrecv")) {
-    console.log(
-      `[Media] Media is already established with ${userId}. No action needed.`
-    );
-    activateVideoStream(userId); // Ensure video is shown even if media was already active
-    return;
-  }
-
-  console.log(`[Media] 🚀 Activating media with ${userId}...`);
-  // This will trigger the 'onnegotiationneeded' event
-  pc.getTransceivers().forEach((transceiver) => {
-    transceiver.direction = "sendrecv";
-  });
-}
-
-function activateVideoStream(userId) {
-  console.log(`[UI] Activating video for ${userId}`);
-  const stream = pendingStreams.get(userId);
-  if (stream) {
-    addVideoStream(stream, userId);
-    pendingStreams.delete(userId); // Clean up
-  } else {
-    console.warn(
-      `[UI] Wanted to activate video for ${userId}, but no pending stream was found.`
-    );
-  }
-}
