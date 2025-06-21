@@ -312,14 +312,22 @@ async function initializeMeeting(userName) {
         expectedUsers.add(data.user);
       }
       switch (data.type) {
+        case "verification-complete":
+          console.log(
+            `✅ ${data.fromUser} has verified you. Establishing media.`
+          );
+          establishMediaWithUser(data.fromUser);
+          updateVerificationStatus(data.fromUser, true);
+          break;
         case "new-user":
           console.log(`✨ New user joined: ${data.user}`);
 
           // Don't connect to yourself
           if (data.user === userName) return;
 
-          // Add to participant list
+          // Add to participant list and create a placeholder
           addParticipant(data.user);
+          addUnverifiedUserPlaceholder(data.user);
 
           // Always handle E2EE key exchange if publicKey is present
           if (data.publicKey && e2eeManager) {
@@ -642,61 +650,66 @@ if (reconnectBtn) {
 
 // Wrap RTCPeerConnection creation to add ICE state logging and user feedback
 async function createPeer(user) {
-  console.log(`🤝 Creating RTCPeerConnection for user: ${user}`);
+  if (peers[user]) {
+    console.warn(`Peer connection already exists for ${user}.`);
+    return peers[user];
+  }
+  console.log(`🏗️ Creating new peer connection for ${user}`);
+
   const iceServers = await fetchIceServers();
   console.log("🧊 ICE Servers used:", iceServers);
-  const peer = new RTCPeerConnection({
-    iceServers: iceServers,
-  });
 
-  // Apply E2EE transforms immediately after creating the peer connection
-  if (
-    isE2EEEnabled &&
-    e2eeManager &&
-    e2eeManager.isParticipant(user) &&
-    transformManager
-  ) {
-    try {
-      await transformManager.applyE2EEToPeer(peer, user);
-    } catch (err) {
-      alert(
-        `Failed to apply E2EE transforms for ${user}. The call will continue unencrypted.`
-      );
-      console.warn(`⚠️ Could not apply E2EE transforms for ${user}:`, err);
-    }
+  const pc = new RTCPeerConnection({
+    iceServers: iceServers,
+    sdpSemantics: "unified-plan",
+  });
+  peers[user] = pc;
+
+  // Add transceivers for audio and video, but disable them initially
+  if (localStream) {
+    localStream.getTracks().forEach((track) => {
+      pc.addTransceiver(track, {
+        direction: "inactive",
+        streams: [localStream],
+      });
+    });
+    console.log(`🎤📹 Transceivers added for ${user} in 'inactive' state.`);
   }
 
-  peer.oniceconnectionstatechange = function () {
-    console.log(
-      "ICE connection state for",
-      user + ":",
-      peer.iceConnectionState
-    );
+  // Handle incoming tracks
+  pc.ontrack = (event) => {
+    console.log(`🛤️ Track received from ${user}:`, event.track.kind);
+    addVideoStream(event.streams[0], user);
+  };
+
+  // Handle ICE candidates
+  pc.oniceconnectionstatechange = function () {
+    console.log("ICE connection state for", user + ":", pc.iceConnectionState);
     updateConnectionStatus(
-      "ICE state for " + user + ": " + peer.iceConnectionState
+      "ICE state for " + user + ": " + pc.iceConnectionState
     );
     if (
-      peer.iceConnectionState === "failed" ||
-      peer.iceConnectionState === "disconnected"
+      pc.iceConnectionState === "failed" ||
+      pc.iceConnectionState === "disconnected"
     ) {
       showReconnectButton(true);
     } else if (
-      peer.iceConnectionState === "connected" ||
-      peer.iceConnectionState === "completed"
+      pc.iceConnectionState === "connected" ||
+      pc.iceConnectionState === "completed"
     ) {
       showReconnectButton(false);
     }
   };
-  peer.onconnectionstatechange = () => {
-    console.log(`🌐 Connection state for ${user}:`, peer.connectionState);
-    if (peer.connectionState === "connected") {
+  pc.onconnectionstatechange = () => {
+    console.log(`🌐 Connection state for ${user}:`, pc.connectionState);
+    if (pc.connectionState === "connected") {
       console.log(`✅ Peer connection established with ${user}`);
-    } else if (peer.connectionState === "failed") {
+    } else if (pc.connectionState === "failed") {
       console.error(`❌ Peer connection failed with ${user}`);
     }
   };
 
-  peer.onicecandidate = (event) => {
+  pc.onicecandidate = (event) => {
     if (event.candidate) {
       console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
       ws.send(
@@ -713,23 +726,8 @@ async function createPeer(user) {
     }
   };
 
-  peer.onicegatheringstatechange = () => {
-    console.log(`🧊 ICE gathering state for ${user}:`, peer.iceGatheringState);
-  };
-
-  peer.ontrack = (event) => {
-    console.log(`🎞️ Track event for ${user}:`, event);
-    console.log(
-      `🎞️ Received streams:`,
-      event.streams.map((s) => ({ id: s.id, active: s.active }))
-    );
-    if (event.streams && event.streams[0]) {
-      addVideoStream(event.streams[0], user);
-    } else {
-      console.warn(
-        `⚠️ No streams received from ${user}. Check if tracks are sent.`
-      );
-    }
+  pc.onicegatheringstatechange = () => {
+    console.log(`🧊 ICE gathering state for ${user}:`, pc.iceGatheringState);
   };
 
   if (localStream) {
@@ -740,14 +738,14 @@ async function createPeer(user) {
         id: track.id,
       });
       if (track.enabled) {
-        const sender = peer.addTrack(track, localStream);
+        const sender = pc.addTrack(track, localStream);
         console.log(`✅ Added ${track.kind} track with sender:`, sender);
       } else {
         console.warn(
           `⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`
         );
         track.enabled = true;
-        const sender = peer.addTrack(track, localStream);
+        const sender = pc.addTrack(track, localStream);
         console.log(
           `✅ Forced enabled and added ${track.kind} track with sender:`,
           sender
@@ -758,8 +756,7 @@ async function createPeer(user) {
     console.error("❌ No localStream available for peer:", user);
   }
 
-  peers[user] = peer;
-  return peer;
+  return pc;
 }
 
 async function createOffer(user) {
@@ -825,41 +822,58 @@ async function createAnswer(offer, user) {
 }
 
 function addVideoStream(stream, user) {
-  if (document.querySelector(`video[data-user="${user}"]`)) return;
-  console.log(
-    `➕ Adding video stream for ${user} with stream ID: ${stream.id}`
-  );
-  const container = document.createElement("div");
-  container.classList.add("video-container");
-  container.setAttribute("data-user-container", user);
+  let container = document.getElementById(`video-container-${user}`);
 
-  const videoEl = document.createElement("video");
-  videoEl.srcObject = stream;
-  videoEl.autoplay = true;
-  videoEl.playsInline = true;
-  videoEl.setAttribute("data-user", user);
+  // If a placeholder doesn't exist, create the container
+  if (!container) {
+    const videoGrid = document.getElementById("video-grid");
+    container = document.createElement("div");
+    container.id = `video-container-${user}`;
+    container.className = "video-container";
+    videoGrid.appendChild(container);
+  }
+
+  // Clear placeholder content and add video
+  container.innerHTML = "";
+  container.classList.remove("unverified");
+
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsinline = true;
+  video.className = "user-video";
 
   const nameTag = document.createElement("p");
   nameTag.textContent = user;
 
-  container.appendChild(videoEl);
+  container.appendChild(video);
   container.appendChild(nameTag);
-  videoGrid.appendChild(container);
 }
 
 function removeVideoStream(user) {
-  try {
-    const container = document.querySelector(
-      `div[data-user-container="${user}"]`
-    );
-    if (container) container.remove();
-    if (peers[user]) {
-      peers[user].close();
-      delete peers[user];
-    }
-  } catch (error) {
-    console.warn(`Warning: Failed to remove video stream for ${user}:`, error);
+  const container = document.getElementById(`video-container-${user}`);
+  if (container) {
+    container.remove();
   }
+}
+
+function addUnverifiedUserPlaceholder(userId) {
+  if (document.getElementById(`video-container-${userId}`)) return;
+
+  const videoGrid = document.getElementById("video-grid");
+  const container = document.createElement("div");
+  container.id = `video-container-${userId}`;
+  container.className = "video-container unverified";
+
+  const placeholderContent = `
+    <div class="unverified-overlay">
+      <i class="fas fa-user-lock"></i>
+      <p class="username">${userId}</p>
+      <p class="status">Pending verification</p>
+    </div>
+  `;
+  container.innerHTML = placeholderContent;
+  videoGrid.appendChild(container);
 }
 
 function addParticipant(user) {
@@ -1220,8 +1234,19 @@ document
     if (storedKeyForUser === otherKey) {
       resultDiv.textContent = "✅ Keys Match! The connection is secure.";
       resultDiv.style.color = "#4caf50";
-      // Optionally, mark user as verified
+      // Mark user as verified and establish media flow
       updateVerificationStatus(selectedUser, true);
+      establishMediaWithUser(selectedUser);
+      // Notify the other user that they have been verified
+      const currentName =
+        new URLSearchParams(window.location.search).get("name") || name;
+      ws.send(
+        JSON.stringify({
+          type: "verification-complete",
+          fromUser: currentName,
+          toUser: selectedUser,
+        })
+      );
     } else {
       resultDiv.textContent =
         "❌ Keys Do NOT Match! Connection may not be secure.";
@@ -1229,3 +1254,17 @@ document
       updateVerificationStatus(selectedUser, false);
     }
   });
+
+async function establishMediaWithUser(userId) {
+  const pc = peers[userId];
+  if (!pc) {
+    console.error(`Cannot establish media, no peer connection for ${userId}`);
+    return;
+  }
+
+  console.log(`🚀 Establishing media with ${userId}...`);
+  // Set transceivers to send and receive
+  pc.getTransceivers().forEach((transceiver) => {
+    transceiver.direction = "sendrecv";
+  });
+}
