@@ -241,7 +241,7 @@ async function initializeMeeting(userName) {
   if (isInitialized) return;
 
   console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
-  ws = new WebSocket(SIGNALING_URL);
+  ws = new WebSocket(SIGNALING_SERVER_URL);
 
   ws.onopen = async () => {
     console.log("✅ WebSocket connected!");
