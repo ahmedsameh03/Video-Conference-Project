@@ -297,12 +297,9 @@
          width: 640,
          height: 480,
      });
-
-     camera.start();
  }
 
  function onGestureResults(results) {
-     console.log("onGestureResults called", results);
      if (!isGestureEnabled) return;
      
      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -419,7 +416,7 @@
          if (lastGesture !== null || peaceActive) {
              lastGesture = null;
              peaceActive = false;
-            updateGestureIndicator(gestureText[gesture]);
+             updateGestureIndicator("No gesture detected");
          }
      }
  }
@@ -557,7 +554,9 @@
          
          // Setup gesture recognition
          setupGestureRecognition(video);
-         // Removed: if (camera) { camera.start(); }
+         if (camera) {
+             camera.start();
+         }
          
          // Setup transcription
          await setupTranscription();
