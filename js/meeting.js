@@ -657,8 +657,6 @@ async function createPeer(user) {
   console.log(`🏗️ Creating new peer connection for ${user}`);
 
   const iceServers = await fetchIceServers();
-  console.log("🧊 ICE Servers used:", iceServers);
-
   const pc = new RTCPeerConnection({
     iceServers: iceServers,
     sdpSemantics: "unified-plan",
@@ -676,85 +674,39 @@ async function createPeer(user) {
     console.log(`🎤📹 Transceivers added for ${user} in 'inactive' state.`);
   }
 
-  // Handle incoming tracks
+  // Handle incoming tracks from the other user
   pc.ontrack = (event) => {
     console.log(`🛤️ Track received from ${user}:`, event.track.kind);
     addVideoStream(event.streams[0], user);
   };
 
   // Handle ICE candidates
-  pc.oniceconnectionstatechange = function () {
-    console.log("ICE connection state for", user + ":", pc.iceConnectionState);
-    updateConnectionStatus(
-      "ICE state for " + user + ": " + pc.iceConnectionState
-    );
-    if (
-      pc.iceConnectionState === "failed" ||
-      pc.iceConnectionState === "disconnected"
-    ) {
-      showReconnectButton(true);
-    } else if (
-      pc.iceConnectionState === "connected" ||
-      pc.iceConnectionState === "completed"
-    ) {
-      showReconnectButton(false);
-    }
-  };
-  pc.onconnectionstatechange = () => {
-    console.log(`🌐 Connection state for ${user}:`, pc.connectionState);
-    if (pc.connectionState === "connected") {
-      console.log(`✅ Peer connection established with ${user}`);
-    } else if (pc.connectionState === "failed") {
-      console.error(`❌ Peer connection failed with ${user}`);
-    }
-  };
-
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      console.log(`🧊 Sending ICE candidate to ${user}:`, event.candidate);
+      const currentName =
+        new URLSearchParams(window.location.search).get("name") || name;
       ws.send(
         JSON.stringify({
           type: "candidate",
           candidate: event.candidate,
           room,
-          user,
           toUser: user,
+          fromUser: currentName,
         })
       );
-    } else {
-      console.log(`🏁 All ICE candidates sent for ${user}`);
     }
   };
 
-  pc.onicegatheringstatechange = () => {
-    console.log(`🧊 ICE gathering state for ${user}:`, pc.iceGatheringState);
+  // Log connection state changes for debugging
+  pc.oniceconnectionstatechange = () => {
+    console.log(
+      `🧊 ICE connection state for ${user}: ${pc.iceConnectionState}`
+    );
   };
 
-  if (localStream) {
-    localStream.getTracks().forEach((track) => {
-      console.log(`➕ Adding local track for ${user}:`, {
-        kind: track.kind,
-        enabled: track.enabled,
-        id: track.id,
-      });
-      if (track.enabled) {
-        const sender = pc.addTrack(track, localStream);
-        console.log(`✅ Added ${track.kind} track with sender:`, sender);
-      } else {
-        console.warn(
-          `⚠️ Track ${track.kind} is disabled for ${user}. Enabling it...`
-        );
-        track.enabled = true;
-        const sender = pc.addTrack(track, localStream);
-        console.log(
-          `✅ Forced enabled and added ${track.kind} track with sender:`,
-          sender
-        );
-      }
-    });
-  } else {
-    console.error("❌ No localStream available for peer:", user);
-  }
+  pc.onconnectionstatechange = () => {
+    console.log(`🌐 Connection state for ${user}: ${pc.connectionState}`);
+  };
 
   return pc;
 }
