@@ -263,7 +263,6 @@ async function initializeMeeting(userName) {
         "e2ee-algorithm-indicator"
       );
       if (algorithmIndicator) {
-        algorithmIndicator.textContent = keyInfo.algorithm;
         algorithmIndicator.style.display = "inline";
         algorithmIndicator.title = `Using ${keyInfo.algorithm} encryption`;
       }
