@@ -389,7 +389,7 @@ async function initializeMeeting(userName) {
 
           // If not already connected, create a peer. The 'onnegotiationneeded' event will handle sending the offer.
           if (!peers[data.user]) {
-            await createPeer(data.user, userName);
+            await createPeer(data.user);
           }
           break;
 
@@ -423,7 +423,7 @@ async function initializeMeeting(userName) {
                 isPolite ? "Polite" : "Impolite"
               }] Offer from ${fromUser} accepted.`
             );
-            await createAnswer(fromUser, userName);
+            await createAnswer(fromUser);
           } catch (err) {
             console.error("Error handling offer:", err);
           }
@@ -627,7 +627,7 @@ if (reconnectBtn) {
 }
 
 // Wrap RTCPeerConnection creation to add ICE state logging and user feedback
-async function createPeer(user, currentUserName) {
+async function createPeer(user) {
   if (peers[user]) {
     console.warn(`Peer connection already exists for ${user}.`);
     return peers[user];
@@ -666,7 +666,7 @@ async function createPeer(user, currentUserName) {
         return;
       }
       isMakingOffer = true;
-      await createOffer(user, currentUserName);
+      await createOffer(user);
     } catch (err) {
       console.error(`❌ Negotiation failed for ${user}:`, err);
     } finally {
@@ -685,6 +685,7 @@ async function createPeer(user, currentUserName) {
   // Handle ICE candidates
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      const currentUserName = getQueryParam("name");
       ws.send(
         JSON.stringify({
           type: "candidate",
@@ -711,7 +712,7 @@ async function createPeer(user, currentUserName) {
   return pc;
 }
 
-async function createOffer(user, currentUserName) {
+async function createOffer(user) {
   try {
     const peer = peers[user];
     if (!peer) {
@@ -725,6 +726,7 @@ async function createOffer(user, currentUserName) {
     await peer.setLocalDescription(offer);
 
     // Send offer
+    const currentUserName = getQueryParam("name");
     ws.send(
       JSON.stringify({
         type: "offer",
@@ -739,7 +741,7 @@ async function createOffer(user, currentUserName) {
   }
 }
 
-async function createAnswer(user, currentUserName) {
+async function createAnswer(user) {
   const pc = peers[user];
   if (!pc) return;
   console.log(`✅ Creating answer for ${user}`);
@@ -747,6 +749,7 @@ async function createAnswer(user, currentUserName) {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
+    const currentUserName = getQueryParam("name");
     ws.send(
       JSON.stringify({
         type: "answer",
@@ -1103,7 +1106,7 @@ function leaveMeeting() {
   Object.values(peers).forEach((p) => p.close());
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "leave", room, user: userName }));
+    ws.send(JSON.stringify({ type: "leave", room, user: name }));
     ws.close();
   }
 
@@ -1206,10 +1209,11 @@ document
       updateVerificationStatus(selectedUser, "i-verified");
 
       // Notify the other user that they have been verified
+      const currentUserName = getQueryParam("name");
       ws.send(
         JSON.stringify({
           type: "verification-complete",
-          fromUser: name,
+          fromUser: currentUserName,
           toUser: selectedUser,
         })
       );
