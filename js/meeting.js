@@ -1019,7 +1019,15 @@ function updateVerificationStatus(userId, state) {
   }
 
   const container = document.getElementById(`video-container-${userId}`);
-  if (container && container.classList.contains("unverified")) {
+  if (!container) return;
+
+  if (state === "mutual") {
+    const overlay = container.querySelector(".unverified-overlay");
+    if (overlay) {
+      overlay.remove();
+    }
+    container.classList.remove("unverified");
+  } else if (container.classList.contains("unverified")) {
     const statusElement = container.querySelector(".status");
     if (statusElement) {
       if (state === "i-verified") {
@@ -1225,9 +1233,12 @@ async function establishMediaWithUser(userId) {
     return;
   }
 
-  console.log(`🚀 Establishing media with ${userId}...`);
+  console.log(`🚀 Activating media with ${userId}...`);
   // Set transceivers to send and receive
   pc.getTransceivers().forEach((transceiver) => {
     transceiver.direction = "sendrecv";
   });
+
+  // Forcing negotiation immediately is more reliable
+  await createOffer(userId);
 }
