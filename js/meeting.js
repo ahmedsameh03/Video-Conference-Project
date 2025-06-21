@@ -394,7 +394,7 @@ async function initializeMeeting(userName) {
 
           // If not already connected, create a peer. The 'onnegotiationneeded' event will handle sending the offer.
           if (!peers[data.user]) {
-            await createPeer(data.user);
+            await createPeer(data.user, userName);
           }
           break;
 
@@ -632,7 +632,7 @@ if (reconnectBtn) {
 }
 
 // Wrap RTCPeerConnection creation to add ICE state logging and user feedback
-async function createPeer(user) {
+async function createPeer(user, currentUserName) {
   if (peers[user]) {
     console.warn(`Peer connection already exists for ${user}.`);
     return peers[user];
@@ -645,6 +645,12 @@ async function createPeer(user) {
     sdpSemantics: "unified-plan",
   });
   peers[user] = pc;
+
+  // Apply E2EE transforms immediately if E2EE is enabled.
+  if (isE2EEEnabled && e2eeManager && transformManager) {
+    console.log(`[E2EE] Applying E2EE transforms for new peer: ${user}`);
+    await transformManager.applyE2EEToPeer(pc, user);
+  }
 
   // Add transceivers for audio and video, but disable them initially
   if (localStream) {
@@ -690,7 +696,7 @@ async function createPeer(user) {
           candidate: event.candidate,
           room,
           toUser: user,
-          fromUser: userName,
+          fromUser: currentUserName,
         })
       );
     }
@@ -711,30 +717,30 @@ async function createPeer(user) {
 }
 
 async function createOffer(user) {
-  console.log(`📤 Creating offer for ${user}`);
-  const peer = peers[user];
-  if (!peer) {
-    console.error(`❌ No peer connection found for ${user}`);
-    return;
-  }
-
   try {
+    const peer = peers[user];
+    if (!peer) {
+      console.error(`❌ No peer connection found for ${user}`);
+      return;
+    }
+    console.log(`📤 Creating offer for ${user}`);
+
+    // Set local description
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    const currentName =
-      new URLSearchParams(window.location.search).get("name") || name;
+
+    // Send offer
     ws.send(
       JSON.stringify({
         type: "offer",
-        offer,
-        room,
-        user: currentName,
+        offer: peer.localDescription,
         toUser: user,
+        fromUser: userName,
       })
     );
     console.log(`✅ Offer sent to ${user}`);
-  } catch (error) {
-    console.error(`❌ Failed to create offer for ${user}:`, error);
+  } catch (err) {
+    console.error(`❌ Failed to create offer for ${user}:`, err);
   }
 }
 
