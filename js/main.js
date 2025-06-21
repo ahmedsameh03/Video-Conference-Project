@@ -40,18 +40,18 @@ let ws;
 // STUN/TURN servers - using XirSys TURN service
 const iceServers = {
   iceServers: [
-    { urls: ["stun:fr-turn4.xirsys.com"] },
+    { urls: ["stun:fr-turn8.xirsys.com"] },
     {
       username:
-        "cUZOpdVWEBLF0Ut185izT8u2FICM65KXzn0Ymd32wTTRc-6Is4Y6oPKrjrwX7u_TAAAAAGhWRYBTRUVOR1A0",
-      credential: "0f963c80-4e62-11f0-87f7-d2ba3806b5d3",
+        "_zBkfC4Ee508hvItVLxnCfr_LTWqchqaxS3cNHquSPFaCXGr-i0aZ22VUGvo-_9iAAAAAGhW22lTRUVOR1A1",
+      credential: "69f9c2ba-4ebb-11f0-a8c1-66ffacc6f8fc",
       urls: [
-        "turn:fr-turn4.xirsys.com:80?transport=udp",
-        "turn:fr-turn4.xirsys.com:3478?transport=udp",
-        "turn:fr-turn4.xirsys.com:80?transport=tcp",
-        "turn:fr-turn4.xirsys.com:3478?transport=tcp",
-        "turns:fr-turn4.xirsys.com:443?transport=tcp",
-        "turns:fr-turn4.xirsys.com:5349?transport=tcp",
+        "turn:fr-turn8.xirsys.com:80?transport=udp",
+        "turn:fr-turn8.xirsys.com:3478?transport=udp",
+        "turn:fr-turn8.xirsys.com:80?transport=tcp",
+        "turn:fr-turn8.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn8.xirsys.com:443?transport=tcp",
+        "turns:fr-turn8.xirsys.com:5349?transport=tcp",
       ],
     },
   ],
