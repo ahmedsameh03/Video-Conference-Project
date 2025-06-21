@@ -381,119 +381,77 @@ async function initializeMeeting(userName) {
           break;
 
         case "offer":
-          console.log(`📨 Offer received from ${data.user}`);
-          const offerPeer =
-            peers[data.fromUser] || (await createPeer(data.fromUser));
-          const offerCollision =
-            isMakingOffer || offerPeer.signalingState !== "stable";
-
-          isPolite = userName.localeCompare(data.fromUser) > 0;
-          if (offerCollision && !isPolite) {
-            console.warn(
-              `⚠️ Offer collision from ${data.fromUser}, dropping offer`
-            );
-            return;
-          }
-
           try {
-            await offerPeer.setRemoteDescription(
-              new RTCSessionDescription(data.offer)
-            );
-            if (offerPeer._bufferedCandidates?.length) {
-              for (const candidate of offerPeer._bufferedCandidates) {
-                try {
-                  await offerPeer.addIceCandidate(
-                    new RTCIceCandidate(candidate)
-                  );
-                  console.log(
-                    `✅ Buffered ICE candidate added for ${data.fromUser}`
-                  );
-                } catch (e) {
-                  console.error(`❌ Error adding buffered ICE candidate:`, e);
-                }
-              }
-              offerPeer._bufferedCandidates = [];
+            const fromUser = data.fromUser;
+            const pc = peers[fromUser];
+            if (!pc) {
+              console.error(
+                `Received offer from ${fromUser}, but no peer connection exists.`
+              );
+              return;
             }
 
-            console.log(`✅ Remote offer set for ${data.fromUser}`);
-            const answer = await offerPeer.createAnswer();
-            await offerPeer.setLocalDescription(answer);
-            console.log(`✅ Answer created and set for ${data.fromUser}`);
-            ws.send(
-              JSON.stringify({
-                type: "answer",
-                answer,
-                room,
-                user: userName,
-                toUser: data.fromUser,
-              })
+            const offerCollision =
+              isMakingOffer || pc.signalingState !== "stable";
+            isPolite = userName.localeCompare(fromUser) > 0;
+
+            if (offerCollision && !isPolite) {
+              console.warn(
+                `[Impolite] Offer collision from ${fromUser}. Ignoring their offer.`
+              );
+              return;
+            }
+
+            await pc.setRemoteDescription(
+              new RTCSessionDescription(data.offer)
             );
-          } catch (e) {
-            console.error("❌ Failed to handle offer:", e);
+            console.log(
+              `[${
+                isPolite ? "Polite" : "Impolite"
+              }] Offer from ${fromUser} accepted.`
+            );
+            await createAnswer(fromUser);
+          } catch (err) {
+            console.error("Error handling offer:", err);
           }
           break;
 
         case "answer":
-          console.log(`📬 Answer received from ${data.user}`);
-          if (peers[data.fromUser]) {
-            const peer = peers[data.fromUser];
-            try {
-              await peer.setRemoteDescription(
-                new RTCSessionDescription(data.answer)
-              );
-              if (peer._bufferedCandidates?.length) {
-                for (const candidate of peer._bufferedCandidates) {
-                  try {
-                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log(
-                      `✅ Buffered ICE candidate added for ${data.fromUser}`
-                    );
-                  } catch (e) {
-                    console.error(`❌ Error adding buffered ICE candidate:`, e);
-                  }
-                }
-                peer._bufferedCandidates = [];
-              }
-
+          try {
+            const fromUser = data.fromUser;
+            const pc = peers[fromUser];
+            if (pc.signalingState === "stable") {
               console.log(
-                `✅ Remote description (answer) set for ${data.fromUser}`
+                `Ignoring answer from ${fromUser}, signaling state is stable.`
               );
-            } catch (e) {
-              console.error(
-                `❌ Failed to set remote answer for ${data.fromUser}:`,
-                e.message
-              );
+              return;
             }
-          } else {
-            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
+            await pc.setRemoteDescription(
+              new RTCSessionDescription(data.answer)
+            );
+            console.log(`✅ Answer from ${fromUser} accepted.`);
+          } catch (err) {
+            console.error("Error handling answer:", err);
           }
           break;
 
         case "candidate":
-          const peerConn = peers[data.fromUser];
-          if (peerConn) {
-            if (peerConn.remoteDescription && peerConn.remoteDescription.type) {
-              try {
-                await peerConn.addIceCandidate(
-                  new RTCIceCandidate(data.candidate)
-                );
-                console.log(`✅ ICE candidate added for ${data.fromUser}`);
-              } catch (e) {
-                console.error(
-                  `❌ Error adding ICE candidate for ${data.fromUser}:`,
-                  e
-                );
-              }
+          try {
+            const fromUser = data.fromUser;
+            const pc = peers[fromUser];
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+              await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+              console.log(`✅ ICE candidate added for ${fromUser}`);
             } else {
               // Buffer candidates if remote description not set yet
-              if (!peerConn._bufferedCandidates) {
-                peerConn._bufferedCandidates = [];
+              if (!pc._bufferedCandidates) {
+                pc._bufferedCandidates = [];
               }
-              peerConn._bufferedCandidates.push(data.candidate);
-              console.log(`📦 Buffered ICE candidate for ${data.fromUser}`);
+              pc._bufferedCandidates.push(data.candidate);
+              console.log(`📦 Buffered ICE candidate for ${fromUser}`);
             }
-          } else {
-            console.warn(`⚠️ No peer connection found for ${data.fromUser}`);
+          } catch (e) {
+            console.error(`❌ Error adding ICE candidate for ${fromUser}:`, e);
           }
           break;
 
@@ -762,37 +720,26 @@ async function createOffer(user) {
   }
 }
 
-async function createAnswer(offer, user) {
-  console.log(`📬 Creating answer for ${user}`);
-  if (!peers[user]) await createPeer(user);
+async function createAnswer(user) {
+  const pc = peers[user];
+  if (!pc) return;
+  console.log(`✅ Creating answer for ${user}`);
   try {
-    const peer = peers[user];
-    console.log(
-      `🔍 Signaling state before setting offer for ${user}:`,
-      peer.signalingState
-    );
-    await peer.setRemoteDescription(new RTCSessionDescription(offer));
-    console.log(
-      `✅ Remote offer set for ${user}. New signaling state:`,
-      peer.signalingState
-    );
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    const currentName =
+      new URLSearchParams(window.location.search).get("name") || name;
     ws.send(
       JSON.stringify({
         type: "answer",
-        answer,
-        room,
-        user: name,
+        answer: pc.localDescription,
         toUser: user,
+        fromUser: currentName,
       })
     );
-    console.log(
-      `✅ Answer created and set for ${user}. New signaling state:`,
-      peer.signalingState
-    );
-  } catch (e) {
-    console.error("❌ Error creating answer:", e.message, e.stack);
+  } catch (err) {
+    console.error(`❌ Failed to create/send answer to ${user}:`, err);
   }
 }
 
@@ -1266,6 +1213,15 @@ async function establishMediaWithUser(userId) {
   const pc = peers[userId];
   if (!pc) {
     console.error(`Cannot establish media, no peer connection for ${userId}`);
+    return;
+  }
+
+  // Check if media is already active
+  const transceivers = pc.getTransceivers();
+  if (transceivers.some((t) => t.direction === "sendrecv")) {
+    console.log(
+      `Media is already established with ${userId}. No action needed.`
+    );
     return;
   }
 
