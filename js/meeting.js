@@ -1066,7 +1066,6 @@ window.toggleE2EE = async function () {
     }
   }
 };
-
 // Function to update verification status in UI
 function updateVerificationStatus(userId, isVerified) {
   const participantElement = document.getElementById(`participant-${userId}`);
