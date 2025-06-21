@@ -416,14 +416,17 @@
          if (lastGesture !== null || peaceActive) {
              lastGesture = null;
              peaceActive = false;
-             updateGestureIndicator("No gesture detected");
+            updateGestureIndicator(gestureText[gesture]);
          }
      }
  }
 
- function updateGestureIndicator(text) {
-    console.log(text)
-}
+  function updateGestureIndicator(text) {
+     const indicator = document.getElementById('gesture-indicator');
+     if (indicator) {
+         indicator.textContent = text;
+     }
+ }
 
  function triggerEffect(gestureName) {
      const gestures = {
