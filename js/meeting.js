@@ -241,7 +241,7 @@ async function initializeMeeting(userName) {
   if (isInitialized) return;
 
   console.log("🔗 Connecting to signaling server at", SIGNALING_SERVER_URL);
-  ws = new WebSocket(SIGNALING_SERVER_URL);
+  ws = new WebSocket(SIGNALING_URL);
 
   ws.onopen = async () => {
     console.log("✅ WebSocket connected!");
@@ -425,7 +425,7 @@ async function initializeMeeting(userName) {
                 isPolite ? "Polite" : "Impolite"
               }] Offer from ${fromUser} accepted.`
             );
-            await createAnswer(fromUser);
+            await createAnswer(fromUser, userName);
           } catch (err) {
             console.error("Error handling offer:", err);
           }
@@ -668,7 +668,7 @@ async function createPeer(user, currentUserName) {
         return;
       }
       isMakingOffer = true;
-      await createOffer(user);
+      await createOffer(user, currentUserName);
     } catch (err) {
       console.error(`❌ Negotiation failed for ${user}:`, err);
     } finally {
@@ -713,7 +713,7 @@ async function createPeer(user, currentUserName) {
   return pc;
 }
 
-async function createOffer(user) {
+async function createOffer(user, currentUserName) {
   try {
     const peer = peers[user];
     if (!peer) {
@@ -732,7 +732,7 @@ async function createOffer(user) {
         type: "offer",
         offer: peer.localDescription,
         toUser: user,
-        fromUser: userName,
+        fromUser: currentUserName,
       })
     );
     console.log(`✅ Offer sent to ${user}`);
@@ -741,7 +741,7 @@ async function createOffer(user) {
   }
 }
 
-async function createAnswer(user) {
+async function createAnswer(user, currentUserName) {
   const pc = peers[user];
   if (!pc) return;
   console.log(`✅ Creating answer for ${user}`);
@@ -754,7 +754,7 @@ async function createAnswer(user) {
         type: "answer",
         answer: pc.localDescription,
         toUser: user,
-        fromUser: userName,
+        fromUser: currentUserName,
       })
     );
   } catch (err) {
