@@ -1445,6 +1445,144 @@ progress {
     --bs-gutter-y: 3rem;
   }
 }
+
+/* E2EE Manual Verification Modal Styles */
+#e2ee-manual-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(5px);
+}
+
+#e2ee-manual-modal .modal-content {
+  background: #23272f;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  padding: 28px;
+  width: 90%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#e2ee-manual-modal .close-button {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 1.8rem;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+#e2ee-manual-modal .close-button:hover {
+  color: #fff;
+}
+
+#e2ee-manual-modal h2 {
+  text-align: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+#e2ee-manual-modal p {
+  color: #bbb;
+  font-size: 0.9rem;
+  margin-top: 15px;
+  margin-bottom: 5px;
+}
+
+#e2ee-manual-modal .key-container {
+  display: flex;
+  gap: 8px;
+}
+
+#e2ee-manual-modal input[type="text"],
+#e2ee-manual-modal .e2ee-select {
+  width: 100%;
+  background: #181a20;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 0.9rem;
+  font-family: "Courier New", Courier, monospace;
+}
+
+#e2ee-manual-modal .e2ee-select {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+#e2ee-manual-modal #copy-my-e2ee-key,
+#e2ee-manual-modal .verify-btn {
+  padding: 0 15px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-weight: 600;
+}
+
+#e2ee-manual-modal #copy-my-e2ee-key {
+  background-color: #3b82f6;
+  color: white;
+}
+
+#e2ee-manual-modal #copy-my-e2ee-key:hover {
+  background-color: #2563eb;
+}
+
+#e2ee-manual-modal .verify-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #16a34a;
+  color: white;
+  font-size: 1rem;
+  margin-top: 20px;
+}
+
+#e2ee-manual-modal .verify-btn:hover {
+  background-color: #15803d;
+}
+
+#e2ee-manual-modal #e2ee-verify-result {
+  text-align: center;
+  margin-top: 15px;
+  font-weight: 600;
+  min-height: 24px;
+}
+
+#e2ee-manual-modal .close-modal-btn {
+  background: #4b5563;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 15px;
+  margin-top: 15px;
+  cursor: pointer;
+  align-self: center;
+}
+
+#e2ee-manual-modal .close-modal-btn:hover {
+  background: #374151;
+}
+
+@media (max-width: 500px) {
+  #e2ee-manual-modal .modal-content {
+    padding: 20px;
+  }
+}
 @media (min-width: 1200px) {
   .col-xl {
     flex: 1 0 0%;
@@ -7015,11 +7153,6 @@ fieldset:disabled .btn {
 .link-secondary {
   color: #e21e80 !important;
 }
-.link-secondary:hover,
-.link-secondary:focus {
-  color: #e84b99 !important;
-}
-
 .link-success {
   color: #198754 !important;
 }

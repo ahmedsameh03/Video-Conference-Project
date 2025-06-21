@@ -1167,6 +1167,13 @@ function openManualE2EEModal() {
   document.getElementById("other-e2ee-key").value = "";
 }
 
+function closeManualE2EEModal() {
+  const modal = document.getElementById("e2ee-manual-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
 document
   .getElementById("e2ee-verify-btn")
   .addEventListener("click", openManualE2EEModal);

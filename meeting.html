@@ -813,35 +813,8 @@
     </div>
 
     <!-- E2EE Manual Verification Modal -->
-    <div
-      id="e2ee-manual-modal"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: 2000;
-        justify-content: center;
-        align-items: center;
-      "
-    >
-      <div
-        style="
-          background: #23272f;
-          border-radius: 18px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-          padding: 32px 28px 24px 28px;
-          min-width: 320px;
-          max-width: 95vw;
-          width: 370px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        "
-      >
+    <div id="e2ee-manual-modal">
+      <div class="modal-content">
         <span class="close-button" onclick="closeManualE2EEModal()">×</span>
         <h2>🔑 E2EE Key Verification</h2>
         <div class="e2ee-manual-verification">
@@ -868,11 +841,7 @@
           <button id="verify-e2ee-key-btn" class="verify-btn">Verify</button>
           <div id="e2ee-verify-result"></div>
         </div>
-        <button
-          class="btn btn-sm btn-dark"
-          style="margin-top: 10px"
-          onclick="document.getElementById('e2ee-manual-modal').style.display='none'"
-        >
+        <button class="close-modal-btn" onclick="closeManualE2EEModal()">
           Close
         </button>
       </div>
