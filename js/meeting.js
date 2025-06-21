@@ -7,6 +7,11 @@ let e2eeManager;
 let transformManager;
 let keyVerification;
 let isE2EEEnabled = false;
+let isMakingOffer = false;
+let isPolite = false;
+let allKeysExchanged = false;
+let ws;
+const peers = {};
 const localVideo = document.getElementById("large-video");
 const videoGrid = document.getElementById("video-grid");
 const chatMessages = document.getElementById("chat-messages");
@@ -17,16 +22,11 @@ const SIGNALING_SERVER_URL =
   "wss://video-conference-project-production.up.railway.app";
 
 // Don't connect immediately - wait for name to be provided
-let ws = null;
 let isInitialized = false;
-const peers = {};
-let isMakingOffer = false;
-let isPolite = false;
-let isSettingRemoteAnswerPending = false;
 let localStream;
 
 // Add a global state for key exchange
-let allKeysExchanged = false;
+let receivedKeys = new Set();
 
 function setE2EEControlsEnabled(enabled) {
   const e2eeBtn = document.getElementById("e2ee-btn");
@@ -71,7 +71,6 @@ showKeyExchangeLoading(true);
 
 // Track expected users for key exchange
 let expectedUsers = new Set();
-let receivedKeys = new Set();
 
 function getQueryParams() {
   const params = {};
@@ -366,10 +365,9 @@ async function initializeMeeting(userName) {
             }
           }
 
-          // If not already connected, create a peer and send an offer
+          // If not already connected, create a peer. The 'onnegotiationneeded' event will handle sending the offer.
           if (!peers[data.user]) {
             await createPeer(data.user);
-            await createOffer(data.user);
           }
           break;
 
@@ -673,6 +671,22 @@ async function createPeer(user) {
     });
     console.log(`🎤📹 Transceivers added for ${user} in 'inactive' state.`);
   }
+
+  // Set up negotiation handler
+  pc.onnegotiationneeded = async () => {
+    try {
+      if (isMakingOffer) {
+        console.log(`⚠️ Skipping negotiation for ${user}, already in progress`);
+        return;
+      }
+      isMakingOffer = true;
+      await createOffer(user);
+    } catch (err) {
+      console.error(`❌ Negotiation failed for ${user}:`, err);
+    } finally {
+      isMakingOffer = false;
+    }
+  };
 
   // Handle incoming tracks from the other user
   pc.ontrack = (event) => {
