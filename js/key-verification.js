@@ -102,7 +102,6 @@ class KeyVerification {
 
         // Create hash
         const hash = await window.crypto.subtle.digest("SHA-256", combined);
-
         // Convert to base64 and take first 8 characters
         const hashArray = new Uint8Array(hash);
         const hashBase64 = btoa(String.fromCharCode(...hashArray));
