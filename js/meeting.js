@@ -125,22 +125,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const qrModal = document.getElementById("qr-modal");
   if (qrModal) qrModal.style.display = "none";
 
-  // Always wait for name to be provided via the modal
-  // This ensures camera/mic permissions are only requested after user enters their name
-  console.log("⏳ Waiting for user to enter name...");
-
-  // Update the name modal logic to handle both cases (with and without name parameter)
-  const nameModal = document.getElementById("name-modal");
-  if (nameModal) {
-    nameModal.style.display = "flex";
-    const input = document.getElementById("name-input");
-    if (input) {
-      // Pre-fill with name from URL if available
-      if (name) {
-        input.value = name;
-      }
-      input.focus();
+  // Only initialize if name is provided
+  if (name) {
+    if (document.getElementById("user-name-display")) {
+      document.getElementById("user-name-display").textContent = name;
     }
+    await testLocalStream();
+    await initializeMeeting(name);
+  } else {
+    // Wait for name to be provided via the modal
+    console.log("⏳ Waiting for user to enter name...");
   }
 });
 
@@ -222,18 +216,18 @@ function closeE2EEScanModal() {
 
 async function fetchIceServers() {
   return [
-    { urls: ["stun:fr-turn7.xirsys.com"] },
+    { urls: ["stun:fr-turn8.xirsys.com"] },
     {
       username:
-        "ne0q9wGXk4abBx9NgeZKKeN8iV_MoiOY2xtNucfrrJfxuattIOUEjZRzpNxh8hBtAAAAAGhXjg5TRUVOR1AxMg==",
-      credential: "e534c776-4f25-11f0-8886-5680fa9d6d80",
+        "_zBkfC4Ee508hvItVLxnCfr_LTWqchqaxS3cNHquSPFaCXGr-i0aZ22VUGvo-_9iAAAAAGhW22lTRUVOR1A1",
+      credential: "69f9c2ba-4ebb-11f0-a8c1-66ffacc6f8fc",
       urls: [
-        "turn:fr-turn7.xirsys.com:80?transport=udp",
-        "turn:fr-turn7.xirsys.com:3478?transport=udp",
-        "turn:fr-turn7.xirsys.com:80?transport=tcp",
-        "turn:fr-turn7.xirsys.com:3478?transport=tcp",
-        "turns:fr-turn7.xirsys.com:443?transport=tcp",
-        "turns:fr-turn7.xirsys.com:5349?transport=tcp",
+        "turn:fr-turn8.xirsys.com:80?transport=udp",
+        "turn:fr-turn8.xirsys.com:3478?transport=udp",
+        "turn:fr-turn8.xirsys.com:80?transport=tcp",
+        "turn:fr-turn8.xirsys.com:3478?transport=tcp",
+        "turns:fr-turn8.xirsys.com:443?transport=tcp",
+        "turns:fr-turn8.xirsys.com:5349?transport=tcp",
       ],
     },
   ];
@@ -281,19 +275,6 @@ async function initializeMeeting(userName) {
         })
       );
       addParticipant(userName);
-
-      // Initialize AI features after camera/mic permissions are granted
-      if (typeof initialize === "function") {
-        try {
-          console.log("🤖 Initializing AI features...");
-          await initialize();
-          console.log("✅ AI features initialized successfully");
-        } catch (error) {
-          console.warn("⚠️ AI features initialization failed:", error);
-          // Don't block the meeting if AI features fail to initialize
-        }
-      }
-
       // Wait for key exchange to complete before enabling controls
       // (handled in ws.onmessage)
     } catch (error) {

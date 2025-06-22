@@ -4,6 +4,7 @@ class KeyVerification {
     this.verificationStatus = new Map(); // userId -> verification status
     this.verificationCallbacks = new Map(); // userId -> callback functions
   }
+
   async generateVerificationCode(userId) {
     try {
       // Get the shared secret for this user
