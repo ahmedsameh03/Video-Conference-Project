@@ -1,8 +1,8 @@
 # Video-Conference-Project
 
-Graduation Project
+Graduation Project, Grade (A+)
 
-Smart-Secure Video Conference Web Application (SEEN), Grade (A+)
+Smart-Secure Video Conference Web Application (SEEN),
 
 Developed a secure, scalable video conferencing web application using WebRTC, Node.js, MongoDB, and WebSockets,
 
